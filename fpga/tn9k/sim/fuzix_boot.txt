@@ -1,0 +1,9 @@
+expect login:
+send root\r
+expect # 
+send echo hello from fpga\r
+expect # 
+send ls /\r
+expect # 
+send shutdown\r
+expect Halted.

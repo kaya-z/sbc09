@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: MIT
+// The HDMI connector of the Tang Nano 9K: TMDS (DVI) on four differential pairs (positive, negative pin);
+// as in Sipeed's HDMI example.  d0 = blue (with the syncs), d1 = green, d2 = red.
+IO_LOC "tmds_d_p[0]" 71,70;
+IO_PORT "tmds_d_p[0]" PULL_MODE=NONE DRIVE=8;
+IO_LOC "tmds_d_p[1]" 73,72;
+IO_PORT "tmds_d_p[1]" PULL_MODE=NONE DRIVE=8;
+IO_LOC "tmds_d_p[2]" 75,74;
+IO_PORT "tmds_d_p[2]" PULL_MODE=NONE DRIVE=8;
+IO_LOC "tmds_clk_p" 69,68;
+IO_PORT "tmds_clk_p" PULL_MODE=NONE DRIVE=8;

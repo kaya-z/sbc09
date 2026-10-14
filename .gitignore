@@ -1,0 +1,5 @@
+non_dist_docs/
+build/
+build_*/
+__pycache__/
+*.pyc

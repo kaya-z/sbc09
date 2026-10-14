@@ -1,0 +1,2184 @@
+0000:                   ********************************************************************
+0000:                   * PipeMan - OS-9 Level Two Named Pipe File Manager
+0000:                   *
+0000:                   * $Id$
+0000:                   *
+0000:                   * Edt/Rev  YYYY/MM/DD  Modified by
+0000:                   * Comment
+0000:                   * ------------------------------------------------------------------
+0000:                   *          1986/02/23  Kent D. Meyers
+0000:                   * Pipeman Modified to Include the SS.Ready I$GETSTT Call.
+0000:                   *
+0000:                   *          1986/03/26  Kent D. Meyers
+0000:                   * Major Bug Corrected.
+0000:                   *
+0000:                   *          1988/06/29  Kent D. Meyers
+0000:                   * Upgraded to Level II version.
+0000:                   *
+0000:                   *          1988/11/11  Chris J. Burke
+0000:                   * Added new labels and special defs.
+0000:                   * Added code to detect EOF in SS.Ready
+0000:                   * Reformatted to make the module easier to understand during coding.
+0000:                   *
+0000:                   *          1988/12/03  Chris J. Burke
+0000:                   * Added named pipes, etc for Level 2 upgrade, includes SS.SSig,
+0000:                   * SS.Relea, SS.Attr, SS.FD
+0000:                   *
+0000:                   *   1      1988/12/26  Chris J. Burke
+0000:                   * Release 1.0 for Tandy CoCo OS-9.
+0000:                   
+0000:                            nam   PipeMan
+0000:                            ttl   OS9 Level Two Named Pipe File Manager
+0000:                   
+0000:                   *
+0000:                   *   Copyright 1981, 1985, 1986, 1988 by Microware Systems Corporation
+0000:                   *   All Rights Reserved
+0000:                   *
+0000:                   *   Named pipe code by Burke & Burke.
+0000:                   *   All rights assigned to Microware Systems Corporation.
+0000:                   *
+0000:                   *   This file contains proprietary information of Microware Systems
+0000:                   *   Corporation.  Persons accessing this file will be held strictly
+0000:                   *   accountable for their use of the information herein.
+0000:                   *
+0000:                   
+0000:                   *
+0000:                   *   PIPEMAN
+0000:                   *
+0000:                   *   Pipe File Manager
+0000:                   *
+0000:                   *   WARNING
+0000:                   *   -------
+0000:                   *
+0000:                   *   Opening an existing named pipe emulates IOMan's I$Close and
+0000:                   *   I$Dup calls.  This file manager contains subroutines that
+0000:                   *   mimic the current operation of IOMan.  Any changes to IOMan's
+0000:                   *   FMEXEC, I$Close or I$Dup calls must also be made to this code.
+0000:                   *
+0000:                   *   Device Driver Static Storage Layout
+0000:                   *   -----------------------------------
+0000:                   *
+0000:                   *   $00-$01 V.List  Pointer in system map to pipe buffer for 1st
+0000:                   *                   pipe (16 bits).
+0000:                   *
+0000:                   *   Pipe Buffer Data Structure
+0000:                   *   --------------------------
+0000:                   *
+0000:                   *   $00-$01 PP.PD   Pointer to shared path descriptor
+0000:                   *   $02-$03 PP.Next Pointer to next pipe buffer in system map
+0000:                   *   $04-$05 PP.Prev Pointer to previous pipe buffer in system map
+0000:                   *   $06-$07 PP.Rsv2 Reserved
+0000:                   *
+0000:                   *   $08     PP.Data Data buffer begins at this offset
+0000:                   *
+0000:                   *   Path Descriptor Data Structure
+0000:                   *   ------------------------------
+0000:                   *
+0000:                   *   $00     PD.PD   Path number
+0000:                   *   $01     PD.MOD  Access permissions
+0000:                   *   $02     PD.CNT  Number of open images (e.g. I$DUP)
+0000:                   *   $05     PD.CPR  Current process ID
+0000:                   *   $06-$07 PD.RGS  Address of caller's register stack
+0000:                   *   $08-$09 PD.BUF  System space pipe buffer base pointer
+0000:                   *** PP.Read must have bit 4 clear; PP.Writ must be PP.Read XOR 4
+0000:                   *  $0A      PD.Read No bytes -- offset only
+0000:                   *   $0A     PD.RPID Process ID of reader waiting on signal
+0000:                   *   $0B     PD.RCT  Number of blocked readers
+0000:                   *   $0C     PD.RSIG Signal to send reader
+0000:                   *   $0D     PD.REOR Read EOR character
+0000:                   *  $0E      PD.Writ No bytes -- offset only
+0000:                   *   $0E     PD.WPID Process ID of writer waiting on signal
+0000:                   *   $0F     PD.WCT  Number of blocked writers
+0000:                   *   $10     PD.WSIG Signal to send writer
+0000:                   *   $11     PD.WEOR Write EOR character (dummy)
+0000:                   *** End of special section
+0000:                   *   $12-$13 PD.End  Pointer to end of pipe buffer
+0000:                   *   $14-$15 PD.NxtI Next in pointer
+0000:                   *   $16-$17 PD.NxtO Next out pointer
+0000:                   *   $18     PD.RFlg "Ready" flag
+0000:                   *   $19     PD.Wrtn "Written" flag
+0000:                   *   $1A-$1B PD.BCnt # queue elements currently bufered
+0000:                   *   $1C     PD.Own  Process ID of pipe original creator
+0000:                   *   $1D     PD.Keep Non-zero if this pipe has been kept open artificially
+0000:                   *   $1E-$1F PD.QSiz Max. size of queue (in elements)
+0000:                   *   .
+0000:                   *   .
+0000:                   *   $20     PD.DTP  Device type $02 = PIPE
+0000:                   *   $21     PD.ESiz Size of each queue element
+0000:                   *   $22-$23 PD.ECnt Max. elements in queue
+0000:                   *   $23-$3F PD.Name Pipe name (after moving PD.ECnt to PD.QSiz)
+0000:                   *
+0000:                   
+0000:                            page  
+0000:                   *
+0000:                   *   Global equates
+0000:                   *
+0000:                            IFP1  
+0000:                            use   defsfile
+0000:                            use   pipe.d
+0000:                            ENDC  
+0000:                   
+0000:                   *
+0000:                   *   Local Equates
+0000:                   *
+0000:                   
+0003:                   XVER     equ   3          ;Version
+0000:                   
+0000:                   *   ASCII CONTROL CHARACTERS
+0000:                   
+000D:                   CR       equ   $0D
+0000:                   
+0000:                   *   CONDITION CODES
+0000:                   
+0000:                   *   PIPEMAN SPECIAL OFFSETS.
+0000:                   
+0000:                   PM.CPR   equ   PD.RPID-PD.READ
+0001:                   PM.CNT   equ   PD.RCT-PD.READ
+0002:                   PM.SIG   equ   PD.RSIG-PD.READ
+0003:                   PM.EOR   equ   PD.REOR-PD.READ
+0000:                   
+0000:                   *   IOMAN special offsets.
+0000:                   *
+0000:                   *   This constant is IOMAN release-dependent.
+0000:                   *   It is the number of bytes between the entry stack
+0000:                   *   pointer and the stacked PD pointer saved by *IOMAN*.
+0000:                   *   Currently, the stack looks like this:
+0000:                   *
+0000:                   *       A   PL
+0000:                   *       9   PH  <IOMAN post-SOPEN return address>
+0000:                   *       8   UL
+0000:                   *       7   UH
+0000:                   *       6   YL  +
+0000:                   *       5   YH  <PD pointer saved by IOMAN>
+0000:                   *       4   XL
+0000:                   *       3   XH
+0000:                   *       2   A
+0000:                   *       1   PL
+0000:                   * SP->  0   PH  <post OPEN/CREATE return address>
+0000:                   *               <start of stack to be used by PIPEMAN>
+0000:                   
+0005:                   IOMAGIC  equ   5          ;5 bytes to PD pointer
+0000:                   
+0000:                   *   Local pipe buffer equates
+0000:                   
+0020:                   CInit    equ   %00100000  ;Set this bit to override PD queue parameters
+0000:                   
+0000:                   *   Conditional assembly
+0000:                   
+0000:                   ANON     set   0          ;Anonymous pipes only
+0001:                   NAMED    set   1          ;Anonymous and named pipes
+0002:                   MSGS     set   2          ;Both types of pipes, and message queues
+0001:                   WIZBANG  set   NAMED      ;What features are we providing?
+0000:                   
+0000:                   NODIR    set   0          ;Don't allow DIR on pipe devices
+0001:                   YESDIR   set   1          ;Allow DIR on pipe devices
+0001:                   PIPEDIR  set   YESDIR     ;Does DIR work on pipes?
+0000:                   
+0000:                   SLOWPD   set   0          ;Slow PD location algorithm
+0001:                   QUICKPD  set   1          ;Fast PD location algorithm
+0001:                   PDALGO   set   QUICKPD    ;How to convert PD to system path #
+0000:                   
+0000:                   RECKLES  set   0          ;Don't check for certain errors
+0001:                   CAREFUL  set   1          ;Check for certain errors
+0001:                   CAUTION  set   CAREFUL
+0000:                   
+0000:                            page  
+0000:                   *
+0000:                   *   Module Header
+0000:                   *
+0000:                   
+0001:                   edition  set   1
+0000:                   
+0000: 87CD05DB000DD183           mod   MODSIZE,MODNAM,FlMgr+Objct,ReEnt+XVER,JmpTbl,$0000
+0009: 00150000
+0000:                   
+0000:                   *   Module Name
+0000:                   
+000D: 506970654D61EE    MODNAM   fcs   "PipeMan"
+0014: 01                         fcb   edition
+0015:                   
+0015:                   *   Jump table
+0015:                   
+0015: 160024            JmpTbl   lbra  Create
+0018: 16003B                     lbra  Open
+001B: 1601EA                     lbra  MakDir
+001E: 1601E7                     lbra  ChgDir
+0021: 160227                     lbra  Delete
+0024: 16027A                     lbra  Seek
+0027: 160359                     lbra  Read
+002A: 1603E3                     lbra  Write
+002D: 160347                     lbra  ReadLn
+0030: 1603D0                     lbra  WriteLn
+0033: 16026D                     lbra  GetStt
+0036: 1602C5                     lbra  SetStt
+0039: 1601D0                     lbra  Close
+003C:                   
+003C:                            page  
+003C:                   *
+003C:                   *   Create a named or anonymous pipe
+003C:                   *
+003C:                   *   The size of the queue is determined by examining
+003C:                   *   the path descriptor, since this information has
+003C:                   *   been copied there from the device descriptor.
+003C:                   *
+003C:                   *   Reg-U points to stacked registers of user.
+003C:                   *   Reg-Y points to path descriptor
+003C:                   *
+003C:                   *   If success, carry clear and X points to pipe buffer
+003C:                   *
+003C:                   
+003C:                   *   Create function allows user to override both element
+003C:                   *   count and element size.  Override is enabled if if bit
+003C:                   *   5 of the access mode is set.  For override, if MS bit
+003C:                   *   of Reg-Y is clear, just use Reg-Y as queue element
+003C:                   *   count.  If MS bit of Reg-Y is set, use LS byte of
+003C:                   *   Reg-Y as element size ($00 = no change) and bottom 7
+003C:                   *   bits of MS byte of Reg-Y as element count ($00 = no change)
+003C:                   
+003C:                   Create   equ   *
+003C:                   
+003C: A641                       lda   R$A,U      ;Get access mode
+003E: 8520                       bita  #CInit
+0040: 2714                       beq   Open
+0042:                   
+0042:                   *   Handle queue size override
+0042:                   
+0042: EC46                       ldd   R$Y,U      ;Get queue size initializer
+0044: 2A0D                       bpl   SetCnt     ; (branch if just setting count)
+0046:                   
+0046:                   *   Set element size and count
+0046:                   
+0046: 5D                         tstb  
+0047: 2703                       beq   Creat00    ; (branch if using default size)
+0049:                   
+0049: E7A821                     stb   PD.ESiz,Y  ;Reg-B = size of each element
+004C:                   
+004C: 847F              Creat00  anda  #$7F
+004E: 2706                       beq   Open       ; (branch if using default count)
+0050:                   
+0050: 1F89                       tfr   a,B
+0052: 4F                         clra  
+0053:                   
+0053:                   *   Set number of elements in queue from Reg-D
+0053:                   
+0053: EDA822            SetCnt   std   PD.ECnt,Y  ;Reg-D = number of elements
+0056:                   
+0056:                   *   Enter here for normal OPEN
+0056:                   
+0056:                   Open     equ   *
+0056:                   
+0056:                   *   Move number of elements in queue to make room for name
+0056:                   
+0056: ECA822                     ldd   PD.ECnt,Y
+0059: EDA81E                     std   PD.QSiz,Y
+005C:                   
+005C:                   *   Parse pathname
+005C:                   
+005C: 5F                         clrb             ;Assume anonymous pipe
+005D: 4F                         clra             ;Assume not 1st pipe
+005E: AE44                       ldx   R$X,U      ;Point at file name in user's space
+0060: 3476                       pshs  U,Y,X,D    ;Save file name, PD, reg. base, 1st & anon flag
+0062:                   
+0062:                   *       Caller's Regs Ptr
+0062:                   *       PD Ptr
+0062:                   *       Path name uptr
+0062:                   *       Named flag
+0062:                   *  SP-> First flag
+0062:                   
+0062: 103F10                     os9   F$PrsNam   ;Error if driver name (e.g. /pipe) invalid
+0065: 2565                       bcs   BadName
+0067:                   
+0067:                   *   See if named or anonymous pipe requested.
+0067:                   
+0067: 170194                     lbsr  GtNext     ;Return CC=MI if at end of path name
+006A: 812F                       cmpa  #'/
+006C: 2712                       beq   HasName
+006E:                   
+006E:                   *   /pipe____
+006E:                   *    X   Y
+006E:                   *   Pipe is anonymous -- set up dummy name in PD.
+006E:                   *   Stack must match the named pipe setup
+006E:                   
+006E: 1F21              NotName  tfr   Y,X        ;Skip any trailing blanks
+0070: 103F10                     os9   F$PrsNam   ; (should return carry set)
+0073: CC0001                     ldd   #1         ;Length of dummy name
+0076: 3436                       pshs  Y,X,D
+0078:                   
+0078: 10AE6A                     ldy   10,S       ;Get PD pointer
+007B: 6FA823                     clr   PD.Name,Y  ; and set dummy name
+007E:                   
+007E: 2038                       bra   GoCheck
+0080:                   
+0080:                   *   /pipe/foo____
+0080:                   *    X   Y
+0080:                   *   Pipe is named -- check length and flag on stack
+0080:                   
+0080: 1F21              HasName  tfr   Y,X
+0082: 103F10                     os9   F$PrsNam   ;Scan off the name
+0085: 2545                       bcs   BadName
+0087:                   
+0087: C11D                       cmpb  #NameMax   ;Check length of name
+0089: 2241                       bhi   BadName
+008B:                   
+008B:                   *   Length OK.  X points to start of name, Y to end of name,
+008B:                   *   B has name length. 
+008B:                   *   Save registers & length, and do final parse to skip white
+008B:                   
+008B: 6361                       com   1,S        ;Set "named" flag
+008D: 4F                         clra  
+008E: 3436                       pshs  Y,X,D
+0090:                   
+0090: 1F21                       tfr   Y,X
+0092: 103F10                     os9   F$PrsNam   ;Error if trying for pipe subdirectory
+0095: 2433                       bcc   BadNam2
+0097:                   
+0097:                   *   /pipe/foo____
+0097:                   *            X   Y
+0097:                   *   Need to get the pipe name into our address space
+0097:                   *   Use the PD for a temporary buffer.
+0097:                   
+0097: 9E50              NameOK   ldx   <D.Proc    ;Pointer to caller's PD
+0099: A606                       lda   P$Task,X   ; get caller's DAT image #
+009B: 9E4A                       ldx   <D.SysPrc  ;Pointer to our PD
+009D: E606                       ldb   P$Task,X   ; get system's DAT image #
+009F: 10AE60                     ldy   0,S        ;Byte count
+00A2: AE62                       ldx   2,S        ;Source address
+00A4: EE6A                       ldu   10,S       ;Get PD pointer and convert to . . .
+00A6: 33C823                     leau  PD.Name,U  ;Destination address
+00A9: 170499                     lbsr  MovSet     ;Move block, set MSB of last byte.
+00AC:                   
+00AC:                   *   Wow!  Everybody's in the same address space now.
+00AC:                   
+00AC:                   *   Since this is a named pipe, force mode to UPDATE.
+00AC:                   *   Also, do not permit DIR. access
+00AC:                   
+00AC: AE6A                       ldx   10,S
+00AE: A601                       lda   PD.MOD,X
+00B0: 8580                       bita  #DIR.
+00B2: 2616                       bne   BadNam2
+00B4:                   
+00B4: 8A03                       ora   #(READ.+WRITE.)
+00B6: A701                       sta   PD.MOD,X
+00B8:                   
+00B8:                   *   See if this is an existing pipe.  To do this, we
+00B8:                   *   must get the linked list head pointer from the
+00B8:                   *   device driver's static storage.
+00B8:                   *
+00B8:                   *   Stack looks like this:
+00B8:                   *
+00B8:                   *   C   2   Sysmap Reg Pointer
+00B8:                   *   A   2   Sysmap PD Pointer
+00B8:                   *   8   2   Usrmap Path name pointer
+00B8:                   *   7   1   Named pipe flag
+00B8:                   *   6   1   First pipe flag
+00B8:                   *   4   2   Usrmap Pipe name end pointer
+00B8:                   *   2   2   Usrmap Pipe name start pointer
+00B8:                   *   0   2   Name length
+00B8:                   *   sp->
+00B8:                   
+00B8: AE6A              GoCheck  ldx   10,S       ;Get PD pointer
+00BA: AE03                       ldx   PD.DEV,X   ;Get device table pointer
+00BC: EE02                       ldu   V$Stat,X   ;Get static storage pointer
+00BE: AE46                       ldx   V.List,U   ;Get pointer to head of pipe bfr linked list
+00C0: 2614                       bne   Not1st     ; (reg-X = $0000 if no previous pipes)
+00C2:                   
+00C2:                   *   This is the 1st pipe for this descriptor.
+00C2:                   *   Reg-X = $0000
+00C2:                   *   Set flag and process as a new pipe.
+00C2:                   
+00C2: 6366                       com   6,S        ;This is the first pipe
+00C4: 2032                       bra   NewPipe    ;This is a new pipe
+00C6:                   
+00C6:                   *   No time like the present for some error handlers
+00C6:                   
+00C6:                   *   Generic error, cleaning stack
+00C6:                   
+00C6: 3268              BadXit2  leas  8,S
+00C8: 43                         coma             ;Set carry
+00C9: 39                         rts   
+00CA:                   
+00CA:                   *   Bad Pathname -- 2 versions, depending on
+00CA:                   *   how much junk is on the stack.
+00CA:                   
+00CA: 3266              BadNam2  leas  6,S        ;Clean stack
+00CC: C6D7              BadName  ldb   #E$BPNam
+00CE: 20F6                       bra   BadXit2
+00D0:                   
+00D0:                   *   Not Enough System RAM
+00D0:                   
+00D0: C6ED              TooBig   ldb   #E$NoRAM
+00D2: 3266              BadExit  leas  6,S        ;Clean stack
+00D4: 20F0                       bra   BadXit2
+00D6:                   
+00D6:                   *   Look up the pipe name, unless the pipe is anonymous.
+00D6:                   *
+00D6:                   *   Reg-U points to driver static storage.
+00D6:                   *   Reg-X points to next pipe buffer to check.
+00D6:                   
+00D6: 6D67              Not1st   tst   7,S        ;Unnamed pipes are always new
+00D8: 271E                       beq   NewPipe
+00DA:                   
+00DA: 10AE6A                     ldy   10,S       ;point at PD
+00DD: 31A823                     leay  PD.Name,Y  ; then point at name in PD
+00E0:                   
+00E0:                   *   Main loop.  Always at least 1 pipe buffer to check first time through.
+00E0:                   *   Reg-X points to buffer to check, or $0000 if none.
+00E0:                   *   Reg-Y points to desired pipe name.
+00E0:                   
+00E0: 3410              ChkLoop  pshs  X
+00E2: AE00                       ldx   PP.PD,X    ;Point at PD for this pipe buffer
+00E4: 308823                     leax  PD.Name,X  ; and then point at name stored in PD
+00E7: 1700DC                     lbsr  Compare
+00EA: 3510                       puls  X
+00EC: 10270088                   lbeq  OldPipe    ; (got a match)
+00F0:                   
+00F0: EC02                       ldd   PP.Next,X  ;Don't fall off the edge
+00F2: 2704                       beq   NewPipe    ; (end of list)
+00F4:                   
+00F4: 1F01                       tfr   D,X        ;Advance to next buffer
+00F6: 20E8                       bra   ChkLoop
+00F8:                   
+00F8:                   *   Pipe name not found.  Create a new pipe.
+00F8:                   *
+00F8:                   *   Reg-U points to driver static storage.
+00F8:                   *   Reg-X points to last pipe buffer checked ($0000 if 1st pipe)
+00F8:                   
+00F8: 10AE6A            NewPipe  ldy   10,S       ;Get PD pointer
+00FB:                   
+00FB:                            IFEQ  (PIPEDIR-YESDIR)
+00FB: A621                       lda   PD.MOD,Y   ;Check pipe attributes
+00FD: 8580                       bita  #DIR.
+00FF: 2703                       beq   NEWP1
+0101:                   
+0101:                   *   Initialize pipe characteristics for DIR. bit set
+0101:                   
+0101: 17044E                     lbsr  SizDirP
+0104:                   *         beq    XYZZY       ;Special if no pipes created
+0104:                            ENDC  
+0104:                   
+0104:                   *   Normal (non-dir) processing
+0104:                   
+0104: ECA81E            NewP1    ldd   PD.QSiz,Y  ;Get max element count
+0107: 260C                       bne   DoNew      ; (graceful operation if no count)
+0109:                   
+0109:                   *   Default pipe parameters if none in PD.
+0109:                   
+0109: CC0100                     ldd   #$0100     ;Assume 256 byte buffer, 1 byte element
+010C: A7A821                     sta   PD.ESiz,Y  ;Reg-A = 1
+010F: 830008                     subd  #PP.Data   ;Compute elements for total size = 256
+0112: EDA81E                     std   PD.QSiz,Y  Use parameters in PD
+0115:                   
+0115: 1700C6            DoNew    lbsr  ECtoBC     ;Convert element count to byte count in D
+0118: 25B6                       bcs   TooBig     ; (carry set if too big)
+011A:                   
+011A:                   *   Carry has exit status
+011A:                   *   Reg-D = # bytes for queue, w/o overhead
+011A:                   *   Reg-X = previous buffer
+011A:                   *   Reg-U = driver static storage
+011A:                   
+011A: 1F32                       tfr   U,Y        ;Save static storage pointer
+011C:                   
+011C: C30008                     addd  #PP.Data   ;Add in overhead
+011F: 25AF                       bcs   TooBig
+0121:                   
+0121: 3406                       pshs  D          ;Save buffer size
+0123: 103F28                     os9   F$SrqMem   ;Attempt to allocate buffer
+0126: 3506                       puls  D          ;Recover size, clean stack, lose error msg
+0128: 25A6                       bcs   TooBig
+012A:                   
+012A:                   *   Found enough memory for pipe buffer.
+012A:                   *
+012A:                   *   Pointer in Reg-U
+012A:                   *   Size in Reg-D
+012A:                   *   Previous buffer in Reg-X.
+012A:                   *   Driver static storage in Reg-Y.
+012A:                   *
+012A:                   *   Initialize the buffer
+012A:                   
+012A: 3446                       pshs  U,D        ;Save buffer pointer & size
+012C:                   
+012C:                   *   Clear pipe buffer header
+012C:                   
+012C: C608                       ldb   #PP.Data   ;Size of header
+012E: 6FC0              ClrBuf   clr   ,U+
+0130: 5A                         decb  
+0131: 26FB                       bne   ClrBuf
+0133:                   
+0133: 3546                       puls  D,U
+0135:                   
+0135:                   *   Initialize path descriptor and other fields of pipe buffer
+0135:                   *   for new pipe.
+0135:                   *
+0135:                   *   Pointer in Reg-U
+0135:                   *   Size in Reg-D
+0135:                   *   Previous buffer in Reg-X.
+0135:                   *   Driver static storage in Reg-Y.
+0135:                   *
+0135:                   *   IOMan has already prefilled the PD to $00 and 
+0135:                   *   has set PD.CNT for this path to 1.
+0135:                   
+0135: 3430                       pshs  Y,X        ;Save static storage pointer & prev.buff
+0137:                   
+0137: 10AE6E                     ldy   (4+10),S   ;Get PD pointer to Reg-Y
+013A: 10AF40                     sty   PP.PD,U    ;Save pointer to PD in pipe buffer
+013D:                   
+013D: 30CB                       leax  D,U        ;Point to end of pipe.buff + 1
+013F: AFA812                     stx   PD.End,Y
+0142:                   
+0142: 3048                       leax  PP.Data,U  ;Initial Next in & Next out pointers
+0144: AFA814                     stx   PD.NxtI,Y
+0147: AFA816                     stx   PD.NxtO,Y
+014A:                   
+014A: 9E50                       ldx   <D.Proc    ;Save ID of original creator
+014C: A600                       lda   P$ID,X
+014E: A7A81C                     sta   PD.Own,Y
+0151:                   
+0151: 3530                       puls  Y,X        ;Recover static storage pointer and prev.buff
+0153:                   
+0153: AF44                       stx   PP.Prev,U  ;Save address of previous buffer ($0 if none)
+0155: 2604                       bne   LinkIn     ; (branch if this isn't the 1st pipe)
+0157:                   
+0157:                   *   Special -- this is the first pipe.
+0157:                   *   Set PP.Next to $0000 and store buffer address in device memory.
+0157:                   *
+0157:                   *   Reg-U = pointer to new buffer.
+0157:                   *   Reg-X = $0000.
+0157:                   *   Reg-Y = static storage
+0157:                   
+0157:                   **  Zero prefill of PP header covers this
+0157:                   **        stx     PP.Next,U       ;No next buffer
+0157:                   **        stx     PP.Prev,U       ;No previous buffer
+0157: EF26                       stu   V.List,Y   ;Point driver static at this buffer
+0159: 2012                       bra   IsAsOld
+015B:                   
+015B:                   *   There are other named pipes.  Link this one in correctly
+015B:                   *   after the last one checked.
+015B:                   *
+015B:                   *   Reg-U = pointer to new buffer.
+015B:                   *   Reg-X = Pointer to previous buffer.
+015B:                   *   Reg-Y = static storage.
+015B:                   
+015B: EC02              LinkIn   ldd   PP.Next,X  ;Get old's next (could be $0000)
+015D: EF02                       stu   PP.Next,X  ;Set old's next pointing at new
+015F: ED42                       std   PP.Next,U  ;Set new's next where old's was
+0161: AF44                       stx   PP.Prev,U  ;Set new's prev pointing at old
+0163: 3416                       pshs  X,D
+0165: AE60                       ldx   0,S        ;Point X at original old's next
+0167: 2702                       beq   Link9      ; (branch if no next -- $0000 set already)
+0169: EF04                       stu   PP.Prev,X  ;Set prev of old's original next to new
+016B: 3516              Link9    puls  D,X
+016D:                   
+016D:                   *   Now we look pretty much like a new access to an old pipe.
+016D:                   *   Fix up pointers to match "old pipe" code
+016D:                   
+016D: 1F31              IsAsOld  tfr   U,X        ;Point Reg-X at pipe buffer
+016F: 1F23                       tfr   Y,U        ;Point Reg-U at driver static storage
+0171: 10AE6A                     ldy   10,S       ;Recover PD pointer
+0174: AF28                       stx   PD.BUF,Y   ;Set up buffer pointer in PD
+0176: 2031                       bra   OpnXit     ; (go to common trailer code)
+0178:                   
+0178:                   *   Pipe name found.  Set up to access an old pipe.
+0178:                   *
+0178:                   *   Reg-U points to driver static storage.
+0178:                   *   Reg-X points to matching pipe buffer.
+0178:                   *
+0178:                   *   We need to make this look like a DUP call, so
+0178:                   *   there's some nasty code here to give back the
+0178:                   *   PD allocated by IOMan and go get the "original"
+0178:                   *   PD for this named pipe.
+0178:                   
+0178:                   OldPipe  equ   *
+0178:                   
+0178:                   ***                                                       ***
+0178:                   *   WARNING -- This code emulates IOMan's I$Close and I$Dup *
+0178:                   ***                                                       ***
+0178:                   
+0178:                   *
+0178:                   *   Processing to give back the new path descriptor and use
+0178:                   *   the original PD that the pipe was opened with.
+0178:                   *
+0178:                   *       Fake close of PD passed by IOMan
+0178:                   *       Fake dup of named pipe's "master" PD
+0178:                   *       Fix PD pointer saved on IOMAN's stack
+0178:                   *
+0178:                   *   All of the subroutines preserve all regs, except as noted
+0178:                   *   This section MUST preserve Reg-X and Reg-U.  There must
+0178:                   *   be exactly 14 bytes on the stack at this point.
+0178:                   
+0178: 10AE6A                     ldy   10,S       ;Get IOMAN PD pointer (original Reg-Y)
+017B:                   
+017B:                   *   Detach the path.
+017B:                   
+017B: 3440                       pshs  U
+017D: EE23                       ldu   PD.DEV,Y   ; Get device pointer
+017F: 103F81                     os9   I$Detach   ; Detach to compensate for IOMAN Attach
+0182: 3540                       puls  U
+0184:                   
+0184:                   *   Decrement use count
+0184:                   
+0184: 6A22                       dec   PD.CNT,Y   ;Decrement use count
+0186:                   
+0186:                   *   Give back unwanted PD
+0186:                   
+0186:                   *** This is the way I did it originally
+0186: 3410                       pshs  X
+0188: A620                       lda   PD.PD,Y    ;Get system path number
+018A: 9E88                       ldx   <D.PthDBT  ;Point at path table index
+018C: 103F31                     os9   F$Ret64    ; and give back descriptor
+018F: 3510                       puls  X
+0191:                   *** This is the way the OSK named pipe manager does it.
+0191:                   *** I had to translate, of course, but the translated
+0191:                   *** version doesn't work right.
+0191:                   *        pshs    U,X
+0191:                   *        lda     PD.PD,Y         ;Get system path #
+0191:                   *        ldx     <D.PthDBT       ;Point at path table index
+0191:                   *        ldu     <D.SysDis       ;Point at system SVC dispatch table
+0191:                   *        jsr     [(F$Ret64*2),U] ;Do a RET64
+0191:                   *        puls    X,U
+0191:                   
+0191:                   *   Stack clean.
+0191:                   *   Update IOMAN variables.
+0191:                   *   Reg-Y = where IOMAN thinks the PD is.
+0191:                   
+0191:                            IFEQ  (CAUTION-CAREFUL)
+0191: 10ACE813                   cmpy  (14+IOMAGIC),S ;Make sure the stack looks right (PD matches)
+0195: 2706                       beq   OKMagic
+0197:                   
+0197:                   *   Stack is wrong; declare bad magic!
+0197:                   
+0197: 53                         comb  
+0198: C6BE                       ldb   #E$Bug
+019A: 326E                       leas  14,S
+019C: 39                         rts   
+019D:                            ENDC  
+019D:                   
+019D:                   *   Stack is right; go fix PD pointers
+019D:                   
+019D: 10AE00            OKMagic  ldy   PP.PD,X    ;Get PD pointer of existing named pipe PD.
+01A0: 10AF6A                     sty   10,S       ;Point PD pointer at existing PD
+01A3: 10AFE813                   sty   (14+IOMAGIC),S ;Save new IOMAN PD pointer in IOMAN stack
+01A7: 6C22                       inc   PD.CNT,Y   ;Increment use count
+01A9:                   
+01A9:                   *   End of dangerous code
+01A9:                   *   This section MUST have preserved Reg-X and Reg-U
+01A9:                   
+01A9:                   *   Exit code.
+01A9:                   *
+01A9:                   *   Reg-U points to driver static storage.
+01A9:                   *   Reg-Y points to PD.
+01A9:                   *   Reg-X points to matching pipe buffer.
+01A9:                   *
+01A9:                   *   Advance caller's path name pointer
+01A9:                   
+01A9:                   OpnXit   equ   *
+01A9:                   
+01A9:                   *   Fix use count based on PD.Keep
+01A9:                   
+01A9: A622                       lda   PD.CNT,Y
+01AB: A0A81D                     suba  PD.Keep,Y
+01AE: A722                       sta   PD.CNT,Y   ;Get rid of any artificial openings
+01B0: 6FA81D                     clr   PD.Keep,Y
+01B3:                   
+01B3:                            IFEQ  (PIPEDIR-YESDIR)
+01B3:                   *   Handle prefill of pipe directory buffer
+01B3:                   
+01B3: A621                       lda   PD.Mod,Y   ;Is this a DIR. open?
+01B5: 8580                       bita  #DIR.
+01B7: 2703                       beq   OpnXt2
+01B9:                   
+01B9: 1703B4                     lbsr  FilDirP    ;Send directory info to pipe
+01BC:                            ENDC  
+01BC:                   
+01BC: EE6C              OpnXt2   ldu   12,S       ;Point at caller's registers
+01BE: EC64                       ldd   4,S        ;Get revised path name pointer
+01C0: ED44                       std   R$X,U
+01C2:                   
+01C2: 326E                       leas  14,S       ;Clean the stack
+01C4:                   
+01C4:                   *   Successful exit.  Reg-X points to pipe buffer.
+01C4:                   
+01C4: 5F                         clrb  
+01C5: 39                         rts   
+01C6:                   
+01C6:                            page  
+01C6:                   *
+01C6:                   *   Compare pipe names.
+01C6:                   *
+01C6:                   *   Can't use F$CmpNam here because the strings
+01C6:                   *   are in system space.
+01C6:                   *
+01C6:                   *   Path names are pointed to by Reg-X and Reg-Y.
+01C6:                   *   Case is ignored.  Returns NE if not equal, else
+01C6:                   *   EQ.
+01C6:                   *
+01C6:                   
+01C6: 3432              Compare  pshs  Y,X,A      ;Reg-A is temp. storage
+01C8:                   
+01C8:                   *   Main comparison loop
+01C8:                   
+01C8: A680              Cmp001   lda   ,X+
+01CA: 84DF                       anda  #%11011111 ;Cheap and fast TOUPPER
+01CC: A760                       sta   0,S
+01CE:                   
+01CE: A6A0                       lda   ,Y+
+01D0: 84DF                       anda  #%11011111 ;Cheap and fast TOUPPER
+01D2: 2B06                       bmi   Cmp.Y      ; (exit if we find end of Y-string)
+01D4:                   
+01D4: A160                       cmpa  0,S
+01D6: 27F0                       beq   Cmp001
+01D8:                   
+01D8:                   *   Names don't match.  Return CC=NE
+01D8:                   
+01D8: 35B2                       puls  A,X,Y,PC
+01DA:                   
+01DA:                   *   End of "Y" string.  "X" character either matches or
+01DA:                   *   it doesn't.  Return CC accordingly.
+01DA:                   
+01DA: A160              Cmp.Y    cmpa  0,S
+01DC: 35B2                       puls  A,X,Y,PC
+01DE:                   
+01DE:                   *
+01DE:                   *   Convert element count in D to byte count in D.
+01DE:                   *   Return carry set if too big.
+01DE:                   *
+01DE:                   *   Reg-Y = PD pointer
+01DE:                   *   Reg-D = Element count
+01DE:                   *
+01DE:                   
+01DE: 3406              ECtoBC   pshs  D
+01E0: A6A821                     lda   PD.ESiz,Y  ;Get size of each element
+01E3: E660                       ldb   0,S        ;Get MSB of element count
+01E5: 3D                         mul   
+01E6: 3406                       pshs  D
+01E8: A6A821                     lda   PD.ESiz,Y  ;Get size of each element
+01EB: E663                       ldb   (2+1),S    ;Get LSB of element count
+01ED: 3D                         mul   
+01EE: AB61                       adda  1,S        ;C-bit set if too big
+01F0: 6DE1                       tst   ,S++       ;Z-bit clear if too big, C-bit OK
+01F2: 3262                       leas  2,S
+01F4: 2505                       bcs   EB.err
+01F6: 2603                       bne   EB.err
+01F8:                   
+01F8:                   *   OK exit
+01F8: 1CFE                       andcc  #^Carry
+01FA: 39                         rts   
+01FB:                   
+01FB:                   *   Error exit
+01FB: 1A01              EB.err   orcc  #Carry
+01FD: 39                         rts   
+01FE:                   
+01FE:                   *   Get next character of path name.
+01FE:                   *   Reg-Y set up as if just did a PRSNAM.
+01FE:                   
+01FE: 9E50              GtNext   ldx   <D.Proc
+0200: E606                       ldb   P$Task,X
+0202: 1F21                       tfr   Y,X
+0204: 103F49                     os9   F$LDABX
+0207: 39                         rts   
+0208:                   
+0208:                            page  
+0208:                   *
+0208:                   *   Error hook
+0208:                   *
+0208:                   MAKDIR   equ   *
+0208:                   CHGDIR   equ   *
+0208: 53                UNKNOWN  comb  
+0209: C6D0                       ldb   #E$UNKSVC
+020B: 39                         rts   
+020C:                   
+020C:                            page  
+020C:                   *
+020C:                   *   Close a pipe
+020C:                   *
+020C:                   *   If there are any other pipe users, leave the pipe
+020C:                   *   around.  Also, if the pipe is named and contains
+020C:                   *   any data, leave the pipe around even if there are
+020C:                   *   no remaining pipe users.
+020C:                   *
+020C:                   *   PD.Keep will be non-zero if the pipe has been kept
+020C:                   *   open artificially.
+020C:                   *
+020C:                   *   This routine is called each time a path to the pipe
+020C:                   *   is closed.
+020C:                   *
+020C:                   
+020C:                   CLOSE    equ   *
+020C:                   
+020C:                   *   Account for extra use count if pipe artificially kept open.
+020C:                   *   Then see if this is the last user of the pipe
+020C:                   
+020C: A6A81D                     lda   PD.Keep,Y  ;Account for extra pipe images
+020F: 40                         nega  
+0210: 6FA81D                     clr   PD.Keep,Y
+0213: AB22                       adda  PD.CNT,Y
+0215: A722                       sta   PD.CNT,Y   ;Set correct PD.CNT value
+0217: 2615                       bne   READERS    ; and branch if any users left
+0219:                   
+0219:                   *   No open paths to this pipe.
+0219:                   *   If it's named and not empty, leave it around anyway.
+0219:                   
+0219: 6DA823                     tst   PD.Name,Y  ;Named pipe?
+021C: 270C                       beq   CLOSE2
+021E:                   
+021E: ECA81A                     ldd   PD.BCnt,Y  ;How many elements buffered on named pipe?
+0221: 2707                       beq   CLOSE2
+0223:                   
+0223:                   *   Leave this named pipe around for a while
+0223:                   
+0223: 6C22                       inc   PD.CNT,Y   ;Create an extra image
+0225: 6CA81D                     inc   PD.Keep,Y  ; and remember that we did it
+0228: 201F                       bra   CLOXIT
+022A:                   
+022A:                   *   Delete the pipe.
+022A:                   *   Y = PD pointer.
+022A:                   
+022A: 8D38              CLOSE2   bsr   ZapPipe
+022C: 201B                       bra   CloXit     ;No error
+022E:                   
+022E:                   *   Open paths left.  What kind?
+022E:                   
+022E: A12B              READERS  cmpa  PD.RCT,Y   ;Are all open paths readers?
+0230: 2604                       bne   WRITERS
+0232:                   
+0232:                   *   All other open paths are readers.
+0232:                   *   Send signal to next reader (let him read a bit)
+0232:                   
+0232: 302A                       leax  PD.Read,Y
+0234: 2006                       bra   SENDSIG
+0236:                   
+0236:                   *   Not all readers.  What kind?
+0236:                   
+0236: A12F              WRITERS  cmpa  PD.WCT,Y   ;Are all open paths writers?
+0238: 260F                       bne   CloXit
+023A:                   
+023A:                   *   All other open paths are writers.
+023A:                   *   Send signal to next writer (let him write a bit)
+023A:                   
+023A: 302E                       leax  PD.Writ,Y
+023C:                   
+023C:                   *   Send signal to next reader or writer
+023C:                   
+023C: A600              SENDSIG  lda   PM.CPR,X   ;Process ID to signal
+023E: 2709                       beq   CLOXIT
+0240:                   
+0240: E602                       ldb   PM.SIG,X   ;Signal code to send
+0242: 2705                       beq   CLOXIT
+0244:                   
+0244:                   *   Committed to send signal:  clear the flag and send it
+0244:                   
+0244: 6F02                       clr   PM.SIG,X   ;Force no pending signal
+0246: 103F08                     os9   F$SEND
+0249:                   
+0249:                   *   Done with close
+0249:                   
+0249: 5F                CLOXIT   clrb  
+024A: 39                         rts   
+024B:                   
+024B:                            page  
+024B:                   *
+024B:                   *   Delete a named pipe.
+024B:                   *
+024B:                   *   Reg-Y = PD
+024B:                   *   Reg-U = caller's registers
+024B:                   *   Reg-X = path name
+024B:                   *
+024B:                   
+024B: 8601              Delete   lda   #Read.
+024D: A721                       sta   PD.MOD,Y   ;Need only READ permission
+024F: 3472                       pshs  U,Y,X,A    ;***Match stack set up by IOMAN
+0251: 17FE02                     lbsr  Open       ;Try to open the pipe
+0254: 3572                       puls  U,Y,X,A    ;***Clean up special stack
+0256: 2507                       bcs   BadDel
+0258:                   
+0258:                   *   Disconnect from pipe, but keep pointer.
+0258:                   *   Then check to see if we're the only user.
+0258:                   *
+0258:                   *   Note -- The call to OPEN updated PD.CNT
+0258:                   *   and cleared PD.Keep.
+0258:                   
+0258: 6A22                       dec   PD.CNT,Y   ;Don't count ourselves
+025A: 2704                       beq   DoDel      ;If count is zero, OK to delete
+025C:                   
+025C:                   *   Pipe is in use.  Return E$FNA
+025C:                   
+025C: 53                FNAXIT   comb  
+025D: C6D6                       ldb   #E$FNA
+025F:                   
+025F:                   *   Exit w/ carry set and error code in B
+025F:                   
+025F: 39                BadDel   rts   
+0260:                   
+0260:                   *   Perform the delete.
+0260:                   
+0260: 8D02              DoDel    bsr   ZapPipe
+0262: 5F                         clrb  
+0263: 39                         rts   
+0264:                   
+0264:                   *
+0264:                   *   Return all memory for the pipe buffer specified
+0264:                   *   in the path descriptor, and remove it from the linked list.
+0264:                   *
+0264:                   *   Reg-Y = PD pointer
+0264:                   *   Pipe buffer pointer is at PD.BUF,Y
+0264:                   *
+0264:                   
+0264: EE23              ZapPipe  ldu   PD.DEV,Y   ;Get device table pointer
+0266: EE42                       ldu   V$Stat,U   ;Get static storage pointer
+0268:                   
+0268: AE28                       ldx   PD.BUF,Y   ;Point to pipe's buffer
+026A: EC02                       ldd   PP.Next,X  ;Save pointer to current and next in list
+026C: 3406                       pshs  D
+026E: EC04                       ldd   PP.Prev,X  ;Save pointer to previous in list
+0270: 3406                       pshs  D
+0272:                   
+0272:                   *   Reg-D has pointer to previous.  If zero, we're zapping head of list.
+0272:                   *   Z-bit is already set accordingly
+0272:                   
+0272: 2612                       bne   OldHead
+0274:                   
+0274:                   *   New head of list.
+0274:                   *   Reg-X still points to buffer to be deleted
+0274:                   
+0274: EC62                       ldd   2,S        ;Get pointer to next (may be $0000)
+0276: ED46                       std   V.List,U   ; and set as new head
+0278: 3416                       pshs  X,D
+027A: AE60                       ldx   0,S        ;Point Reg-X at next, set CC
+027C: 2704                       beq   Zap9
+027E: 6F04                       clr   (PP.Prev+0),X ; and set no prev for next
+0280: 6F05                       clr   (PP.Prev+1),X
+0282: 3516              Zap9     puls  D,X        ;Point back at pipe to delete
+0284: 200C                       bra   ZapIt
+0286:                   
+0286:                   *   No new head of list.  Just delete from linked list.
+0286:                   *   We know there is a previous buffer.
+0286:                   *
+0286:                   *   Reg-X points to buffer to be deleted.
+0286:                   *   Reg-D points to previous buffer.
+0286:                   
+0286: EE02              OldHead  ldu   PP.Next,X  ;Get U pointing at our next (may be $0000)
+0288: 1E01                       exg   D,X        ;Point X at our prev, D at us
+028A: EF02                       stu   PP.Next,X  ;Save new next for out prev
+028C: 2702                       beq   Zap8
+028E: AF44                       stx   PP.Prev,U  ;Point our next's prev at our original prev
+0290: 1E01              Zap8     exg   D,X
+0292:                   
+0292:                   *   All cleaned up. Give back the buffer
+0292:                   *   Reg-X points to buffer, Reg-Y points to PD.
+0292:                   
+0292: ECA812            ZapIt    ldd   PD.End,Y
+0295: 3410                       pshs  X
+0297: A360                       subd  0,S        ;Get total bytes to Reg-D
+0299: 3540                       puls  U          ;Point at buffer, clean stack
+029B: 103F29                     os9   F$SRtMem
+029E:                   
+029E:                   *   Exit with whatever error F$SRtMem produces
+029E:                   
+029E: 3264                       leas  4,S        ;Clean stack
+02A0: 39                         rts   
+02A1:                   
+02A1:                            page  
+02A1:                   *
+02A1:                   *   Dummy hook
+02A1:                   *
+02A1:                   SEEK     equ   *
+02A1: 5F                Dummy    clrb  
+02A2: 39                         rts   
+02A3:                   
+02A3:                            page  
+02A3:                   *
+02A3:                   *   GETSTT processing
+02A3:                   *
+02A3:                   *   Supports the following codes:
+02A3:                   *
+02A3:                   *   SS.Opt          Option section
+02A3:                   *   SS.Ready        # bytes in queue
+02A3:                   *   SS.Siz          Size of queue
+02A3:                   *   SS.EOF          Queue empty
+02A3:                   *   SS.FD           Bogus file descriptor   (WIZBANG==MSGS)
+02A3:                   *   SS.ScSiz        Screen Size
+02A3:                   *
+02A3:                   *   SS.Opt handled in IOMAN, etc.
+02A3:                   *   SS.Ready code by Kent Meyers, modified by Chris Burke
+02A3:                   *   SS.Siz, SS.EOF, SS.FD, SS.ScSiz by Chris Burke
+02A3:                   *
+02A3:                   
+02A3: A642              GETSTT   lda   R$B,U      Get User B Register ++
+02A5: 8101                       cmpa  #SS.READY  Test for Ready Call ++
+02A7: 2626                       bne   NotSSRDY
+02A9:                   
+02A9:                   *   Process SS.Rdy -- return # elements in queue
+02A9:                   *   If more than 255, return 255.
+02A9:                   
+02A9: C6FF              G.Rdy    ldb   #255
+02AB: 6DA81A                     tst   (PD.BCnt+0),Y
+02AE: 2605                       bne   G.Rdy0     ;Accomodate large queues (256 or more bytes)
+02B0: E6881B                     ldb   (PD.BCnt+1),X ;Get element count LSB
+02B3:                   
+02B3:                   *   Reg-B has LSB of element count, CC set based on value
+02B3:                   
+02B3: 2708                       beq   RDNRDY     ;Not Ready if no characters
+02B5:                   
+02B5: E742              G.Rdy0   stb   R$B,U      ;Return count in B
+02B7:                   
+02B7:                   SST.OK   equ   *
+02B7:                   SST.Ign  equ   *
+02B7:                   
+02B7: 5F                G.OK     clrb             No Error ++
+02B8: 1FA8                       tfr   CC,A
+02BA: A740                       sta   R$CC,U
+02BC: 39                         rts              Return ++
+02BD:                   
+02BD:                   *   No characters for SS.Ready
+02BD:                   
+02BD: 6DA819            RDNRDY   tst   PD.Wrtn,Y  Anybody writing to pipe?
+02C0: 2609                       bne   NOTEOF     (not OK if so)
+02C2:                   
+02C2:                   *   No writer
+02C2:                   
+02C2: E622                       ldb   PD.CNT,Y   Exactly one path open to pipe?
+02C4: 5A                         decb  
+02C5: 2604                       bne   NOTEOF     (OK if no, e.g. nobody or > 1)
+02C7:                   
+02C7:                   *   Internal error
+02C7:                   
+02C7: 53                IntErr   comb  
+02C8: C6FF                       ldb   #255
+02CA: 39                         rts   
+02CB:                   
+02CB: 53                NOTEOF   comb             Set Error Flag ++
+02CC: C6F6                       ldb   #E$NOTRDY  Get Error Code ++
+02CE: 39                         rts              Return ++
+02CF:                   
+02CF:                   *   Not SS.Ready.  Check for SS.Siz
+02CF:                   
+02CF: 8102              NotSSRdy cmpa  #SS.Size   Test for Size call
+02D1: 260B                       bne   NotSSSiz
+02D3:                   
+02D3:                   *   Process SS.Siz -- return size of queue in ELEMENTS.
+02D3:                   
+02D3: ECA81E            G.Siz    ldd   PD.QSiz,Y  ;Get max. # of queue elements
+02D6: ED48                       std   R$U,U
+02D8: 6F44                       clr   (R$X+0),U  Set 16 MSB's to $0000
+02DA: 6F45                       clr   (R$X+1),U
+02DC: 20D9              GOK001   bra   G.OK
+02DE:                   
+02DE:                   *   Not SS.Siz.  Check for SS.EOF
+02DE:                   
+02DE: 8106              NotSSSiz cmpa  #SS.EOF
+02E0: 260B                       bne   NotSSEOF
+02E2:                   
+02E2:                   *   Process SS.EOF
+02E2:                   *   Handle like SS.Rdy, but preserve Reg-B
+02E2:                   
+02E2: 8DEF              G.EOF    bsr   G.Siz
+02E4: C600                       ldb   #0         ;NOT clrb -- preserve carry
+02E6: E742                       stb   R$B,U
+02E8: 24CD                       bcc   G.OK       ;No error if ready
+02EA:                   
+02EA: C6D3                       ldb   #E$EOF     ;Carry is already set
+02EC: 39                         rts   
+02ED:                   
+02ED:                   *   Not SS.EOF.  Check for SS.FD
+02ED:                   
+02ED:                            IFEQ  (PIPEDIR-YESDIR)
+02ED: 810F              NotSSEOF cmpa  #SS.FD
+02EF: 2605                       bne   NotSSFD
+02F1:                   
+02F1:                   *   Process SS.FD
+02F1:                   
+02F1: 1702B2                     lbsr  DoSSFD
+02F4: 20C1                       bra   G.OK       ;Successful always
+02F6:                            ELSE  
+02ED:                   NotSSEOF equ   *
+02F6:                            ENDC  
+02F6:                   
+02F6:                   *   Not SS.FD.  Check for SS.ScSiz
+02F6:                   
+02F6: 8126              NotSSFD  cmpa  #SS.ScSiz  ;Force UNKNOWN here
+02F8: 1027FF0C                   lbeq  UnKnown
+02FC:                   
+02FC:                   NotSCSZ  equ   *
+02FC:                   
+02FC:                   NotSSAT  equ   *
+02FC:                   
+02FC:                   *   Process unknown GETSTT
+02FC:                   
+02FC:                   *        lbra    UNKNOWN
+02FC: 20B9                       bra   G.OK
+02FE:                   *        bra     NotEOF
+02FE:                   
+02FE:                            page  
+02FE:                   *
+02FE:                   *   SETSTT processing
+02FE:                   *
+02FE:                   *   Supports the following codes:
+02FE:                   *
+02FE:                   *   SS.Opt          Option section
+02FE:                   *   SS.Siz          No effect unless size=0; then clears pipe buffer
+02FE:                   *   SS.FD           No effect
+02FE:                   *   SS.SSig         Set signal on data available
+02FE:                   *   SS.Relea        Release signal
+02FE:                   *
+02FE:                   *   SS.Opt handled in IOMAN, etc.
+02FE:                   *   SS.Siz, SS.SSig, SS.Relea by Chris Burke, modified
+02FE:                   *   from OSK.
+02FE:                   *
+02FE:                   
+02FE: A642              SetStt   lda   R$B,U      Get User B Register ++
+0300: 8100                       cmpa  #SS.Opt
+0302: 27B3                       beq   SST.Ign    ; (ignore)
+0304: 810F                       cmpa  #SS.FD
+0306: 27AF                       beq   SST.Ign
+0308:                   
+0308:                   *   Check for SS.SIZ
+0308:                   
+0308: 8102                       cmpa  #SS.Size
+030A: 261C                       bne   NoS.Siz
+030C:                   
+030C: EC48                       ldd   R$U,U      ;Get caller's size
+030E: 26A7                       bne   SST.Ign
+0310:                   
+0310:                   *   Clear the pipe
+0310:                   
+0310: AE28                       ldx   PD.Buf,Y
+0312: 3308                       leau  PP.Data,X
+0314: EFA814                     stu   PD.NxtI,Y
+0317: EFA816                     stu   PD.NxtO,Y
+031A: 6FA81A                     clr   (PD.BCnt+0),Y
+031D: 6FA81B                     clr   (PD.BCnt+1),Y
+0320: 6FA818                     clr   PD.RFlg,Y
+0323: 6FA819                     clr   PD.Wrtn,Y
+0326:                   
+0326: 208F              QST.OK   bra   SST.OK
+0328:                   
+0328:                   *   Check for SS.SSig
+0328:                   
+0328: 811A              NoS.Siz  cmpa  #SS.SSig
+032A: 2617                       bne   NoS.Sig
+032C:                   
+032C: 302A                       leax  PD.Read,Y  ;Point at read packet
+032E: 6D00                       tst   PM.Cpr,X   ;Error if already somebody waiting
+0330: 2699                       bne   NOTEOF
+0332:                   
+0332:                   *   Set signal trap
+0332:                   
+0332: A625                       lda   PD.CPR,Y   ;Set process ID
+0334: A700                       sta   PM.CPR,X
+0336: A645                       lda   (R$X+1),U  ;Get signal code
+0338: A702                       sta   PM.Sig,X
+033A: 6DA81A                     tst   PD.BCnt,Y  ;Immediate signal if
+033D: 1026FEFB                   lbne  SendSig
+0341:                   
+0341: 20E3                       bra   QST.OK
+0343:                   
+0343:                   *   Check for release of signal
+0343:                   
+0343: 811B              NoS.Sig  cmpa  #SS.Relea
+0345: 260C                       bne   NoS.Rel
+0347:                   
+0347: 302A                       leax  PD.Read,Y  ;Point at read packet
+0349: A600                       lda   PM.CPR,X
+034B: A125                       cmpa  PD.CPR,Y   ;Our process set it?
+034D: 26D7                       bne   QST.OK
+034F:                   
+034F:                   *   Release signal trap
+034F:                   
+034F: 5F                         clrb  
+0350: 160193                     lbra  Switch
+0353:                   
+0353:                   *   Not SS.Relea.  Check for SS.Attr
+0353:                   
+0353: 811C              NoS.Rel  cmpa  #SS.Attr
+0355: 261D                       bne   NoS.Atr
+0357:                   
+0357:                   *   Change attributes if allowed
+0357:                   
+0357: 9E50                       ldx   <D.Proc
+0359: A600                       lda   P$ID,X     ;Are we superuser?
+035B: 270F                       beq   SAT.OK
+035D: 6DA81C                     tst   PD.Own,Y   ;Is creator still attached?
+0360: 2603                       bne   SAT.XX
+0362:                   
+0362: A7A81C                     sta   PD.Own,Y   ;Inherit pipe if owner abandoned it
+0365:                   
+0365: A1A81C            SAT.XX   cmpa  PD.Own,Y
+0368: 1026FEF0                   lbne  FNAXit     ;If can't match PID, E$FNA error
+036C:                   
+036C:                   *   Change attributes.
+036C:                   *   Reg-U points at caller's registers
+036C:                   
+036C: A641              SAT.OK   lda   R$A,U
+036E: 8A03                       ora   #(READ.+WRITE.) ;We insist . . .
+0370: A721                       sta   PD.MOD,Y
+0372: 20B2                       bra   QST.OK
+0374:                   
+0374:                   *   Unknown SETSTT
+0374:                   
+0374: 16FE91            NoS.Atr  lbra  Unknown
+0377:                   
+0377:                            page  
+0377:                   *
+0377:                   *   Read CR-terminated line or element count from
+0377:                   *   pipe with no editing.  Note that this call is
+0377:                   *   not well defined for element sizes other than
+0377:                   *   1 byte.
+0377:                   *
+0377:                   
+0377: E6A821            READLN   ldb   PD.ESiz,Y
+037A: 5A                         decb  
+037B: 2665                       bne   RddEOF     ;EOF error if more than 1 byte per element
+037D:                   
+037D: C60D                       ldb   #CR
+037F: E72D                       stb   PD.REOR,Y
+0381: 2002                       bra   READ001
+0383:                   
+0383:                   *
+0383:                   *   Read element count from pipe with no editing.
+0383:                   *
+0383:                   *   Note that if there are fewer elements in the pipe
+0383:                   *   than the user wants to read, and there are no writers
+0383:                   *   for the pipe, we return all elements followed by E$EOF.
+0383:                   *
+0383:                   
+0383: 6F2D              READ     clr   PD.REOR,Y
+0385:                   
+0385:                   *   Generic read.  PD.REOR = terminator if non-null
+0385:                   
+0385: 302A              READ001  leax  PD.Read,Y  ;Get PID of reader (us)
+0387: 1700F5                     lbsr  GETFREE
+038A: 2576                       bcs   RddRTS
+038C:                   
+038C: EC46                       ldd   R$Y,U      ;Desired element count
+038E: 2758                       beq   RddXit
+0390:                   
+0390:                   *   Set up for outer loop -- push zero element count
+0390:                   *   and space for buffer pointers on stack.
+0390:                   
+0390: 4F                         clra  
+0391: 5F                         clrb  
+0392: 3406                       pshs  D          ;Initial count of elements read
+0394: 327C                       leas  -4,S
+0396: AE44                       ldx   R$X,U      ;Initial buffer start address
+0398: 2030                       bra   RddNext
+039A:                   
+039A:                   *   Enter here to block on read.  If there are no writers,
+039A:                   *   return E$EOF.
+039A:                   
+039A: 3410              CantRdd  pshs  X          ;Save buffer pointer
+039C:                   
+039C: 302A                       leax  PD.Read,Y
+039E: 170109                     lbsr  SigSlp
+03A1: 10250035                   lbcs  RddDone
+03A5:                   
+03A5:                   *   Inner loop to read bytes.
+03A5:                   *   Here for initial attempt to read,
+03A5:                   *   or to retry after blocking
+03A5:                   
+03A5: 9E50              READOK   ldx   <D.PROC    ;Point to our task descriptor
+03A7: E606                       ldb   P$TASK,X   ++LII
+03A9: 3510                       puls  X          ++LII Recover current buffer pointer
+03AB:                   
+03AB:                   *   Inner read loop.  Read one element.
+03AB:                   *   Note that we could use F$Move for elements larger
+03AB:                   *   than 1 byte, because queue size is always an even
+03AB:                   *   multiple of element size.
+03AB:                   
+03AB: 170171            RddMore  lbsr  DOREAD     ;Get byte to A, or CS
+03AE: 25EA                       bcs   CantRdd
+03B0:                   
+03B0: 103F4A                     os9   F$STABX    ;Put byte in caller's buffer
+03B3: 3001                       leax  1,X
+03B5: 6D2D                       tst   PD.REOR,Y  ;Is there an EOR character?
+03B7: 2704                       beq   NotRdLn
+03B9:                   
+03B9: A12D                       cmpa  PD.REOR,Y  ;Did we match it?
+03BB: 2719                       beq   RddEOL
+03BD:                   
+03BD: AC60              NotRdLn  cmpx  0,S        ;Compare current addr. to end addr
+03BF: 25EA                       blo   RddMore    ; and loop until done
+03C1:                   
+03C1:                   *   Done with element.  Check for next.
+03C1:                   
+03C1: 3410                       pshs  X          ;Save buffer pointer
+03C3:                   
+03C3: 8D28                       bsr   CntDn      ;Update queue count, etc
+03C5: 10A346                     cmpd  R$Y,U      ;Got all elements?
+03C8: 2412                       bhs   RddTail
+03CA:                   
+03CA:                   *   Outer loop -- read one element at a time.
+03CA:                   *
+03CA:                   *   X = next data pointer
+03CA:                   *   Y = PD pointer
+03CA:                   
+03CA: AF60              RddNext  stx   0,S        ;Set new start address
+03CC: E6A821                     ldb   PD.ESiz,Y  ;Size of one element
+03CF: 4F                         clra  
+03D0: E360                       addd  0,S        ;Compute end address of current element bfr
+03D2: ED62                       std   2,S
+03D4: 20CF                       bra   READOK     ;Go to element reading loop
+03D6:                   
+03D6:                   *   Read an EOL.  Advance element count
+03D6:                   
+03D6: 3410              RddEOL   pshs  X          ;Save buffer pointer
+03D8: 8D13                       bsr   CntDn
+03DA:                   
+03DA:                   *   Read everything, or aborting
+03DA:                   
+03DA: EC64              RddDone  ldd   4,S        ;Get element count
+03DC:                   
+03DC:                   *   Tail end of read
+03DC:                   
+03DC: ED46              RddTail  std   R$Y,U
+03DE: 3266                       leas  6,S        ;Clean stack
+03E0: 2605                       bne   RddSome    ;Success if read more than 0 elements
+03E2:                   
+03E2:                   *   EOF error if no bytes read
+03E2:                   
+03E2: 53                RddEOF   comb  
+03E3: C6D3                       ldb   #E$EOF
+03E5: 2001                       bra   RddXit
+03E7:                   
+03E7:                   *   Successful exit
+03E7:                   
+03E7: 5F                RddSome  clrb  
+03E8:                   
+03E8: 302A              RddXit   leax  PD.Read,Y
+03EA: 1600F9                     lbra  SWITCH
+03ED:                   
+03ED:                   *   Decrement queued count, inc read count
+03ED:                   
+03ED: CCFFFF            CntDn    ldd   #-1
+03F0: 2003                       bra   CUpDn
+03F2:                   
+03F2:                   *   Increment queued count, inc written count
+03F2:                   
+03F2: CC0001            CntUp    ldd   #1
+03F5:                   
+03F5: E3A81A            CUpDn    addd  PD.BCnt,Y  ;Modify count of elements queued
+03F8: EDA81A                     std   PD.BCnt,Y
+03FB:                   
+03FB:                   *   Bump I/O count
+03FB:                   
+03FB: EC66              IOCnt    ldd   (2+4),S    ;Bump count of elements read/written
+03FD: C30001                     addd  #1
+0400: ED66                       std   (2+4),S
+0402: 39                RDDRTS   rts   
+0403:                   
+0403:                            page  
+0403:                   *
+0403:                   *   Write CR-terminated line or element count to
+0403:                   *   pipe with no editing
+0403:                   *
+0403:                   
+0403: E6A821            WRITELN  ldb   PD.ESiz,Y
+0406: 5A                         decb  
+0407: 26D9                       bne   RddEOF     ;EOF error if more than 1 byte per element
+0409:                   
+0409: C60D                       ldb   #CR
+040B: E7A811                     stb   PD.WEOR,Y
+040E: 2003                       bra   Wrt001
+0410:                   
+0410:                   *
+0410:                   *   Write byte count to pipe with no editing.
+0410:                   *
+0410:                   
+0410: 6FA811            WRITE    clr   PD.WEOR,Y
+0413:                   
+0413:                   *   Generic entry point
+0413:                   
+0413: 302E              Wrt001   leax  PD.Writ,Y
+0415: 170067                     lbsr  GETFREE    ;Check I/O queue
+0418: 2555                       bcs   WrtXit
+041A:                   
+041A: EC46                       ldd   R$Y,U      ;Element count
+041C: 2751                       beq   WrtXit
+041E:                   
+041E:                   *   Set up for outer loop -- push zero element count
+041E:                   *   and space for buffer pointers on stack.
+041E:                   
+041E: 4F                         clra  
+041F: 5F                         clrb  
+0420: 3406                       pshs  D          ;Initial count of elements read
+0422: 327C                       leas  -4,S
+0424: AE44                       ldx   R$X,U      ;Initial buffer start address
+0426: 2030                       bra   WrtNext
+0428:                   
+0428:                   *   Enter here to block on write
+0428:                   
+0428: 3410              CantWrt  pshs  X
+042A:                   
+042A: 302E                       leax  PD.Writ,Y
+042C: 17007B                     lbsr  SigSlp
+042F: 2542                       bcs   WrtErr
+0431:                   
+0431:                   *   Begin (or resume) write
+0431:                   
+0431: 9E50              WRITOK   ldx   <D.PROC    ++LII
+0433: E606                       ldb   P$TASK,X   ;Get our DAT image #
+0435: 3510                       puls  X          ++LII
+0437:                   
+0437:                   *   Main write loop
+0437:                   
+0437: 103F49            WrtMore  os9   F$LDABX    ;Get a byte from caller's buffer
+043A: 1700B8                     lbsr  DOWRITE
+043D: 25E9                       bcs   CantWrt
+043F:                   
+043F: 3001                       leax  1,X
+0441: 6DA811                     tst   PD.WEOR,Y  ;EOL character defined?
+0444: 2705                       beq   NotWrLn
+0446:                   
+0446: A1A811                     cmpa  PD.WEOR,Y
+0449: 2719                       beq   WrtEOL
+044B:                   
+044B:                   *   See if at end of buffer
+044B:                   
+044B: AC60              NotWrLn  cmpx  0,S
+044D: 25E8                       blo   WrtMore
+044F:                   
+044F:                   *   Done with element.  Check for next.
+044F:                   
+044F: 3410                       pshs  X          ;Save buffer pointer
+0451:                   
+0451: 8D9F                       bsr   CntUp
+0453: 10A346                     cmpd  R$Y,U      ;Put all elements?
+0456: 2412                       bhs   WrtTail
+0458:                   
+0458:                   *   Outer loop -- write one element at a time.
+0458:                   
+0458: AF60              WrtNext  stx   0,S        ;Set new start address
+045A: E6A821                     ldb   PD.ESiz,Y  ;Size of one element
+045D: 4F                         clra  
+045E: E360                       addd  0,S        ;Compute end address of current element bfr
+0460: ED62                       std   2,S
+0462: 20CD                       bra   WRITOK     ;Go to element reading loop
+0464:                   
+0464:                   *   Wrote an EOL.  Advance element count
+0464:                   
+0464: 3410              WrtEOL   pshs  X          ;Save buffer pointer
+0466: 8D8A                       bsr   CntUp
+0468:                   
+0468:                   *   Wrote everything, or aborting
+0468:                   
+0468: EC64              WrtDone  ldd   4,S        ;Get element count
+046A:                   
+046A:                   *   Tail end of write
+046A:                   
+046A: ED46              WrtTail  std   R$Y,U
+046C: 3266                       leas  6,S        ;Clean stack
+046E:                   
+046E:                   *   Successful exit
+046E:                   
+046E: 5F                WrtSome  clrb  
+046F:                   
+046F: 302E              WrtXit   leax  PD.Writ,Y
+0471: 2073                       bra   SWITCH
+0473:                   
+0473:                   *   Error exit
+0473:                   
+0473: 3404              WrtErr   pshs  B
+0475: EC65                       ldd   (4+1),S
+0477: ED46                       std   R$Y,U
+0479: 3504                       puls  B
+047B:                   
+047B: 3266                       leas  6,S
+047D: 20F0                       bra   WrtXit
+047F:                   
+047F:                            page  
+047F:                   *
+047F:                   *   I/O queue manipulation routines
+047F:                   *
+047F:                   
+047F: A600              GETFREE  lda   PM.CPR,X   ;Is any process using this resource?
+0481: 2721                       beq   SETPMCPR   ; (branch if not)
+0483:                   
+0483: A125                       cmpa  PD.CPR,Y   ;Does caller control this resource?
+0485: 2721                       beq   OURDEVIC   ; (branch if so)
+0487:                   
+0487: 6C01                       inc   PM.CNT,X   ;Bump # of active r/w images
+0489: E601                       ldb   PM.CNT,X
+048B: E122                       cmpb  PD.CNT,Y   ;See if equal to # of open images
+048D: 2603                       bne   SETQUEUE   ; (if not, run everybody else to free it)
+048F:                   
+048F: 17FDAA                     lbsr  SENDSIG    ;Yes -- wake up next process
+0492:                   
+0492:                   *   Process number in Reg-A
+0492:                   *   Put the process into the I/O queue and
+0492:                   *   sleep until a signal wakes us up
+0492:                   
+0492: 103F2B            SETQUEUE os9   F$IOQU
+0495: 6A01                       dec   PM.CNT,X   ;Caller is asleep, so 1 less active
+0497: 3410                       pshs  X
+0499: 9E50                       ldx   <D.PROC
+049B: E68819                     ldb   P$SIGNAL,X ;Get caller's signal
+049E: 3510                       puls  X
+04A0: 27DD                       beq   GETFREE    ;Loop until there's a signal
+04A2:                   
+04A2: 43                         coma             ;Error if caller is waiting
+04A3: 39                         rts   
+04A4:                   
+04A4:                   *   Nobody using the resource.  Grab it.
+04A4:                   
+04A4: E625              SETPMCPR ldb   PD.CPR,Y
+04A6: E700                       stb   PM.CPR,X   ;Make caller "owner"
+04A8:                   
+04A8:                   *   Exit -- caller owns the pipe
+04A8:                   
+04A8: 5F                OURDEVIC clrb  
+04A9: 39                         rts   
+04AA:                   
+04AA:                   *
+04AA:                   *   Set a wakeup signal for the calling process
+04AA:                   *
+04AA:                   
+04AA: E601              SigSlp   ldb   PM.CNT,X   ;Active image count
+04AC: 5C                         incb  
+04AD: E122                       cmpb  PD.CNT,Y   ;Everybody active?
+04AF: 260A                       bne   SgSlp01    ; (if not, try sending signals)
+04B1:                   
+04B1:                   *   Nobody on the other end to signal.
+04B1:                   *   Error if anonymous, else hang out a bit.
+04B1:                   
+04B1: 6DA823                     tst   PD.Name,Y  ;If anonymous pipe & nobody left, error
+04B4: 272C                       beq   WRITEROR
+04B6:                   
+04B6:                   *   Named pipe and nobody to signal.  Not an error if data in pipe.
+04B6:                   
+04B6: 6DA81A                     tst   PD.BCnt,Y  ;Number of items in pipe
+04B9: 2727                       beq   WRITEROR
+04BB:                   
+04BB:                   *   Send signal to other end of pipe (may not be one, though)
+04BB:                   
+04BB: E701              SgSlp01  stb   PM.CNT,X
+04BD: C601                       ldb   #S$WAKE
+04BF: E702                       stb   PM.SIG,X   ;Force caller's signal to "wakeup"
+04C1: 6F25                       clr   PD.CPR,Y
+04C3: 3410                       pshs  X
+04C5: 1F10                       tfr   X,D        ;Switch from reader to writer or vis-a-vis
+04C7: C804                       eorb  #4
+04C9: 1F01                       tfr   D,X
+04CB: 17FD6E                     lbsr  SENDSIG    ;Send signal to opposite end of pipe
+04CE: 8E0000                     ldx   #0
+04D1: 103F0A                     os9   F$SLEEP    ;Caller sleeps until signaled
+04D4: 9E50                       ldx   <D.PROC
+04D6: E68819                     ldb   P$SIGNAL,X
+04D9: 3510                       puls  X
+04DB: 6A01                       dec   PM.CNT,X   ;Caller is asleep, so 1 less active
+04DD: 5D                         tstb  
+04DE: 2604                       bne   GOTSIGNL   ;Error if opposite end set no signal
+04E0:                   
+04E0: 5F                         clrb  
+04E1: 39                         rts   
+04E2:                   
+04E2:                   *   WRITE ERROR hook
+04E2:                   
+04E2: C6F5              WRITEROR ldb   #E$WRITE
+04E4:                   
+04E4:                   *   Generic error hook
+04E4:                   
+04E4: 43                GOTSIGNL coma  
+04E5: 39                         rts   
+04E6:                   
+04E6:                   *
+04E6:                   *   Release this end of the pipe, and
+04E6:                   *   send a signal to the other end.
+04E6:                   *
+04E6:                   *   Enter pointing to variables for
+04E6:                   *   this end; exit pointing to variables
+04E6:                   *   for opposite end.
+04E6:                   *
+04E6:                   
+04E6: 3445              SWITCH   pshs  CC,B,U
+04E8: 6F00                       clr   PM.CPR,X   ;No process controlling current end
+04EA: 1F10                       tfr   X,D
+04EC: C804                       eorb  #4         ;Switch to other end (MAGIC)
+04EE: 1F01                       tfr   D,X
+04F0: 17FD49                     lbsr  SENDSIG    ;Awaken other end
+04F3: 35C5                       puls  CC,B,U,PC
+04F5:                   
+04F5:                   *
+04F5:                   *   Write one byte to queue described in path
+04F5:                   *   descriptor.  Return CS if queue full.
+04F5:                   *   Doesn't update count of ELEMENTS queued.
+04F5:                   *
+04F5:                   
+04F5: 3414              DOWRITE  pshs  B,X
+04F7: AEA814                     ldx   PD.NxtI,Y
+04FA: E6A818                     ldb   PD.RFlg,Y
+04FD: 2708                       beq   SETREADY   ;(say data available)
+04FF:                   
+04FF: ACA816                     cmpx  PD.NxtO,Y
+0502: 2608                       bne   STORDATA   ;(branch if queue not full)
+0504:                   
+0504:                   *   Error -- queue is full
+0504:                   
+0504: 53                         comb  
+0505: 3594                       puls  B,X,PC
+0507:                   
+0507:                   *   Mark data available in queue
+0507:                   
+0507: C601              SETREADY ldb   #1
+0509: E7A818                     stb   PD.RFlg,Y
+050C:                   
+050C:                   *   Put data in Reg-A into queue, and advance
+050C:                   *   pointer to next in w/ wrap
+050C:                   
+050C: A780              STORDATA sta   ,X+
+050E: ACA812                     cmpx  PD.End,Y
+0511: 2504                       blo   WTNOWRAP
+0513:                   
+0513: AE28                       ldx   PD.BUF,Y
+0515: 3008                       leax  PP.Data,X
+0517:                   
+0517: AFA814            WTNOWRAP stx   PD.NxtI,Y
+051A:                   
+051A:                   * Don't step Character Input Counter.
+051A:                   
+051A: 6FA819                     clr   PD.Wrtn,Y
+051D: 3594                       puls  B,X,PC
+051F:                   
+051F:                   *
+051F:                   *   Read one byte from queue described in path
+051F:                   *   descriptor.  Return CS if none available.
+051F:                   *   Doesn't update count of ELEMENTS queued.
+051F:                   *
+051F:                   
+051F: A6A818            DOREAD   lda   PD.RFlg,Y  ;Any data?
+0522: 2602                       bne   DATAREDY
+0524:                   
+0524:                   *   No data -- return CS
+0524:                   
+0524: 53                         comb  
+0525: 39                         rts   
+0526:                   
+0526:                   *   Get data from queue
+0526:                   
+0526: 3410              DATAREDY pshs  X
+0528: AEA816                     ldx   PD.NxtO,Y  ;Get next out pointer
+052B: A680                       lda   ,X+
+052D: ACA812                     cmpx  PD.End,Y
+0530: 2504                       blo   RDNOWRAP
+0532:                   
+0532: AE28                       ldx   PD.BUF,Y
+0534: 3008                       leax  PP.Data,X
+0536:                   
+0536:                   *   Save updated next out pointer
+0536:                   
+0536: AFA816            RDNOWRAP stx   PD.NxtO,Y
+0539: ACA814                     cmpx  PD.NxtI,Y
+053C: 2603                       bne   NOTEMPTY
+053E:                   
+053E: 6FA818                     clr   PD.RFlg,Y  ;Mark queue empty
+0541:                   
+0541:                   *   Don't decrement Character Input Counter.
+0541:                   
+0541:                   NOTEMPTY equ   *
+0541:                   
+0541:                   *   Exit with character in Reg-A
+0541:                   
+0541: 1CFE                       andcc  #^Carry    ;Clear carry
+0543: 3590                       puls  X,PC
+0545:                   
+0545:                            page  
+0545:                   *
+0545:                   *   Utility placed here to not make assembly listing obsolete.
+0545:                   *
+0545:                   
+0545: 103F38            MovSet   os9   F$Move     ;Do inter-process block move
+0548:                   
+0548:                   *   Force set MSB at end of name
+0548:                   
+0548: 1F20                       tfr   Y,D        ;Byte count to D
+054A: 5A                         decb  
+054B: A6C5                       lda   B,U        ;Get last byte of name
+054D: 8A80                       ora   #%10000000
+054F: A7C5                       sta   B,U
+0551:                   
+0551: 39                         rts   
+0552:                   
+0552:                            IFEQ  (PIPEDIR-YESDIR)
+0552:                   
+0552:                   *
+0552:                   *   Find out how many pipes there are for the
+0552:                   *   current device, and set up device descriptor
+0552:                   *   so that pipe buffer will hold 32 bytes of
+0552:                   *   data for each.
+0552:                   *
+0552:                   *   Reg-Y = PD pointer
+0552:                   *
+0552:                   *   Exit with size set up in PD.
+0552:                   *   CC=EQ if no pipes.
+0552:                   *
+0552:                   
+0552: 3416              SizDirP  pshs  X,D
+0554:                   
+0554: 5F                         clrb             ;Clear count of pipes
+0555: AE23                       ldx   PD.Dev,Y
+0557: AE02                       ldx   V$Stat,X   ;Point at static storage
+0559: AE06                       ldx   V.List,X   ;Get head of linked list
+055B: 2705                       beq   GotCnt
+055D:                   
+055D:                   *   There are some pipes.  Count them.
+055D:                   
+055D: 5C                PCount   incb  
+055E: AE02                       ldx   PP.Next,X  ;Track down linked list
+0560: 26FB                       bne   PCount
+0562:                   
+0562:                   *   Now Reg-B = pipe count.  Need 32 bytes per pipe.
+0562:                   
+0562: 5C                GotCnt   incb             ;Add one for us!
+0563: 8620                       lda   #32
+0565: 3D                         mul   
+0566: EDA81E                     std   PD.QSiz,Y  ;Set element count for this pipe
+0569: 8601                       lda   #1
+056B: A7A821                     sta   PD.ESiz,Y  ;Set element size to 1 byte
+056E:                   
+056E: 3596                       puls  D,X,PC
+0570:                   
+0570:                   *
+0570:                   *   Fill pipe buffer with directory data.
+0570:                   *
+0570:                   *   The data is organized like an RBF directory:
+0570:                   *
+0570:                   *   Offset      Data
+0570:                   *   --------    --------------------------------
+0570:                   *   $00-$1C     Pipe name
+0570:                   *   $1D         DAT task number of pipe buffer
+0570:                   *   $1E-$1F     Address of pipe buffer in task
+0570:                   *
+0570:                   *
+0570: 3456              FilDirP  pshs  U,X,D
+0572:                   
+0572: AE23                       ldx   PD.Dev,Y
+0574: AE02                       ldx   V$Stat,X   ;Point at static storage
+0576: AE06                       ldx   V.List,X   ;Get head of linked list
+0578: 2722                       beq   GotFil
+057A:                   
+057A:                   *   Write data for pipe buffer @X to pipe with PD @Y
+057A:                   
+057A: EE00              FD000    ldu   PP.PD,X    ;Point at PD for pipe to be dumped
+057C: 33C823                     leau  PD.Name,u
+057F: C61D                       ldb   #NameMax
+0581:                   
+0581: A6C0              FD001    lda   ,u+        ;Write pipe name
+0583: 8D19                       bsr   QWrite
+0585: 5A                         decb  
+0586: 26F9                       bne   FD001
+0588:                   
+0588: DE4A                       ldu   <D.SysPrc  ;Get system DAT image number
+058A: A646                       lda   P$Task,u
+058C: 8D10                       bsr   QWrite
+058E:                   
+058E: 3410                       pshs  X          ;Get pipe buffer pointer
+0590: A6E0                       lda   ,S+
+0592: 8D0A                       bsr   QWrite
+0594: A6E0                       lda   ,S+
+0596: 8D06                       bsr   QWrite
+0598:                   
+0598:                   *   Advance to next pipe buffer
+0598:                   
+0598: AE02                       ldx   PP.Next,X
+059A: 26DE                       bne   FD000
+059C:                   
+059C:                   *   All done.  Restore regs & exit
+059C:                   
+059C: 35D6              GotFil   puls  D,X,U,PC
+059E:                   
+059E:                   *   Byte saver
+059E:                   
+059E: 16FF54            QWrite   lbra  DoWrite
+05A1:                   
+05A1:                   *
+05A1:                   *   Immortal entry point
+05A1:                   *
+05A1: 43                Immort   coma  
+05A2: C226                       sbcb  #38
+05A4: 54                         lsrb  
+05A5: 42                         fcb   $42        ;SBCB op-code
+05A6:                   
+05A6:                   *   Fall through to SS.FD processing
+05A6:                   
+05A6:                   *
+05A6:                   *   Routine to process SS.FD call on an open pipe.
+05A6:                   *   Creates a pseudo-FD in the user's buffer (@R$X).
+05A6:                   *   Desired byte count in R$Y.
+05A6:                   *
+05A6:                   *   The pseudo-file descriptor sector includes the following:
+05A6:                   *
+05A6:                   *   Offset      Description
+05A6:                   *   --------    --------------------------------------
+05A6:                   *   $00         Attributes
+05A6:                   *   $01-$02     Owner's *PROCESS* ID
+05A6:                   *   $03-$07     Zeros (date of last access)
+05A6:                   *   $08         Use count
+05A6:                   *   $09-$0C     Number of items queued
+05A6:                   *   $0D-$0F     Zeros (creation date)
+05A6:                   *   $10-$FF     Zeros (segment list -- at least 5 zeros needed)
+05A6:                   *
+05A6:                   
+05A6: 3476              DoSSFD   pshs  D,X,Y,U
+05A8:                   
+05A8: C615                       ldb   #(16+5)    ;Clear data on stack
+05AA: 6FE2              SSFD01   clr   ,-S
+05AC: 5A                         decb  
+05AD: 26FB                       bne   SSFD01
+05AF:                   
+05AF:                   *   Set attributes
+05AF: A621                       lda   PD.Mod,Y
+05B1: A760                       sta   FD.ATT,S
+05B3:                   
+05B3:                   *   Set owner's process ID
+05B3: A6A81C                     lda   PD.Own,Y
+05B6: A762                       sta   (FD.OWN+1),S
+05B8:                   
+05B8:                   *   Set use count
+05B8: A622                       lda   PD.CNT,Y
+05BA: A768                       sta   FD.LNK,S
+05BC:                   
+05BC:                   *   Set queue count
+05BC:                   
+05BC: ECA81A                     ldd   PD.BCNT,Y
+05BF: ED6B                       std   (FD.SIZ+2),S
+05C1:                   
+05C1:                   *   Now copy the data into the caller's buffer
+05C1:                   
+05C1: 9E4A                       ldx   <D.SysPrc  ;Pointer to our PD
+05C3: A606                       lda   P$Task,X   ; get system's DAT image # (source)
+05C5: 9E50                       ldx   <D.Proc    ;Pointer to caller's PD
+05C7: E606                       ldb   P$Task,X   ; get caller's DAT image # (dest)
+05C9: 10AE46                     ldy   R$Y,U      ;Byte count
+05CC: 3060                       leax  0,S        ;Source address
+05CE: EE44                       ldu   R$X,U      ;Destination address
+05D0: 103F38                     os9   F$Move     ;Do the move
+05D3:                   
+05D3:                   *   All done.
+05D3:                   
+05D3: 32E815                     leas  (16+5),S
+05D6: 35F6                       puls  U,X,Y,D,PC
+05D8:                   
+05D8:                            ENDC  
+05D8:                   
+05D8: 684C04                     emod  
+05DB:                   
+05DB:                   MODSIZE  equ   *
+05DB:                   
+05DB:                            end   
+0 Pass 2 errors.
+
+SYMBOL TABLE
+   A.ACIAP 01 ff68    A.MODP 01 ff6c   A.TERMV 01 ffc0      A.V1 01 ffc1
+      A.V2 01 ffc2      A.V3 01 ffc3      A.V4 01 ffc4      A.V5 01 ffc5
+      A.V6 01 ffc6      A.V7 01 ffc7  ACIA2661 02 0003  ACIA6551 02 0002
+  ACIA6850 02 0001  ACIATYPE 03 0002  ALTERBIT 00 0004      ANON 01 0000
+  ATTRMASK 00 00f0      B110 00 0000   B115200 00 000a     B1200 00 0003
+    B19200 00 0007     B2400 00 0004      B300 00 0001    B38400 00 0008
+     B4800 00 0005    B57600 00 0009      B600 00 0002     B9600 00 0006
+    BADDEL 02 025f   BADEXIT 02 00d2  BADINSTR 00 0040   BADNAM2 02 00ca
+   BADNAME 02 00cc   BADXIT2 02 00c6  BLOCKTYP 00 0001   BOOTSTR 02 0014
+   BORDREG 00 ff9a  BT.BLOCK 00 003b   BT.FLAG 00 8a34  BT.OFFST 00 0002
+    BT.SEC 00 0000   BT.SIZE 00 1080  BT.START 01 ed00  BT.TRACK 00 0022
+   BUFBUSY 00 0040    BUFMOD 00 0001  BYTETYPE 00 0002    C$BELL 01 0007
+     C$BSP 01 0008  C$CLSALL 01 0016   C$CLSGR 01 0015    C$COMA 01 002c
+      C$CR 01 000d     C$DEL 01 0018  C$DELETE 01 0010     C$DWN 01 001f
+      C$EL 01 0005     C$EOF 01 001b    C$FORM 01 000c    C$HOME 01 000b
+  C$INSERT 01 0011    C$INTR 01 0003      C$LF 01 000a     C$LFT 01 001d
+    C$NULL 01 0000    C$PAUS 01 0017    C$PERD 01 002e   C$PLINE 01 0013
+    C$QUIT 01 0005    C$RARR 01 0009     C$RGT 01 001c    C$RPET 01 0001
+    C$RPRT 01 0004  C$SHRARR 01 0019      C$SI 01 000f      C$SO 01 000e
+    C$SPAC 01 0020      C$UP 01 001e    C$XOFF 01 0013     C$XON 01 0011
+   CANTRDD 02 039a   CANTWRT 02 0428   CAREFUL 01 0001     CARRY 00 0001
+   CAUTION 01 0001   CBLCODE 00 0005     CCODE 00 0004    CHGDIR 02 0208
+   CHKLOOP 02 00e0     CINIT 00 0020     CLOSE 02 020c    CLOSE2 02 022a
+    CLOXIT 02 0249    CLRBUF 02 012e     CMP.Y 02 01da    CMP001 02 01c8
+     CNTDN 02 03ed  CNTRLBIT 00 0002     CNTUP 02 03f2    COCO.D 01 0001
+     COLOR 01 0001    COLOR3 01 0002   COMPARE 02 01c6    CONDEM 00 0002
+  CPUSPEED 01 0002   CPUTYPE 01 0002        CR 00 000d   CRCCON1 00 0080
+  CRCCON23 00 0fe3    CRCOFF 00 0000     CRCON 00 0001   CREAT00 02 004c
+    CREATE 02 003c     CUPDN 02 03f5    D$GSTA 02 0009    D$INIT 02 0000
+    D$PSTA 02 000c    D$READ 02 0003    D$TERM 02 000f    D$WRIT 02 0006
+  D.ALTIRQ 02 00b2  D.APROCQ 02 0052  D.BLKMAP 02 0040    D.BOOT 02 0031
+   D.BORDR 02 009a   D.BTBUG 02 005e   D.BTPTR 02 0036    D.BTSZ 02 0038
+  D.CBSTRT 02 0071   D.CCMEM 02 00a5   D.CCSTK 02 00a7  D.CLDRES 02 005c
+   D.CLOCK 02 00e0  D.CLOCK2 02 00b6    D.CLTB 02 00b0  D.COCOXT 02 0009
+   D.CRASH 02 006b     D.CRC 02 003b     D.DAY 02 002a   D.DAYWK 02 0034
+  D.DBGMEM 02 000a  D.DEVTBL 02 0080  D.DMAREQ 02 008a D.DWSRVID 02 0010
+  D.DWSTAT 02 000eD.DWSUBADDR 02 000c  D.ERRCOD 02 0033  D.ERRRST 02 00ee
+    D.FIRQ 02 00f6   D.FLIP0 02 00a9   D.FLIP1 02 00ab   D.FRQER 02 0093
+   D.GPOLL 02 00b4   D.HINIT 02 0090   D.HOFF0 02 009f    D.HOUR 02 002b
+    D.INIT 02 0024     D.IRQ 02 00f8   D.IRQER 02 0092    D.IRQS 02 00af
+   D.MEMSZ 02 00a3     D.MIN 02 002c  D.MODDAT 02 005a  D.MODDIR 02 0044
+  D.MODEND 02 0058   D.MONTH 02 0029   D.MOTON 02 0032     D.NMI 02 00fc
+    D.PIPE 02 0061    D.POLL 02 0026  D.POLTBL 02 0082  D.PRCDBT 02 0048
+    D.PROC 02 0050  D.PTHDBT 02 0088    D.QCNT 02 007c    D.QIRQ 02 003f
+   D.QUICK 02 003e   D.RESV1 02 0096   D.RESV2 02 0097   D.RESV3 02 009b
+     D.SEC 02 002d   D.SLICE 02 002f   D.SPEED 02 00a0  D.SPROCQ 02 0056
+  D.SSTSKN 02 00a4  D.SVCIRQ 02 00ce     D.SWI 02 00fa    D.SWI2 02 00f4
+    D.SWI3 02 00f2  D.SWPAGE 02 0003  D.SYSDAT 02 004c  D.SYSDIS 02 00c2
+  D.SYSIRQ 02 00c4  D.SYSMEM 02 004e  D.SYSPRC 02 004a  D.SYSSTK 02 00cc
+  D.SYSSVC 02 00c0  D.SYSTSK 02 00d0  D.SYSVEC 02 00f0  D.TASK1N 02 003d
+   D.TASKS 02 0020  D.TENTHS 02 003c    D.TICK 02 002e    D.TIME 02 0028
+   D.TIMLS 02 0095   D.TIMMS 02 0094   D.TINIT 02 0091   D.TKCNT 02 0035
+  D.TMPDAT 02 0022  D.TSKIPT 02 00a1  D.TSLICE 02 0030  D.USRDIS 02 00c8
+  D.USRIRQ 02 00ca  D.USRSVC 02 00c6   D.VIDMD 02 0098   D.VIDRS 02 0099
+    D.VIRQ 02 00ad   D.VOFF0 02 009e   D.VOFF1 02 009d   D.VOFF2 02 009c
+  D.WDADDR 02 0000  D.WDBTDR 02 0002  D.WPROCQ 02 0054   D.XFIRQ 02 00e6
+    D.XIRQ 02 00e8    D.XNMI 02 00ec    D.XSWI 02 00ea   D.XSWI2 02 00e4
+   D.XSWI3 02 00e2    D.YEAR 02 0028  DAT.ADDR 00 ffe0  DAT.BLCT 00 0008
+  DAT.BLMX 00 003f  DAT.BLSZ 00 2000  DAT.BMSZ 00 0040  DAT.FREE 00 333e
+  DAT.IMSZ 00 0010  DAT.REGS 00 ffa0  DAT.TASK 00 ff91  DAT.TKCT 00 0020
+  DAT.WREN 00 0000  DAT.WRPR 00 0000      DATA 00 0040  DATAREDY 02 0526
+    DD.ATT 02 000d    DD.BIT 02 0006    DD.BSZ 02 0018     DD.BT 02 0015
+    DD.DAT 02 001a    DD.DIR 02 0008    DD.DSK 02 000e    DD.FMT 02 0010
+    DD.MAP 02 0004    DD.NAM 02 001f    DD.OPT 02 003f    DD.OWN 02 000b
+    DD.RES 02 0013    DD.SIZ 02 0015    DD.SPT 02 0011    DD.TKS 02 0003
+    DD.TOT 02 0000      DEAD 00 0001  DEFIOSIZ 00 0010    DELETE 02 024b
+    DEVCNT 02 000d     DEVIC 00 00f0    DEVSIZ 02 000d      DIR. 00 0080
+    DIR.FD 02 001d    DIR.NM 02 0000    DIR.SZ 02 0020      DIV0 00 0080
+   DNS.DTD 00 0002    DNS.FM 00 0000   DNS.FM0 00 0000   DNS.MFM 00 0001
+  DNS.MFM0 00 0004   DNS.STD 00 0000     DODEL 02 0260     DONEW 02 0115
+    DOREAD 02 051f    DOSSFD 02 05a6   DOWNBIT 00 0010   DOWRITE 02 04f5
+     DPORT 01 ff40     DRIVR 00 00e0    DRVBEG 02 000f    DRVMEM 02 0026
+   DT.CDFM 00 0005    DT.NFM 00 0004   DT.PIPE 00 0002    DT.RBF 00 0001
+    DT.RFM 00 0006    DT.SBF 00 0003    DT.SCF 00 0000     DUMMY 02 02a1
+   E$ALIAS 02 00c7  E$ARROVF 02 0049  E$BADBUF 02 00c2   E$BMCRC 02 00e8
+    E$BMHP 02 00ec    E$BMID 02 00cd   E$BMODE 02 00cb    E$BNAM 02 00eb
+  E$BPADDR 02 00d2   E$BPNAM 02 00d7   E$BPNUM 02 00c9  E$BPRCID 02 00e0
+    E$BTYP 02 00f9  E$BUFSIZ 02 00bf     E$BUG 02 00be     E$CEF 02 00da
+     E$CRC 02 00f3  E$DEADLK 02 00fe   E$DELSP 02 00df  E$DEVBSY 02 00fa
+  E$DEVOVF 02 00cc    E$DIDC 02 00fb  E$DIMLRG 02 0019  E$DIRFUL 02 00ce
+  E$DIVZER 02 002d      E$DN 02 00c6     E$DNE 02 00ee  E$ENDQOU 02 0029
+     E$EOF 02 00d3  E$EXCVRB 02 000b  E$FLTOVF 02 0032     E$FNA 02 00d6
+    E$FULL 02 00f8  E$HANGUP 02 00dc     E$IBA 02 00db  E$ICHREF 02 000e
+  E$ICOORD 02 00bd   E$ICOVF 02 000d  E$IFORKP 02 00e6    E$ILLA 02 0043
+  E$ILLARG 02 00bb  E$ILLCMD 02 00c0  E$ILLCNT 02 0044  E$ILLDEC 02 0048
+  E$ILLDIM 02 0015  E$ILLEXP 02 0047  E$ILLFOR 02 0046  E$ILLINP 02 003d
+  E$ILLIVR 02 004d  E$ILLLIT 02 0016  E$ILLMOD 02 000f  E$ILLNUM 02 0010
+  E$ILLOPD 02 0012  E$ILLOPR 02 0013  E$ILLPNM 02 0040  E$ILLPRF 02 0011
+  E$ILLRET 02 0017  E$ILLRFN 02 0014  E$ILLSFX 02 0018  E$ILLSTC 02 000c
+  E$IOCONV 02 003c  E$IOFRPT 02 003e  E$IOFSYN 02 003f  E$IOMISM 02 003a
+   E$IONUM 02 003b  E$IPRCID 02 00e0    E$ISWI 02 00e3   E$IWDEF 02 00c3
+   E$IWTYP 02 00b7  E$KWNMOD 02 00e7  E$LINLRG 02 001a  E$LNCOMP 02 0033
+    E$LOCK 02 00fc  E$MEMFUL 02 00cf   E$MFULL 02 0020  E$MLTLIN 02 004b
+  E$MLTVAR 02 004c     E$MNF 02 00dd  E$MODBSY 02 00d1  E$MULPRC 02 002c
+   E$NEMOD 02 00ea     E$NES 02 00d5   E$NFONT 02 00b9  E$NOASSG 02 001b
+  E$NOCHLD 02 00e2  E$NOCOMA 02 001d  E$NODATA 02 004f   E$NODIM 02 001e
+    E$NODO 02 001f  E$NOGOTO 02 0021  E$NOLPAR 02 0022  E$NOLREF 02 0023
+  E$NONRCO 02 0042  E$NOOPRD 02 0024  E$NOPATH 02 001c   E$NORAM 02 00ed
+  E$NOROUT 02 0030  E$NORPAR 02 0025  E$NOTASK 02 00ef  E$NOTHEN 02 0026
+    E$NOTO 02 0027  E$NOTRDY 02 00f6  E$NOVREF 02 0028  E$PARMER 02 0038
+    E$PNNF 02 00d8    E$POLL 02 00ca  E$PRCABT 02 00e4  E$PRCFUL 02 00e5
+  E$PTHFUL 02 00c8    E$READ 02 00f4    E$SECT 02 00f1    E$SEEK 02 00f7
+  E$SEEKRG 02 004e   E$SHARE 02 00fd     E$SLF 02 00d9  E$STKOVF 02 00ba
+  E$STROVF 02 002f  E$SUBLRG 02 002a  E$SUBOVF 02 0035  E$SUBRNG 02 0037
+  E$SUBUND 02 0036  E$SYSOVF 02 0039  E$TBLFUL 02 00c1  E$TYPMIS 02 002e
+  E$UNDLIN 02 004a  E$UNDVAR 02 0031    E$UNIT 02 00f0  E$UNKPRC 02 002b
+  E$UNKSVC 02 00d0  E$UNKSYM 02 000a  E$UNMCNT 02 0045      E$UP 02 00c5
+   E$USIGP 02 00e9  E$VALRNG 02 0034   E$WADEF 02 00b8      E$WP 02 00f2
+   E$WRITE 02 00f5   E$WRSUB 02 0041  E$WUNDEF 02 00c4    EB.ERR 02 01fb
+    ECTOBC 02 01de   EDITION 01 0001    ENTIRE 00 0080   EOFLOCK 00 0004
+     EXEC. 00 0004   F$ALARM 02 001e  F$ALHRAM 02 0053   F$ALL64 02 0030
+  F$ALLBIT 02 0013  F$ALLIMG 02 003a  F$ALLPRC 02 004b  F$ALLRAM 02 0039
+  F$ALLTSK 02 003f   F$APROC 02 002c    F$BOOT 02 0035   F$BTMEM 02 0036
+   F$CHAIN 02 0005  F$CLRBLK 02 0050  F$CMPNAM 02 0011  F$CPYMEM 02 001b
+     F$CRC 02 0017  F$CRCMOD 02 0055  F$DATLOG 02 0044  F$DATTMP 02 0045
+   F$DEBUG 02 0023  F$DELBIT 02 0014  F$DELIMG 02 003b  F$DELPRC 02 004c
+  F$DELRAM 02 0051  F$DELTSK 02 0040   F$ELINK 02 004d    F$EXIT 02 0006
+  F$FIND64 02 002f  F$FMODUL 02 004e    F$FORK 02 0003  F$FREEHB 02 003e
+  F$FREELB 02 003d  F$GBLKMP 02 0019  F$GCMDIR 02 0052  F$GMODDR 02 001a
+  F$GPRDSC 02 0018  F$GPROCP 02 0037    F$ICPT 02 0009      F$ID 02 000c
+   F$IODEL 02 0033    F$IOQU 02 002b     F$IRQ 02 002a   F$LDABX 02 0049
+   F$LDAXY 02 0046  F$LDAXYP 02 0047  F$LDDDXY 02 0048    F$LINK 02 0000
+    F$LOAD 02 0001  F$MAPBLK 02 004f     F$MEM 02 0007    F$MOVE 02 0038
+  F$NMLINK 02 0021  F$NMLOAD 02 0022   F$NPROC 02 002d   F$NVRAM 02 0071
+    F$PERR 02 000f  F$PRSNAM 02 0010  F$REBOOT 02 0054  F$REGDMP 02 0070
+  F$RELTSK 02 0043  F$RESTSK 02 0042   F$RET64 02 0031  F$SCHBIT 02 0012
+    F$SEND 02 0008  F$SETIMG 02 003c  F$SETTSK 02 0041   F$SLEEP 02 000a
+   F$SLINK 02 0034  F$SPRIOR 02 000d  F$SRQMEM 02 0028  F$SRTMEM 02 0029
+    F$SSPD 02 000b    F$SSVC 02 0032    F$SSWI 02 000e   F$STABX 02 004a
+   F$STIME 02 0016   F$SUSER 02 001c  F$TIMALM 02 0026    F$TIME 02 0015
+     F$TPS 02 0025  F$UNLINK 02 0002  F$UNLOAD 02 001d  F$VBLOCK 02 0057
+    F$VIRQ 02 0027  F$VMODUL 02 002e    F$WAIT 02 0004   F$XTIME 02 0056
+     FALSE 00 0000    FD.ATT 02 0000  FD.CREAT 02 000d    FD.DAT 02 0003
+    FD.LNK 02 0008    FD.LS1 00 00fb    FD.LS2 00 00fa    FD.OWN 02 0001
+    FD.SEG 02 0010    FD.SIZ 02 0009     FD000 02 057a     FD001 02 0581
+     FDBUF 00 0004    FDSL.A 02 0000    FDSL.B 02 0003    FDSL.S 02 0005
+  FEATURE1 02 001b  FEATURE2 02 001c   FILDIRP 02 0570  FILELOCK 00 0002
+  FIRQMASK 00 0040     FLMGR 00 00d0    FMCDIR 02 0009    FMCLOS 02 0024
+    FMCREA 02 0000    FMDLET 02 000c    FMGSTA 02 001e    FMMDIR 02 0006
+    FMOPEN 02 0003    FMRDLN 02 0018    FMREAD 02 0012    FMSEEK 02 000f
+    FMSSTA 02 0021   FMT.DNS 00 0002  FMT.SIDE 00 0001  FMT.T0DN 00 0020
+  FMT.TDNS 00 0004    FMWRIT 02 0015    FMWRLN 02 001b    FNAXIT 02 025c
+  FRTNCODE 00 0006     G.EOF 02 02e2      G.OK 02 02b7     G.RDY 02 02a9
+    G.RDY0 02 02b5     G.SIZ 02 02d3   GETFREE 02 047f    GETSTT 02 02a3
+  GIMEREGS 00 ff00   GOCHECK 02 00b8    GOK001 02 02dc    GOTCNT 02 0562
+    GOTFIL 02 059c  GOTSIGNL 02 04e4    GTNEXT 02 01fe     H6309 06 0000
+  HALFCRRY 00 0020   HASNAME 02 0080   HW.PAGE 01 0007      HZ50 00 0001
+      HZ60 00 0002  I$ATTACH 02 0080  I$CHGDIR 02 0086   I$CLOSE 02 008f
+  I$CREATE 02 0083  I$DELETE 02 0087  I$DELETX 02 0090  I$DETACH 02 0081
+     I$DUP 02 0082  I$GETSTT 02 008d  I$MAKDIR 02 0085    I$OPEN 02 0084
+    I$READ 02 0089  I$READLN 02 008b    I$SEEK 02 0088  I$SETSTT 02 008e
+   I$WRITE 02 008a  I$WRITLN 02 008c     ICODE 00 0002    IMGCHG 00 0010
+    IMMORT 02 05a1  INDRIVER 00 0020   INITSTR 02 000eINSTALLNAME 02 001f
+    INTERR 02 02c7  INTMASKS 00 0050    IOADDR 00 007f   IOBLOCK 00 003f
+     IOCNT 02 03fb   IOENTRY 00 00fe   IOMAGIC 00 0005    IRQENR 00 ff92
+   IRQMASK 00 0010   ISASOLD 02 016d     ISIZ. 00 0020    IT.ALF 02 0017
+    IT.BAU 02 0027    IT.BDC 02 0035    IT.BGC 02 0034    IT.BSE 02 0024
+    IT.BSO 02 0014    IT.BSP 02 001b    IT.COL 02 002c    IT.CPX 02 0031
+    IT.CPY 02 0032    IT.CYL 02 0017    IT.D2P 02 0028    IT.DEL 02 001c
+    IT.DLO 02 0015    IT.DNS 02 0016    IT.DRV 02 0013    IT.DTP 02 0012
+    IT.DUP 02 0020    IT.DVC 02 0012   IT.ECNT 02 0014    IT.EKO 02 0016
+    IT.EOF 02 001e    IT.EOR 02 001d   IT.ESIZ 02 0013  IT.EXTEN 02 0022
+    IT.FGC 02 0033    IT.ILV 02 001f    IT.INT 02 0022  IT.LLDRV 02 0028
+    IT.MPI 02 002a    IT.NUL 02 0018    IT.OFS 02 0026    IT.OVF 02 0025
+    IT.PAG 02 001a    IT.PAR 02 0026    IT.PAU 02 0019    IT.PDC 00 0012
+    IT.PSC 02 0021    IT.QUT 02 0023    IT.ROW 02 002d    IT.RPR 02 001f
+    IT.RWC 02 0028    IT.SAS 02 0020    IT.SCT 02 001b    IT.SID 02 0019
+  IT.SOFF1 02 0025  IT.SOFF2 02 0026  IT.SOFF3 02 0027  IT.STOFF 02 0024
+    IT.STP 02 0014    IT.STY 02 0030    IT.T0S 02 001d    IT.TFM 02 0021
+    IT.TYP 02 0015    IT.UPC 02 0013    IT.VAL 02 002f    IT.VFY 02 001a
+    IT.WND 02 002e    IT.WPC 02 0025   IT.XOFF 02 002b    IT.XON 02 002a
+   IT.XTYP 02 002e    JMPTBL 02 0015   KEYRPTD 02 0029   KEYRPTS 02 0028
+    KRNBLK 01 003f  LANGMASK 00 000f   LASTRAM 00 003f   LEFTBIT 00 0020
+     LEVEL 00 0002   LIMITED 00 0001     LINK9 02 016b    LINKIN 02 015b
+    M$DTYP 02 0012    M$EXEC 02 0009    M$FMGR 02 0009      M$ID 02 0000
+     M$ID1 00 0087    M$ID12 00 87cd     M$ID2 00 00cd  M$IDSIZE 02 0009
+     M$MEM 02 000b    M$MODE 02 000d    M$NAME 02 0004     M$OPT 02 0011
+  M$PARITY 02 0008    M$PDEV 02 000b    M$PORT 02 000e    M$REVS 02 0007
+    M$SIZE 02 0002    M$TYPE 02 0006    MAKDIR 02 0208  MAPPEDIO 02 0000
+    MAXMEM 02 0009  MD$ESIZE 02 0008   MD$LINK 02 0006  MD$MBSIZ 02 0002
+  MD$MPDAT 02 0000   MD$MPTR 02 0004    MINSEC 01 0010  MODBLOCK 00 0002
+    MODNAM 02 000d    MODNAT 00 0020   MODPROT 00 0040   MODSIZE 02 05db
+   MONTYPE 02 0025  MOUSEINF 02 0026  MOVEBLKS 00 0005    MOVSET 02 0545
+  MPI.SLCT 01 ff7f  MPI.SLOT 01 0003      MSGS 01 0002     MULTI 00 0030
+     NAMED 01 0001   NAMEMAX 01 001d    NAMEOK 02 0097  NEFIOSIZ 00 000c
+  NEGATIVE 00 0008     NEWP1 02 0104   NEWPIPE 02 00f8     NODIR 01 0000
+   NOS.ATR 02 0374   NOS.REL 02 0353   NOS.SIG 02 0343   NOS.SIZ 02 0328
+   NOS9MAJ 00 0000   NOS9MIN 00 0001   NOS9VER 00 0001    NOT1ST 02 00d6
+  NOTEMPTY 02 0541    NOTEOF 02 02cb   NOTNAME 02 006e    NOTRAM 00 0080
+   NOTRDLN 02 03bd   NOTSCSZ 02 02fc   NOTSSAT 02 02fc  NOTSSEOF 02 02ed
+   NOTSSFD 02 02f6  NOTSSRDY 02 02cf  NOTSSSIZ 02 02de   NOTWRLN 02 044b
+    NPATHS 01 0010  NUMPATHS 00 0010   OBJ6309 00 0007     OBJCT 00 0001
+   OKMAGIC 02 019d   OLDHEAD 02 0286   OLDPIPE 02 0178    ONEMHZ 00 0001
+      OPEN 02 0056    OPNXIT 02 01a9    OPNXT2 02 01bc    OPTCNT 00 001a
+     OS9.D 01 0001  OS9MAJOR 00 0000  OS9MINOR 00 0001   OS9VRSN 00 0001
+   OSLEVEL 02 0017   OSMAJOR 02 0019   OSMINOR 02 001a    OSNAME 02 001d
+     OSVER 02 0018  OURDEVIC 02 04a8     P$AGE 02 000b   P$ALARM 02 00c3
+     P$CID 02 0003  P$DATBEG 02 00bd  P$DATIMG 02 0040  P$DEADLK 02 001e
+     P$DIO 02 0020  P$FCALLS 02 00b5  P$ICALLS 02 00b9      P$ID 02 0000
+    P$IOQN 02 0010    P$IOQP 02 000f   P$LINKS 02 0080     P$NIO 02 00a0
+  P$PAGCNT 02 0007    P$PATH 02 0030     P$PID 02 0001  P$PMODUL 02 0011
+   P$PRIOR 02 000a   P$QUEUE 02 000d    P$SELP 02 00ac     P$SID 02 0002
+  P$SIGDAT 02 001c  P$SIGNAL 02 0019  P$SIGVEC 02 001a    P$SIZE 02 0200
+      P$SP 02 0004   P$STACK 02 0200   P$STATE 02 000c  P$STICKS 02 00b1
+     P$SWI 02 0013    P$SWI2 02 0015    P$SWI3 02 0017    P$TASK 02 0006
+  P$TIMBEG 02 00c0    P$USER 02 0008  P$UTICKS 02 00ad    PALADR 00 ffb0
+   PAREVEN 00 0060   PARMARK 00 00a0   PARMASK 00 00e0   PARNONE 00 0000
+    PARODD 00 0020  PARSPACE 00 00e0     PCODE 00 0003    PCOUNT 02 055d
+    PD.ALF 02 0025    PD.ATT 02 0033    PD.BAU 02 0035   PD.BCNT 02 001a
+    PD.BSE 02 0032    PD.BSO 02 0022    PD.BSP 02 0029    PD.BUF 02 0008
+    PD.CNT 02 0002     PD.CP 02 000b    PD.CPR 02 0005    PD.CYL 02 0025
+    PD.D2P 02 0036    PD.DCP 02 003a    PD.DEL 02 002a    PD.DEV 02 0003
+    PD.DFD 02 0037    PD.DLO 02 0023    PD.DNS 02 0024    PD.DRV 02 0021
+    PD.DSK 02 001c    PD.DTB 02 001e    PD.DTP 02 0020    PD.DUP 02 002e
+    PD.DV2 02 000a    PD.DVT 02 003e   PD.ECNT 02 0022    PD.EKO 02 0024
+    PD.END 02 0012    PD.EOF 02 002c    PD.EOR 02 002b    PD.ERR 02 003a
+   PD.ESIZ 02 0021  PD.EXTEN 02 0030     PD.FD 02 0034    PD.FST 02 000a
+    PD.ILV 02 002d    PD.INT 02 0030   PD.KEEP 02 001d    PD.MAX 02 000d
+    PD.MIN 02 000f    PD.MOD 02 0001   PD.NAME 02 0023    PD.NUL 02 0026
+   PD.NXTI 02 0014   PD.NXTO 02 0016    PD.OPT 02 0020    PD.OVF 02 0033
+    PD.OWN 02 001c    PD.PAG 02 0028    PD.PAR 02 0034    PD.PAU 02 0027
+     PD.PD 02 0000    PD.PLP 02 003d    PD.PSC 02 002f    PD.PST 02 003f
+   PD.QSIZ 02 001e    PD.QUT 02 0031    PD.RAW 02 000c    PD.RCT 02 000b
+   PD.READ 02 000a   PD.REOR 02 000d   PD.RFLG 02 0018    PD.RGS 02 0006
+   PD.RPID 02 000a    PD.RPR 02 002d   PD.RSIG 02 000c    PD.SAS 02 002e
+    PD.SBL 02 0013    PD.SBP 02 0016    PD.SCT 02 0029    PD.SID 02 0027
+    PD.SIZ 02 000f    PD.SMF 02 000a    PD.SSZ 02 0019    PD.STM 02 0012
+  PD.STOFF 02 0032    PD.STP 02 0022    PD.STS 02 0010    PD.T0S 02 002b
+    PD.TBL 02 003b    PD.TFM 02 002f    PD.TYP 02 0023    PD.UPC 02 0021
+    PD.VFY 02 0028    PD.WCT 02 000f   PD.WEOR 02 0011   PD.WPID 02 000e
+   PD.WRIT 02 000e   PD.WRTN 02 0019   PD.WSIG 02 0010   PD.XOFF 02 0039
+    PD.XON 02 0038    PDALGO 01 0001    PDELIM 00 002f      PDIR 00 002e
+    PDSIZE 02 0040  PE.CONFL 02 0005  PE.FILNM 02 0020  PE.HILCK 02 000c
+   PE.LOCK 02 0007  PE.LOLCK 02 0008  PE.NXFIL 02 0003  PE.OWNER 02 0014
+  PE.PDPTR 02 0001     PE.PE 02 0000  PE.PRIOR 02 0016    PE.REQ 02 0015
+  PE.SIGID 02 0018  PE.SIGSG 02 0017  PE.TMOUT 02 0012   PE.WAIT 02 0010
+    PENTIR 00 0040    PEXEC. 00 0020  PIA0BASE 00 ff00  PIA1BASE 00 ff20
+    PIPE.D 01 0001   PIPEDIR 01 0001    PM.CNT 00 0001    PM.CPR 00 0000
+    PM.EOR 00 0003    PM.SIG 00 0002   PMANMEM 02 0008   POLLCNT 02 000c
+    POLSIZ 02 000b   PP.DATA 02 0008   PP.NEXT 02 0002     PP.PD 02 0000
+   PP.PREV 02 0004   PP.RSRV 02 0006    PREAD. 00 0008     PRGRM 00 0010
+  PROC6309 00 0002  PROC6809 00 0000  PROTFLAG 02 0016   PST.DCD 00 0001
+    PWRIT. 00 0010  PWRLNFRQ 01 0002    Q$FLIP 02 0002     Q$MAP 02 0009
+    Q$MASK 02 0003    Q$POLL 02 0000    Q$PRTY 02 0008    Q$SERV 02 0004
+    Q$STAT 02 0006    QST.OK 02 0326   QUICKPD 01 0001    QWRITE 02 059e
+       R$A 00 0001       R$B 00 0002      R$CC 00 0000       R$D 00 0001
+      R$DP 00 0003      R$PC 00 000a    R$SIZE 00 000c       R$U 00 0008
+       R$X 00 0004       R$Y 00 0006  RAMCHECK 00 0001  RAMCOUNT 00 0001
+  RAMINUSE 00 0001     RBF.D 01 0001   RCDLOCK 00 0001   RDDDONE 02 03da
+    RDDEOF 02 03e2    RDDEOL 02 03d6   RDDMORE 02 03ab   RDDNEXT 02 03ca
+    RDDRTS 02 0402   RDDSOME 02 03e7   RDDTAIL 02 03dc    RDDXIT 02 03e8
+  RDNOWRAP 02 0536    RDNRDY 02 02bd      READ 02 0383     READ. 00 0001
+   READ001 02 0385   READERS 02 022e    READLN 02 0377    READOK 02 03a5
+   RECKLES 01 0000     REENT 00 0080  REVSMASK 00 000f  RIGHTBIT 00 0040
+  ROMBLOCK 00 003f  ROMCHECK 00 0001  ROMCOUNT 00 0001   S$ABORT 02 0002
+   S$ALARM 02 0005     S$HUP 02 0004  S$INTRPT 02 0003    S$KILL 02 0000
+    S$WAKE 02 0001  S$WINDOW 02 0004    SAT.OK 02 036c    SAT.XX 02 0365
+     SBRTN 00 0020     SCF.D 01 0001      SEEK 02 02a1   SENDSIG 02 023c
+    SETCNT 02 0053  SETPMCPR 02 04a4  SETQUEUE 02 0492  SETREADY 02 0507
+    SETSTT 02 02fe   SGSLP01 02 04bb    SHARE. 00 0040  SHELLSUB 00 0050
+  SHIFTBIT 00 0001      SIGN 00 0080    SIGSLP 02 04aa    SINBUF 00 0002
+   SIZDIRP 02 0552    SLOWPD 01 0000  SPACEBIT 00 0080  SS.AAGBF 02 0080
+  SS.ALFAS 02 001c  SS.ANPAL 02 009a   SS.ARAM 00 00ca  SS.ASCRN 02 008b
+   SS.ATTR 02 001c  SS.BLKRD 02 0014  SS.BLKWR 02 0015  SS.BREAK 02 001d
+  SS.CDREL 02 009b  SS.CDSIG 02 009a  SS.CDSTA 02 0099  SS.CLOSE 02 002a
+  SS.COMST 02 0028  SS.CURSR 02 0025   SS.DCMD 02 000d  SS.DEVNM 02 000e
+  SS.DFPAL 02 0097 SS.DIRENT 02 0020   SS.DRAM 00 00cb  SS.DREAD 02 0080
+  SS.DRVCH 02 0086  SS.DSCRN 02 008c  SS.DSIZE 02 0026  SS.DSTAT 02 0012
+  SS.DWRIT 02 0080    SS.ECC 02 00b0   SS.ELOG 02 0019    SS.EOF 02 0006
+  SS.FBRGS 02 0096   SS.FCLR 00 0081     SS.FD 02 000f  SS.FDINF 00 0020
+   SS.FEED 02 0009   SS.FILL 02 00a0  SS.FNDBF 02 009b    SS.FRZ 02 000a
+  SS.FSCRN 02 008d   SS.FSET 00 00c7   SS.FSIG 02 002c    SS.GIP 02 0094
+   SS.GIP2 02 0099   SS.HIST 02 00a1  SS.HNGUP 02 002b    SS.JOY 02 0013
+   SS.KCLR 00 00c9   SS.KSET 00 00c8  SS.KYSNS 02 0027   SS.LINK 02 0007
+   SS.LOCK 02 0011  SS.MNSEL 02 0087   SS.MOFF 02 0082  SS.MONTR 02 0092
+  SS.MOTIM 02 0083  SS.MOUNT 02 0082  SS.MOUSE 02 0089  SS.MPGPB 02 0084
+  SS.MSSIG 02 008a   SS.OPEN 02 0029    SS.OPT 02 0000  SS.PALET 02 0091
+    SS.POS 02 0005  SS.PSCRN 02 008e  SS.RDNET 02 0083  SS.READY 02 0001
+  SS.RELEA 02 001b  SS.RESET 02 0003  SS.RETEN 02 0016    SS.RFM 02 0018
+  SS.RSBIT 02 001e   SS.SBAR 02 0088  SS.SCINF 02 008f  SS.SCSIZ 02 0026
+  SS.SCTYP 02 0093   SS.SDRD 02 0084  SS.SDWRT 02 0084  SS.SETMF 02 0024
+   SS.SIZE 02 0002  SS.SLEEP 02 0085  SS.SLGBF 02 0081  SS.SLOTS 02 0085
+    SS.SPT 02 000b    SS.SQD 02 000c   SS.SSIG 02 001a  SS.TICKS 02 0010
+   SS.TONE 02 0098  SS.ULINK 02 0008  SS.UMBAR 02 0095  SS.UNFRZ 02 0081
+SS.VARSECT 02 0012   SS.VCTR 00 0080   SS.VSIG 00 0081    SS.WFM 02 0017
+  SS.WNSET 02 0086   SS.WTRK 02 0004    SSFD01 02 05aa   SST.IGN 02 02b7
+    SST.OK 02 02b7    STDSTR 02 0012     STOP1 00 0000     STOP2 00 0010
+  STORDATA 02 050c  STP.12MS 00 0002  STP.20MS 00 0001  STP.30MS 00 0000
+   STP.6MS 00 0003   SUSPEND 00 0008    SWITCH 02 04e6  SYSSTATE 00 0080
+    SYSSTR 02 0010   SYSTASK 00 0000     SYSTM 00 00c0    TIMOUT 00 0020
+  TIMSLEEP 00 0040  TKPERSEC 01 003c    TOOBIG 02 00d0      TRUE 00 0001
+    TWOMHZ 00 0002  TWOSOVFL 00 0002   TYP.256 00 0000     TYP.3 00 0001
+     TYP.5 00 0000   TYP.512 00 0004   TYP.CCF 00 0020   TYP.FLP 00 0000
+  TYP.HARD 00 0080  TYP.NCCF 00 0000   TYP.NSF 00 0040   TYP.SBO 00 0002
+   TYP.SOF 00 0000  TYPEMASK 00 00f0 TYPH.1024 00 0002 TYPH.2048 00 0003
+  TYPH.256 00 0000  TYPH.512 00 0001 TYPH.DRSV 00 000c  TYPH.DSQ 00 0010
+  TYPH.SSM 00 0003   UNKNOWN 02 0208  UNLIMITD 00 0002  UNLOCKED 00 0000
+     UPBIT 00 0008    UPDAT. 00 0003    V$DESC 02 0004    V$DRIV 02 0000
+  V$DRIVEX 02 0009    V$FMGR 02 0006  V$FMGREX 02 000b    V$STAT 02 0002
+    V$USRS 02 0008  V.BMAPSZ 02 001c     V.BMB 02 0017    V.BUSY 02 0004
+    V.DEV2 02 0009  V.DISKID 02 001a     V.ERR 02 000e  V.FILEHD 02 0018
+    V.INTR 02 000b   V.KANJI 02 0011    V.KBUF 02 0012    V.LINE 02 0007
+    V.LIST 02 0006    V.LPRC 02 0003  V.MAPSCT 02 001d  V.MODADR 02 0014
+    V.NDRV 02 0006    V.PAGE 02 0000    V.PAUS 02 0008    V.PCHR 02 000d
+   V.PDLHD 02 0016    V.PORT 02 0001    V.QUIT 02 000c  V.RESBIT 02 001e
+     V.RSV 02 0018     V.SCF 02 001d  V.SCOFST 02 0020  V.SCTKOF 02 001f
+  V.TKOFST 02 0021    V.TRAK 02 0015    V.TYPE 02 0006    V.USER 02 0006
+    V.WAKE 02 0005    V.XOFF 02 0010     V.XON 02 000f    VD.OFS 02 0061
+    VD.STP 02 0060    VI.CNT 02 0000  VI.IFLAG 00 0001   VI.PKSZ 02 0005
+    VI.RST 02 0002   VI.STAT 02 0004    VIDRAM 00 0004   WIZBANG 01 0001
+     WORD7 00 0020     WORD8 00 0000     WRITE 02 0410    WRITE. 00 0002
+   WRITELN 02 0403  WRITEROR 02 04e2   WRITERS 02 0236    WRITOK 02 0431
+    WRT001 02 0413   WRTDONE 02 0468    WRTEOL 02 0464    WRTERR 02 0473
+   WRTMORE 02 0437   WRTNEXT 02 0458   WRTSOME 02 046e   WRTTAIL 02 046a
+    WRTXIT 02 046f  WTNOWRAP 02 0517      XVER 00 0003    YESDIR 01 0001
+      ZAP8 02 0290      ZAP9 02 0282     ZAPIT 02 0292   ZAPPIPE 02 0264
+      ZERO 00 0004

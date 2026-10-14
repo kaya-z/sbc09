@@ -1,0 +1,415 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 sim09 contributors
+//
+// The sim09 / sbc09 "v09" machine (Level 1: 64 KB flat memory, I/O page at $E000) as a system on a chip:
+//
+//   CPU       Greg Miller's cycle accurate MC6809 (vendor/mc6809, BSD-3-Clause), E = clk / (4 * PH_DIV)
+//   RAM       64 KB in the PSRAM of the Tang Nano 9K, through the controller of Feng Zhou (vendor/psram);
+//             cleared (byte by byte) after every reset, like the memory of the simulator
+//   ROM       a read-only image in block RAM, from ROM_BASE up to $FFFF, over the RAM
+//   $E000/01  console ACIA on the UART (acia_uart.v)
+//   $E00F     power control: $A5 stops the machine (until the reset button)
+//   $E030-36  timer and clock (timer_rtc.v)
+//   $E040-47  disk port on the microSD card (sd_disk.v)
+//   $E080-1FF plain RAM
+//
+// The memory map and the registers are those of the simulator (see docs/FPGA.md and README.md).
+//
+// Bus timing: one bus cycle of the CPU is four phases of PH_DIV clocks (E falls, Q rises, E rises, Q falls).
+// Shortly after E has risen, the address, the direction, the data and the "valid" flag of the cycle are
+// stable and the access is made.  The CPU's clock is held (before E falls) while a memory access or the
+// disk is still busy, so the access time of the PSRAM or of the card never matters for the result.
+
+module sbc09_soc #(
+    parameter CLK_HZ     = 67500000,
+    parameter PH_DIV     = 9,                       // clks per phase; E = CLK_HZ / (4 * PH_DIV) = 1.875 MHz
+    parameter BAUD_DIV   = 586,                     // 115200 baud
+    parameter [15:0] ROM_BASE = 16'hC000,
+    parameter ROM_AW     = 14,                      // the ROM is 2**ROM_AW bytes, up to $FFFF
+    parameter ROM_FILE   = "rom.hex",
+    parameter FREERUN    = 0,                       // 1: the monitor ROM v09.rom (FIRQ timer from the reset)
+    parameter [23:0] DRIVE1_BLK = 24'h040000,
+    parameter RTC_YEAR   = 126,
+    parameter RTC_MONTH  = 1,
+    parameter RTC_DAY    = 1,
+    parameter RTC_HOUR   = 0,
+    parameter RTC_MIN    = 0,
+    parameter RTC_SEC    = 0,
+    parameter KANJI      = 1                        // copy the kanji image from the SPI flash to the PSRAM after the reset (HDMI screen)
+) (
+    input  wire        clk,
+    input  wire        resetn,
+    input  wire        rxd,
+    output wire        txd,
+    output wire        sd_clk,
+    output wire        sd_mosi,
+    input  wire        sd_miso,
+    output wire        sd_cs,
+    // PSRAM controller
+    output wire        ps_rd,
+    output wire        ps_wr,
+    output wire [21:0] ps_addr,
+    output wire [15:0] ps_din,
+    output wire        ps_bw,
+    input  wire [15:0] ps_dout,
+    input  wire        ps_busy,
+    // LEDs (active low), and the CPU for the test bench
+    output wire [5:0]  led,
+    input  wire        term_busy,           // the HDMI screen has no room for more characters now
+    // the SPI flash with the kanji image, and two more PSRAM masters of the HDMI screen (word reads)
+    output wire        fl_cs, fl_clk, fl_mosi,
+    input  wire        fl_miso,
+    input  wire        x1_req,
+    input  wire [21:0] x1_addr,
+    output wire        x1_ack,
+    output wire [15:0] x1_rdata,
+    input  wire        x2_req,
+    input  wire [21:0] x2_addr,
+    output wire        x2_ack,
+    output wire [15:0] x2_rdata,
+    output wire        kanji_ok,
+    output wire        term_stb,            // a byte the guest wrote to the console (for the HDMI screen)
+    output wire [7:0]  term_byte,
+    output wire [111:0] dbg_regs,
+    output wire        dbg_lic,
+    output wire [15:0] dbg_addr,
+    output wire        dbg_acc,
+    output wire [15:0] dbg_status,
+    output wire [7:0]  dbg_din,
+    output wire        dbg_rnw,
+    output wire        dbg_vma
+);
+
+    localparam ECYC_PER_SEC  = CLK_HZ / (4 * PH_DIV);
+    localparam ECYC_PER_TICK = ECYC_PER_SEC / 50;
+
+    reg rst = 1'b1;
+    always @(posedge clk) rst <= ~resetn;
+
+    // ---------------------------------------------------------------- the CPU and its bus
+    wire [7:0]  cpu_d_out;
+    wire [15:0] cpu_a;
+    wire        cpu_rnw, cpu_bs, cpu_ba, cpu_avma, cpu_lic;
+    reg  [7:0]  cpu_d_in;
+    reg         e, q;
+    reg         nreset_cpu;
+    wire        timer_irq;
+
+    mc6809i #(.ILLEGAL_INSTRUCTIONS("GHOST")) cpu (
+        .D(cpu_d_in), .DOut(cpu_d_out), .ADDR(cpu_a), .RnW(cpu_rnw),
+        .E(e), .Q(q), .BS(cpu_bs), .BA(cpu_ba),
+        .nIRQ(FREERUN ? 1'b1 : ~timer_irq), .nFIRQ(FREERUN ? ~timer_irq : 1'b1), .nNMI(1'b1),
+        .AVMA(cpu_avma), .BUSY(), .LIC(cpu_lic),
+        .nHALT(1'b1), .nRESET(nreset_cpu), .nDMABREQ(1'b1),
+        .RegData(dbg_regs)
+    );
+    assign dbg_lic = cpu_lic;
+    assign dbg_addr = cpu_a;
+    assign dbg_acc = acc2;
+    assign dbg_status = {cs_, mem_pend, acia_pend, disk_busy, pwroff, sd_st, sd_ready, sd_fail};
+    assign dbg_din = cpu_d_in;
+    assign dbg_rnw = cpu_rnw;
+    assign dbg_vma = vma_pend;
+
+    // ---------------------------------------------------------------- clock phases
+    reg [7:0] div;
+    reg [1:0] ph;
+    reg       ecyc;                 // E has fallen: a bus cycle has ended
+    reg       acc_go;               // E has risen: the cycle's access
+    reg       acc2;                 // and one clock later (the access itself: it needs the decoded address)
+    reg       mem_pend;             // a PSRAM access of the CPU is under way
+    wire      disk_busy;
+    wire      ps_busy_m;
+    wire [15:0] ps_dout_m;           // the word the arbiter read for master 0 (the CPU, the disk)
+    reg       pwroff;
+    reg       acia_pend;            // a character for a busy transmitter: the CPU waits
+    // The byte read from the PSRAM lands in rd_reg on the clock where mem_pend falls.  The core takes its
+    // inputs when E falls, so the stall is held for six more clocks (89 ns): the data has to run through the ALU
+    // (the carry chain, 49 ns in the timing report) of the core before that (on the board this was a wrong result of ADDB with an operand
+    // from the PSRAM, +-$10).
+    reg [5:0] settle = 6'd0;
+    always @(posedge clk) settle <= {settle[4:0], mem_pend | disk_busy};
+    wire      stall = mem_pend | disk_busy | pwroff | acia_pend | (|settle);
+
+    always @(posedge clk) begin
+        ecyc   <= 1'b0;
+        acc_go <= 1'b0;
+        acc2   <= acc_go;
+        if (rst) begin
+            div <= 0; ph <= 0; e <= 1'b1; q <= 1'b0;
+        end else if (div != PH_DIV - 1) begin
+            div <= div + 1'b1;
+        end else if (!(ph == 2'd0 && stall)) begin
+            div <= 0;
+            ph  <= ph + 1'b1;
+            case (ph)
+                2'd0: begin e <= 1'b0; ecyc <= 1'b1; end
+                2'd1: q <= 1'b1;
+                2'd2: begin e <= 1'b1; acc_go <= 1'b1; end
+                2'd3: q <= 1'b0;
+            endcase
+        end
+    end
+
+    // ---------------------------------------------------------------- start-up: PSRAM, clear, reset of the CPU
+    localparam [2:0] C_WAIT = 3'd0, C_CLR = 3'd1, C_WAIT2 = 3'd2, C_RUN = 3'd3, C_LOAD = 3'd4, C_LOADW = 3'd5;
+    reg [2:0]  cs_;
+    reg [15:0] cw;
+    reg        c_wr;
+    reg        ld_start;
+    wire       ld_done, ld_wr;
+    reg [3:0]  rcnt;
+    reg [3:0]  bsy_d;               // busy low for a while: the PSRAM is up
+
+    always @(posedge clk) begin
+        c_wr <= 1'b0;
+        ld_start <= 1'b0;
+        if (rst) begin
+            cs_ <= C_WAIT; cw <= 0; bsy_d <= 0; rcnt <= 0; nreset_cpu <= 1'b0;
+        end else begin
+            bsy_d <= {bsy_d[2:0], ps_busy_m};
+            case (cs_)
+                C_WAIT:  if (bsy_d == 4'b0000 && !ps_busy) cs_ <= C_CLR;
+                C_CLR: begin                            // write zero bytes 0, 1, 2 ... 65535 (the access the controller was tested with)
+                    c_wr <= 1'b1;
+                    cs_  <= C_WAIT2;
+                end
+                C_WAIT2: if (!c_wr && !ps_busy_m && !bsy_d[0] && !bsy_d[1]) begin
+                    if (cw == 16'hffff) cs_ <= C_LOAD;
+                    else begin cw <= cw + 1'b1; cs_ <= C_CLR; end
+                end
+                C_LOAD:  if (KANJI) begin ld_start <= 1'b1; cs_ <= C_LOADW; end else cs_ <= C_RUN;
+                C_LOADW: if (ld_done) cs_ <= C_RUN;
+                C_RUN: if (ecyc) begin
+                    if (rcnt == 4'd15) nreset_cpu <= 1'b1;
+                    else rcnt <= rcnt + 1'b1;
+                end
+            endcase
+        end
+    end
+    reg run = 1'b0;                             // the start-up is over (a register of its own: it selects the PSRAM path)
+    always @(posedge clk) run <= !rst && (cs_ == C_RUN);
+
+    wire [21:0] ld_addr;
+    wire [7:0]  ld_data;
+    kanji_loader loader (
+        .clk(clk), .rst(rst), .start(ld_start), .done(ld_done), .ok(kanji_ok),
+        .fl_cs(fl_cs), .fl_clk(fl_clk), .fl_mosi(fl_mosi), .fl_miso(fl_miso),
+        .wr(ld_wr), .wr_addr(ld_addr), .wr_data(ld_data), .busy(ps_busy_m)
+    );
+
+    // ---------------------------------------------------------------- the access of a cycle
+    reg        vma_pend;            // AVMA of the previous cycle = "valid" of this one
+    reg [7:0]  rd_reg;
+    reg        c_rd, c_cwr;
+    reg [21:0] c_addr;
+    reg [7:0]  c_wdata;
+    reg        c_rsel;
+    reg        c_isrd;              // the access under way is a read
+    reg        mp_wait;             // one clk for the busy flag of the controller to show up
+
+    // I/O page decode
+    wire [15:0] a      = cpu_a;
+    // The address is stable for two phases before it is used, so its decoding is registered (one clock late).
+    wire        in_io  = (a[15:9] == 7'b1110000);
+    wire [8:0]  off    = a[8:0];
+    reg io_acia, io_power, io_timer, io_disk, io_hit, io_quiet, rom_sel;
+    always @(posedge clk) begin
+        io_acia  <= in_io && off[8:1] == 8'd0;                   // $E000, $E001
+        io_power <= in_io && off == 9'h00f;
+        io_timer <= in_io && off >= 9'h030 && off <= 9'h036;
+        io_disk  <= in_io && off >= 9'h040 && off <= 9'h047;
+        io_hit   <= in_io && ((off[8:1] == 8'd0) || off == 9'h00f || (off >= 9'h030 && off <= 9'h036) || (off >= 9'h040 && off <= 9'h047));
+        io_quiet <= in_io && off < 9'h080 && !((off[8:1] == 8'd0) || off == 9'h00f || (off >= 9'h030 && off <= 9'h036) || (off >= 9'h040 && off <= 9'h047));
+        rom_sel  <= (a >= ROM_BASE);
+    end
+
+    // ROM
+    reg [7:0] rom [0:(1 << ROM_AW) - 1];
+    reg [7:0] rom_q;
+    initial $readmemh(ROM_FILE, rom);
+    always @(posedge clk) rom_q <= rom[a[ROM_AW-1:0]];
+
+    // devices
+    wire [7:0] acia_status, acia_rdata;
+    wire [7:0] timer_rdata;
+    reg        acia_rd;                 // a clock after the read: rd_reg has taken the character by then
+    always @(posedge clk) acia_rd <= acc2 && vma_pend && cpu_rnw && io_acia && off[0];
+    wire       acia_tx_full;
+    reg  [7:0] acia_byte;
+    wire       acia_wr = acia_pend && !acia_tx_full && !term_busy;    // the screen can also hold a character back
+    assign term_stb  = acia_wr;
+    assign term_byte = acia_byte;
+    wire       timer_wr = acc2 && vma_pend && !cpu_rnw && io_timer;
+    wire       iack     = acc2 && cpu_bs && !cpu_ba;
+
+    acia_uart #(.BAUD_DIV(BAUD_DIV)) acia (
+        .clk(clk), .rst(rst), .rxd(rxd), .txd(txd),
+        .rd_data(acia_rd), .wr_data(acia_wr), .wdata(acia_byte),
+        .tx_full(acia_tx_full), .status(acia_status), .rdata(acia_rdata)
+    );
+
+    timer_rtc #(
+        .FREERUN(FREERUN), .ECYC_PER_TICK(ECYC_PER_TICK), .ECYC_PER_SEC(ECYC_PER_SEC),
+        .START_YEAR(RTC_YEAR), .START_MONTH(RTC_MONTH), .START_DAY(RTC_DAY),
+        .START_HOUR(RTC_HOUR), .START_MIN(RTC_MIN), .START_SEC(RTC_SEC)
+    ) timer (
+        .clk(clk), .rst(rst), .ecyc(ecyc),
+        .wr(timer_wr), .off(off[2:0]), .wdata(cpu_d_out), .iack(iack),
+        .rdata(timer_rdata), .irq(timer_irq)
+    );
+
+    // disk registers
+    reg [7:0]  d_drive, d_lsn2, d_lsn1, d_lsn0, d_bufh, d_bufl, d_47;
+    reg [7:0]  e040;
+    reg        dgo, dwr;
+    wire [7:0] disk_result;
+    wire       d_rd, d_wr;
+    wire [21:0] d_addr;
+    wire [7:0]  d_din;
+    wire        sd_ready, sd_fail, sd_active;
+    wire [5:0]  sd_st;
+    reg         disk_busy_d;
+
+    sd_disk #(.DRIVE1_BLK(DRIVE1_BLK)) disk (
+        .clk(clk), .rst(rst),
+        .go(dgo), .wr(dwr), .drive(d_drive), .lsn({d_lsn2, d_lsn1, d_lsn0}), .buf_addr({d_bufh, d_bufl}),
+        .busy(disk_busy), .result(disk_result),
+        .m_rd(d_rd), .m_wr(d_wr), .m_addr(d_addr), .m_din(d_din), .m_dout(ps_dout_m), .m_busy(ps_busy_m),
+        .sd_clk(sd_clk), .sd_mosi(sd_mosi), .sd_miso(sd_miso), .sd_cs(sd_cs),
+        .ready(sd_ready), .fail(sd_fail), .active(sd_active), .dbg_st(sd_st)
+    );
+
+    // io read data
+    reg [7:0] io_rdata;
+    always @(*) begin
+        io_rdata = 8'h00;
+        if (io_acia)       io_rdata = off[0] ? acia_rdata : acia_status;
+        else if (io_timer) io_rdata = timer_rdata;
+        else if (io_disk)
+            case (off[2:0])
+                3'd0: io_rdata = e040;
+                3'd1: io_rdata = d_drive;
+                3'd2: io_rdata = d_lsn2;
+                3'd3: io_rdata = d_lsn1;
+                3'd4: io_rdata = d_lsn0;
+                3'd5: io_rdata = d_bufh;
+                3'd6: io_rdata = d_bufl;
+                default: io_rdata = d_47;
+            endcase
+    end
+
+    // a write to the disk registers: noted at the access, done one clock later (c_wdata holds the byte)
+    reg       w_disk = 1'b0;
+    reg [2:0] w_off;
+    always @(posedge clk) begin
+        w_disk <= acc2 && vma_pend && !cpu_rnw && io_disk;
+        w_off  <= off[2:0];
+    end
+
+    always @(posedge clk) begin
+        dgo  <= 1'b0;
+        c_rd <= 1'b0;
+        c_cwr <= 1'b0;
+        disk_busy_d <= disk_busy;
+        if (disk_busy_d && !disk_busy) e040 <= disk_result;
+        if (rst) begin
+            mem_pend <= 1'b0; mp_wait <= 1'b0; vma_pend <= 1'b1; pwroff <= 1'b0; acia_pend <= 1'b0;
+            rd_reg <= 8'h00; e040 <= 8'h00; d_drive <= 0; d_lsn2 <= 0; d_lsn1 <= 0; d_lsn0 <= 0;
+            d_bufh <= 0; d_bufl <= 0; d_47 <= 0;
+        end else begin
+            c_addr  <= {6'd0, a};
+            c_wdata <= cpu_d_out;
+            c_rsel  <= a[0];
+            if (acc2) begin
+                vma_pend <= cpu_avma;
+                if (vma_pend) begin
+                    if (io_hit) begin
+                        if (cpu_rnw) rd_reg <= io_rdata;
+                        else begin
+                            if (io_power && cpu_d_out == 8'ha5) pwroff <= 1'b1;
+                            if (io_acia && off[0]) begin
+                                acia_pend <= 1'b1;                  // the guest does not look at TDRE: wait for it here
+                                acia_byte <= cpu_d_out;
+                            end
+                        end
+                    end else if (cpu_rnw && rom_sel) begin
+                        rd_reg <= rom_q;
+                    end else if (!cpu_rnw && (rom_sel || io_quiet)) begin
+                        // read-only memory, or an unused register: the write is lost
+                    end else begin                                    // RAM
+                        c_rd    <= cpu_rnw;
+                        c_cwr   <= ~cpu_rnw;
+                        c_isrd  <= cpu_rnw;
+                        mem_pend <= 1'b1;
+                        mp_wait  <= 1'b1;
+                    end
+                end
+            end
+            if (w_disk)
+                case (w_off)
+                    3'd0: begin
+                        if (c_wdata == 8'h81 || c_wdata == 8'h55) begin
+                            dgo <= 1'b1; dwr <= (c_wdata == 8'h55);
+                        end else e040 <= 8'hff;                       // no VRBF (host files) on the FPGA
+                    end
+                    3'd1: d_drive <= c_wdata;
+                    3'd2: d_lsn2  <= c_wdata;
+                    3'd3: d_lsn1  <= c_wdata;
+                    3'd4: d_lsn0  <= c_wdata;
+                    3'd5: d_bufh  <= c_wdata;
+                    3'd6: d_bufl  <= c_wdata;
+                    default: d_47 <= c_wdata;
+                endcase
+            if (acia_wr) acia_pend <= 1'b0;
+            if (mem_pend) begin
+                if (mp_wait) mp_wait <= 1'b0;                          // the request is on its way
+                else if (!ps_busy_m) begin
+                    mem_pend <= 1'b0;
+                    if (c_isrd) rd_reg <= c_rsel ? ps_dout_m[15:8] : ps_dout_m[7:0];
+                end
+            end
+        end
+    end
+
+    // master 0 of the PSRAM arbiter: the start-up (clear, kanji loader), the disk and the CPU.  Their pulses
+    // become a request that is held until the arbiter has done it; ps_busy_m is high from the clock of the pulse
+    // until then (so no master has to count clocks).
+    wire use_clr  = !run;
+    reg  disk_sel = 1'b0;                       // the disk owns the port (a clock late: the CPU is waiting at both ends)
+    always @(posedge clk) disk_sel <= disk_busy;
+    wire m_rd_s   = use_clr ? 1'b0 : disk_sel ? d_rd : c_rd;
+    wire m_wr_s   = use_clr ? (c_wr | ld_wr) : disk_sel ? d_wr : c_cwr;
+    wire m0_pulse = m_rd_s | m_wr_s;
+    reg         m0_req = 1'b0, m0_wrr = 1'b0;
+    reg  [21:0] m0_addr;
+    reg  [7:0]  m0_din;
+    wire        m0_ack;
+    always @(posedge clk) begin
+        if (m0_ack) m0_req <= 1'b0;
+        if (m0_pulse) begin
+            m0_req  <= 1'b1;
+            m0_wrr  <= m_wr_s;
+            m0_addr <= use_clr ? (ld_wr ? ld_addr : {6'd0, cw}) : disk_sel ? d_addr : c_addr;
+            m0_din  <= use_clr ? (ld_wr ? ld_data : 8'h00) : disk_sel ? d_din : c_wdata;
+        end
+    end
+    assign ps_busy_m = m0_req;                  // (high from the clock after the pulse: nobody looks at the clock of the pulse itself)
+
+    psram_arb arb (
+        .clk(clk), .rst(rst),
+        .c_rd(ps_rd), .c_wr(ps_wr), .c_addr(ps_addr), .c_din(ps_din), .c_bw(ps_bw), .c_dout(ps_dout), .c_busy(ps_busy),
+        .m0_req(m0_req), .m0_wr(m0_wrr), .m0_addr(m0_addr), .m0_din(m0_din), .m0_ack(m0_ack), .m0_rdata(ps_dout_m),
+        .m1_req(x1_req), .m1_addr(x1_addr), .m1_ack(x1_ack), .m1_rdata(x1_rdata),
+        .m2_req(x2_req), .m2_addr(x2_addr), .m2_ack(x2_ack), .m2_rdata(x2_rdata)
+    );
+
+    // ---------------------------------------------------------------- feed the CPU
+    always @(*) cpu_d_in = rd_reg;
+
+    // ---------------------------------------------------------------- the LEDs (active low)
+    reg [23:0] hb;
+    always @(posedge clk) hb <= hb + 1'b1;
+    assign led = ~{pwroff, sd_fail, sd_active, sd_ready, run, hb[23]};
+
+endmodule

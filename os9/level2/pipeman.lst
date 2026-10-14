@@ -1,0 +1,859 @@
+0000:                   ********************************************************************
+0000:                   * PipeMan - OS-9 Pipe File Manager
+0000:                   *
+0000:                   * $Id$
+0000:                   *
+0000:                   * Some tests under NitrOS-9:
+0000:                   *
+0000:                   * 'show grf.3.a | eat'  (eat is cat, but just does a I$ReadLn, and not I$WritLn)
+0000:                   * April 10, 1996  14:05:15
+0000:                   * April 10, 1996  14:07:47
+0000:                   *          15.2 seconds per iteration
+0000:                   *          i.e. everything but the screen writes
+0000:                   * 
+0000:                   * fast SCF+fast pipe
+0000:                   * 'show grf.3.a | cat', 10 times
+0000:                   * April 10, 1996  13:17:54
+0000:                   * April 10, 1996  13:21:57
+0000:                   *          24.3 seconds per iteration
+0000:                   *          9.1 solely for pipes
+0000:                   * 
+0000:                   * fast SCF+old slow pipe
+0000:                   * April 10, 1996  13:30:24
+0000:                   * April 10, 1996  13:38:04
+0000:                   *          46.0 seconds per iteration
+0000:                   *          30.8 solely for pipes
+0000:                   * 
+0000:                   *          speedup percent is (30.8-9.1)/30.8 = 70%
+0000:                   * 
+0000:                   *          Pipes are more than doubled in speed!
+0000:                   *
+0000:                   * 32 byte read and write buffers
+0000:                   *
+0000:                   * Edt/Rev  YYYY/MM/DD  Modified by
+0000:                   * Comment
+0000:                   * ------------------------------------------------------------------
+0000:                   *   4      ????/??/??  Alan DeKok
+0000:                   * Enhanced and re-written.
+0000:                   *
+0000:                   *   5r0    2003/08/27  Boisy G. Pitre
+0000:                   * Back-ported from OS-9 Level Two to OS-9 Level One.
+0000:                   
+0000:                            nam   PipeMan
+0000:                            ttl   OS-9 Pipe File Manager
+0000:                   
+0000:                            ifp1
+0000:                            use   defsfile
+0000:                            use   pipe.d
+0000:                            use   scf.d
+0000:                            endc
+0000:                   
+00D1:                   tylg     set   FlMgr+Objct   
+0080:                   atrv     set   ReEnt+Rev
+0000:                   rev      set   $00
+0005:                   edition  set   5
+0000:                   
+0000: 87CD0253000DD180           mod   eom,name,tylg,atrv,start,size
+0009: 00150000
+0000:                   
+0000:                            rmb   $0000
+0000:                   size     equ   .
+0000:                   
+0000:                   
+0000:                            org   $0000
+0000:                   P.CPR    rmb   1          process ID
+0001:                   P.CNT    rmb   1          count
+0002:                   P.SIG    rmb   1          signal code
+0003:                   P.FLAG   rmb   1          raw/edit flag
+0004:                   
+000D: 506970654D61EE    name     fcs   /PipeMan/
+0014: 05                         fcb   edition
+0015:                   
+0015: 16004D            start    lbra  Create
+0018: 16004A                     lbra  Open
+001B: 160043                     lbra  MakDir
+001E: 160040                     lbra  ChgDir
+0021: 16003D                     lbra  Delete
+0024:                   *
+0024:                   * I$Seek Entry Point        
+0024:                   * 
+0024:                   * Entry: 
+0024:                   *        
+0024:                   * Exit:
+0024:                   *
+0024:                   * Error: CC Carry set  
+0024:                   *        B = errcode
+0024:                   *
+0024: 5F                Seek     clrb
+0025: 39                         rts
+0026: 12                         nop
+0027: 16007A                     lbra  Read
+002A: 160183                     lbra  Write
+002D: 160071                     lbra  ReadLn
+0030: 16017A                     lbra  WritLn
+0033:                   
+0033:                   *
+0033:                   * I$GetStat Entry Point
+0033:                   *
+0033:                   * Entry:
+0033:                   *
+0033:                   * Exit:
+0033:                   *
+0033:                   * Error: CC Carry set
+0033:                   *        B = errcode
+0033:                   *
+0033: 5F                GetStt   clrb
+0034: 39                         rts
+0035: 12                         nop
+0036:                   
+0036:                   *
+0036:                   * I$SetStat Entry Point
+0036:                   *
+0036:                   * Entry:    
+0036:                   *
+0036:                   * Exit:      
+0036:                   *
+0036:                   * Error: CC Carry set
+0036:                   *        B = errcode
+0036:                   *
+0036: 5F                SetStt   clrb
+0037: 39                         rts
+0038: 12                         nop
+0039:                   
+0039:                   *
+0039:                   * I$Close Entry Point
+0039:                   *
+0039:                   * Entry: A = path number
+0039:                   *                                 
+0039:                   * Exit:
+0039:                   *                                 
+0039:                   * Error: CC Carry set
+0039:                   *        B = errcode
+0039:                   *        
+0039: A622              Close    lda   PD.CNT,y
+003B: 2609                       bne   L008E
+003D: EE28                       ldu   PD.BUF,y   if no one's using it,
+003F: 5F                         clrb
+0040: 4C                         inca
+0041: 103F29                     os9   F$SRtMem   return the memory
+0044: 5F                         clrb
+0045: 39                         rts
+0046:                   
+0046: 302A              L008E    leax  PD.Read,y
+0048: A12B                       cmpa  PD.Read+P.CNT,y is the read count zero?
+004A: 2706                       beq   L009C
+004C:                   
+004C: A12F                       cmpa  PD.Writ+P.CNT,y is the write count zero?
+004E: 260F                       bne   L00A9
+0050: 302E                       leax  PD.Writ,y
+0052:                   
+0052: A600              L009C    lda   P.CPR,x    get process ID that's reading/writing
+0054: 2709                       beq   L00A9      if none
+0056: E602                       ldb   P.SIG,x    get signal code
+0058: 2705                       beq   L00A9
+005A: 6F02                       clr   P.SIG,x
+005C: 103F08                     os9   F$Send     send a wake-up signal to the process
+005F: 5F                L00A9    clrb  
+0060: 39                         rts   
+0061:                   
+0061:                   *
+0061:                   * I$MakDir Entry Point
+0061:                   *
+0061:                   * Entry: X = address of the pathlist
+0061:                   *
+0061:                   * Exit:  X = last byte of pathlist address
+0061:                   *
+0061:                   * Error: CC Carry set
+0061:                   *        B = errcode  
+0061:                   *
+0061:                   MakDir   equ   *
+0061:                   
+0061:                   *
+0061:                   * I$ChgDir Entry Point
+0061:                   *
+0061:                   * Entry: 
+0061:                   *                                 
+0061:                   * Exit:
+0061:                   *                                 
+0061:                   * Error: CC Carry set
+0061:                   *        B = errcode
+0061:                   *        
+0061:                   ChgDir   equ   *
+0061:                   
+0061:                   *
+0061:                   * I$Delete Entry Point
+0061:                   *
+0061:                   * Entry: 
+0061:                   *
+0061:                   * Exit:  
+0061:                   *
+0061:                   * Error: CC Carry set
+0061:                   *        B = errcode  
+0061:                   *
+0061:                   Delete   equ   *
+0061: 53                         comb  
+0062: C6D0                       ldb   #E$UnkSVC
+0064: 39                         rts   
+0065:                   
+0065:                   *
+0065:                   * I$Create Entry Point
+0065:                   *
+0065:                   * Entry: A = access mode desired
+0065:                   *        B = file attributes
+0065:                   *        X = address of the pathlist
+0065:                   * 
+0065:                   * Exit:  A = pathnum
+0065:                   *        X = last byte of pathlist address
+0065:                   *
+0065:                   * Error: CC Carry set
+0065:                   *        B = errcode
+0065:                   *
+0065:                   Create   equ   *
+0065:                   
+0065:                   *
+0065:                   * I$Open Entry Point        
+0065:                   * 
+0065:                   * Entry: A = access mode desired
+0065:                   *        X = address of the pathlist
+0065:                   *
+0065:                   * Exit:  A = pathnum   
+0065:                   *        X = last byte of pathlist address
+0065:                   *
+0065:                   * Error: CC Carry set  
+0065:                   *        B = errcode
+0065:                   *
+0065:                   Open     equ   *
+0065: AE44                       ldx   R$X,u        get address of filename to open
+0067: 3420                       pshs  y            save PD pointer
+0069: 103F10                     os9   F$PrsNam   parse /pipe
+006C: 252E                       bcs   L007B        exit on error
+006E:                            IFGT  Level-1
+006E: 9E50                       ldx   <D.Proc      current process ptr
+0070: E606                       ldb   P$Task,x     get task number for call, below
+0072: 303F                       leax  -$01,y       back up one character
+0074: 103F49                     os9   F$LDABX    get last character of the filename
+0077: 4D                         tsta               check the character
+0078:                            ELSE
+0078:                   *         leax  -1,y
+0078:                            lda   -1,y
+0078:                            ENDC
+0078: 2B07                       bmi   L0060      if high bit set, it's OK
+007A: 30A4                       leax  ,y           point to next bit
+007C: 103F10                     os9   F$PrsNam   else parse name
+007F: 241B                       bcc   L007B      if no error, it's a sub-dir, and we error out
+0081: 10AF44            L0060    sty   R$X,u        save new pathname ptr
+0084: 3520                       puls  y            restore PD pointer
+0086: CC0100                     ldd   #$0100
+0089: 103F28                     os9   F$SRqMem   request one page for the pipe
+008C: 250D                       bcs   L007A        exit on error
+008E: EF28                       stu   PD.BUF,y     save ptr to the buffer
+0090: EFA814                     stu   <PD.NxtI,y save write pointer
+0093: EFA816                     stu   <PD.NxtO,y and read pointer
+0096: 33CB                       leau  d,u          point to the end of the buffer
+0098: EFA812                     stu   <PD.End,y    save save the ptr
+009B: 39                L007A    rts   
+009C:                   
+009C: 53                L007B    comb  
+009D: C6D7                       ldb   #E$BPNam   bad path name
+009F: 35A0                       puls  pc,y
+00A1:                   
+00A1:                   *
+00A1:                   * I$ReadLn Entry Point      
+00A1:                   * 
+00A1:                   * Entry: 
+00A1:                   *        
+00A1:                   * Exit:
+00A1:                   *
+00A1:                   * Error: CC Carry set  
+00A1:                   *        B = errcode
+00A1:                   *
+00A1: C60D              ReadLn   ldb   #$0D
+00A3: 21                         fcb   $21      skip one byte
+00A4:                   
+00A4:                   *
+00A4:                   * I$Read Entry Point        
+00A4:                   * 
+00A4:                   * Entry: 
+00A4:                   *        
+00A4:                   * Exit:
+00A4:                   *
+00A4:                   * Error: CC Carry set  
+00A4:                   *        B = errcode
+00A4:                   *
+00A4: 5F                Read     clrb
+00A5: E72D                       stb   PD.Read+P.FLAG,y  raw read
+00A7: 302A                       leax  PD.Read,y
+00A9: 17009B                     lbsr  L0160      send wakeup signals to process
+00AC: 2544                       bcs   L0100      on error, wake up writing process
+00AE: AE46                       ldx   R$Y,u
+00B0: 2740                       beq   L0100      if no bytes to rwad
+00B2: EC44                       ldd   R$X,u      start address to read from
+00B4: 308B                       leax  d,x        add in number of bytes: end address
+00B6:                   
+00B6:                   * NOTE: PD.RGS,Y will change as the processes read/write the pipe,
+00B6:                   * and sleep.
+00B6: 3440                       pshs  u            save current caller's register stack
+00B8: 32E8E0                     leas  -32,s        reserve a 32-byte buffer on the stack
+00BB: 33E4                       leau  ,s           point to the start of the buffer
+00BD: 3416                       pshs  d,x        save start, end to read
+00BF:                   
+00BF: 5F                         clrb               no bytes read to user yet
+00C0: 3510                       puls  x            restore number of data bytes read, read address
+00C2: 8D5F              L00DB    bsr   L01F2        are we blocked?
+00C4: 254C                       bcs   L00C8        yes, send a signal
+00C6: A7C5                       sta   b,u          store the byte in the internal read buffer
+00C8: 3001                       leax  $01,x        go up by one byte
+00CA: 5C                         incb               one more byte in the buffer
+00CB: C120                       cmpb  #32          reached maximum size of the buffer?
+00CD: 2502                       blo   L00E0        no, continue
+00CF: 8D26                       bsr   read.out     read 32 bytes of data to the caller
+00D1:                   
+00D1: 6D2D              L00E0    tst   PD.Read+P.FLAG,Y  was it a raw read?
+00D3: 2704                       beq   L00ED      skip ahead if raw
+00D5: 810D                       cmpa  #C$CR      was the character a CR?
+00D7: 2704                       beq   L00F1      yes, we're done: flush and exit
+00D9: ACE4              L00ED    cmpx  ,s         or at end of data to read?
+00DB: 25E5                       blo   L00DB        no, keep reading
+00DD:                   
+00DD: 8D18              L00F1    bsr   read.out     flush the rest of the pipe buffer to the user
+00DF: 1F10              L00F2    tfr   x,d        this is how far we got
+00E1: A3E1                       subd  ,s++       take out start of buffer
+00E3: 32E820                     leas  32,s         kill our on-stack buffer
+00E6: 3540                       puls  u            restore caller's register stack ptr: NOT PD.RGS,Y
+00E8: E346                       addd  R$Y,u      add in number of bytes
+00EA: ED46                       std   R$Y,u      save bytes read
+00EC: 2603                       bne   L00FF      if not zero
+00EE: C6D3                       ldb   #E$EOF     zero bytes read:EOF error
+00F0: 21                         fcb   $21          skip one byte
+00F1:                   
+00F1: 5F                L00FF    clrb               no errors
+00F2: 302A              L0100    leax  PD.Read,y    read data ptr
+00F4: 16010D                     lbra  L01BD      signal other it's OK to go ahead
+00F7:                   
+00F7: 3472              read.out pshs  a,x,y,u      save registers
+00F9: 5D                         tstb               any data to write?
+00FA: 2714                       beq   read.ex      no, skip ahead
+00FC:                            IFGT  Level-1
+00FC: 4F                         clra               make 16-bit data length
+00FD: 1F02                       tfr   d,y          number of data bytes to read to user
+00FF: 50                         negb               make it negative
+0100: 3085                       leax  b,x          back up TO pointer
+0102: 3410                       pshs  x            save it
+0104: 30C4                       leax  ,u           point to the start of the buffer
+0106: DE50                       ldu   <D.Proc      current process pointer
+0108: E646                       ldb   P$Task,u     A=$00 from above, already
+010A: 3540                       puls  u            restore TO pointer
+010C: 103F38                     os9   F$Move       move the data over
+010F: 5F                         clrb               no bytes read to the caller yet
+0110:                            ELSE
+0110:                            tfr   b,a              copy byte count to A
+0110:                            nega                   make it negative
+0110:                            leax  a,x              back up TO pointer
+0080:                   ReadLoop lda   ,u+
+0110:                            sta   ,x+
+0110:                            decb
+0110:                            bne   ReadLoop
+0110:                            ENDC
+0110: 35F2              read.ex  puls  a,x,y,u,pc   restore registers and exit
+0112:                   
+0112: 3410              L00C8    pshs  x            save read pointer
+0114: 8DE1                       bsr   read.out     dump data out to the user
+0116: 3404                       pshs  b            save number of bytes read
+0118: 302A                       leax  PD.Read,y    read data area ptr
+011A: 1700FF                     lbsr  L018B      setup for signal
+011D: 3514                       puls  x,b          restore registers: note B=$00, but we CANNOT do a
+011F: 24A1                       bcc   L00DB        clrb, because this line needs CC.C!
+0121: 20BC                       bra   L00F2        don't write data out again, but exit
+0123:                   
+0123:                   * Check if we're blocked
+0123: A6A818            L01F2    lda   <PD.RFlg,y  we blocked?
+0126: 2602                       bne   L01F9        no, skip ahead
+0128: 43                         coma               set flag: blocked
+0129: 39                         rts                and return to the caller
+012A:                   
+012A: 3410              L01F9    pshs  x            save read ptr
+012C: AEA816                     ldx   <PD.NxtO,y   where to read from in the buffer
+012F: A680                       lda   ,x+        get a byte
+0131: ACA812                     cmpx  <PD.End,y  at the end of the buffer?
+0134: 2502                       blo   L0207        no, skip ahesd
+0136: AE28                       ldx   PD.BUF,y   yes, go to start
+0138: AFA816            L0207    stx   <PD.NxtO,y   save new read ptr
+013B: ACA814                     cmpx  <PD.NxtI,y caught up to the write pointer yet?
+013E: 2603                       bne   L0212        no, skeip ahead
+0140: 6FA818                     clr   <PD.RFlg,y yes, set read is blocked
+0143: 1CFE              L0212    andcc #^Carry      no errors
+0145: 3590                       puls  pc,x         restore regs and exit
+0147:                   
+0147: A600              L0160    lda   P.CPR,x      get current process
+0149: 2721                       beq   L0185        none, exit
+014B: A125                       cmpa  PD.CPR,y   current process ID
+014D: 2721                       beq   L0189        none, exit
+014F: 6C01                       inc   P.CNT,x    one more process using this pipe
+0151: E601                       ldb   P.CNT,x
+0153: E122                       cmpb  PD.CNT,y   same as the number for this path?
+0155: 2603                       bne   L0173        no, skip ahead
+0157: 17FEF8                     lbsr  L009C      no, send a wake-up signal
+015A: 103F2B            L0173    os9   F$IOQu     and insert it in the others IO queue
+015D: 6A01                       dec   P.CNT,x    decrement count
+015F: 3410                       pshs  x
+0161: 9E50                       ldx   <D.Proc      current process ptr
+0163: E68819                     ldb   <P$Signal,x  signal code
+0166: 3510                       puls  x
+0168: 27DD                       beq   L0160      if no signal code sent, do another process
+016A: 43                         coma               otherwise return CC.C set, and B=signal code
+016B: 39                         rts   
+016C:                   
+016C: E625              L0185    ldb   PD.CPR,y     grab current PD process
+016E: E700                       stb   P.CPR,x      save as current reading/writing process
+0170: 5F                L0189    clrb               no errors
+0171: 39                         rts                and exit
+0172:                   
+0172: 3414              L01CC    pshs  b,x          save regs
+0174: AEA814                     ldx   <PD.NxtI,y
+0177: E6A818                     ldb   <PD.RFlg,y 0=READ, 1=WRITE
+017A: 2708                       beq   L01DE      was reading, set to write and continue
+017C: ACA816                     cmpx  <PD.NxtO,y caught up to the read pointer yet?
+017F: 2606                       bne   L01E3
+0181: 53                         comb  
+0182: 3594                       puls  pc,x,b
+0184:                   
+0184: 6CA818            L01DE    inc   <PD.RFlg,y set to writing into the pipe
+0187: A780              L01E3    sta   ,X+        save the byte
+0189: ACA812                     cmpx  <PD.End,y  if at the end of the buffer
+018C: 2502                       blo   L01EC
+018E: AE28                       ldx   PD.BUF,y   reset to the beginning
+0190: AFA814            L01EC    stx   <PD.NxtI,y
+0193: 5F                         clrb  
+0194: 3594                       puls  pc,x,b
+0196:                   
+0196: 3432              write.in pshs  a,x,y        save registers
+0198: 33C8E0                     leau  -32,u      point to the start of the buffer again
+019B:                            IFGT  Level-1
+019B: 9E50                       ldx   <D.Proc      current process pointer
+019D: A606                       lda   P$Task,x   get FROM task number for this process
+019F: AE61                       ldx   1,s        get FROM pointer
+01A1: 108E0020                   ldy   #32        16 bytes to grab
+01A5: 5F                         clrb             TO the system task
+01A6: 103F38                     os9   F$Move
+01A9:                            ELSE
+01A9:                            ldb   #31
+0004:                   WritLoop lda   b,x
+01A9:                            sta   b,u
+01A9:                            decb
+01A9:                            bpl   WritLoop
+01A9:                            ENDC
+01A9: C620                       ldb   #32        16 bytes in the buffer
+01AB: 35B2                       puls  a,x,y,pc
+01AD:                   
+01AD:                   *
+01AD:                   * I$WritLn Entry Point
+01AD:                   *
+01AD:                   * Entry:
+01AD:                   *
+01AD:                   * Exit:
+01AD:                   *
+01AD:                   * Error: CC Carry set  
+01AD:                   *        B = errcode  
+01AD:                   *
+01AD: C60D              WritLn   ldb   #$0D
+01AF: 21                         fcb   $21          skip one byte
+01B0:                   
+01B0:                   *
+01B0:                   * I$Write Entry Point 
+01B0:                   *
+01B0:                   * Entry:
+01B0:                   *
+01B0:                   * Exit:
+01B0:                   *
+01B0:                   * Error: CC Carry set  
+01B0:                   *        B = errcode  
+01B0:                   *
+01B0: 5F                Write    clrb
+01B1: E7A811                     stb   <PD.Writ+P.FLAG,y
+01B4: 302E                       leax  PD.Writ,y
+01B6: 8D8F                       bsr   L0160        make sure it's OK
+01B8: 2548                       bcs   L015C
+01BA: AE46                       ldx   R$Y,u        get number of bytes to write
+01BC: 2744                       beq   L015C
+01BE: EC44                       ldd   R$X,u        start address
+01C0: 308B                       leax  d,x          add in number of bytes
+01C2: 3440                       pshs  u
+01C4: 33E4                       leau  ,s           point to the end of the buffer
+01C6: 32E8E0                     leas  -32,s
+01C9: 3416                       pshs  d,x          save start, end
+01CB:                   
+01CB: AEE4                       ldx   ,s           get initial start pointer
+01CD: 8DC7                       bsr   write.in     fill the write buffer
+01CF:                   
+01CF: 3510                       puls  x
+01D1: A6C4              L0137    lda   ,u
+01D3: 8D9D                       bsr   L01CC        save it in the buffer
+01D5: 2535                       bcs   L0124        caught up to reading process yet?
+01D7: 3001                       leax  $01,x        up by one byte
+01D9: 3341                       leau  1,u
+01DB: 5A                         decb
+01DC: 2602                       bne   L0138
+01DE: 8DB6                       bsr   write.in     fill the buffer again
+01E0:                   
+01E0: 6DA811            L0138    tst   <PD.Writ+P.FLAG,y
+01E3: 2704                       beq   L014B
+01E5: 810D                       cmpa  #C$CR        at the end of a line to output?
+01E7: 2704                       beq   L014F
+01E9: ACE4              L014B    cmpx  ,S           at end yet?
+01EB: 25E4                       blo   L0137        if not, read more data
+01ED: 5F                L014F    clrb               clear carry and error
+01EE: EEE822            L0150    ldu   2+32,s       skip END, 32-byte write buffer, get U
+01F1: 3405                       pshs  b,cc
+01F3: 1F10                       tfr   x,d
+01F5: A362                       subd  $02,s        take out end address
+01F7: E346                       addd  R$Y,u        add in number of bytes
+01F9: ED46                       std   R$Y,u        save bytes written
+01FB: 3515                       puls  x,b,cc
+01FD: 32E820                     leas  32,s         kill write buffer
+0200: 3540                       puls  u
+0202:                   
+0202: 302E              L015C    leax  PD.Writ,y
+0204:                   * can probably lose saving 'U' in next few lines... but only minor difference
+0204:                   * Signal read/write it's OK to go ahead
+0204: 3445              L01BD    pshs  u,b,cc
+0206: 6F00                       clr   P.CPR,x      NO process currently using this device
+0208: 8D3D                       bsr   Other        signal other process to start
+020A: 35C5                       puls  pc,u,b,cc
+020C:                   
+020C: 3414              L0124    pshs  x,b
+020E: 302E                       leax  PD.Writ,y
+0210: 8D0A                       bsr   L018B        send signal to other
+0212: 1F98                       tfr   b,a          save error code, if applicable
+0214: 3514                       puls  x,b          restore pointer, byte count
+0216: 24B9                       bcc   L0137        continue if OK
+0218: 1F89                       tfr   a,b          otherwise restore error code
+021A: 20D2                       bra   L0150        exit, returning the error code to the user
+021C:                   
+021C: E601              L018B    ldb   P.CNT,x
+021E: 5C                         incb  
+021F: E122                       cmpb  PD.CNT,y
+0221: 2720                       beq   L01B9
+0223: E701                       stb   P.CNT,x
+0225: C601                       ldb   #$01
+0227: E702                       stb   P.SIG,x
+0229: 6F25                       clr   PD.CPR,y
+022B: 3410                       pshs  x
+022D: 8D18                       bsr   Other
+022F: 8E0000                     ldx   #$0000       make X=0
+0232: 103F0A                     os9   F$Sleep      sleep forever
+0235: 9E50                       ldx   <D.Proc
+0237: E68819                     ldb   <P$Signal,x  get signal code
+023A: 3510                       puls  x
+023C: 6A01                       dec   P.CNT,x
+023E: 5D                         tstb  
+023F: 2604                       bne   L01BB      if a signal, we can't wake up
+0241: 5F                         clrb             the writing process
+0242: 39                         rts   
+0243:                   
+0243: C6F5              L01B9    ldb   #E$Write   write error
+0245: 43                L01BB    coma  
+0246: 39                         rts   
+0247:                   
+0247: 1E10              Other    exg   x,d
+0249: C804                       eorb  #$04       if r/w go to w/r
+024B: 1E01                       exg   d,x
+024D: 16FE02                     lbra  L009C
+0250:                   
+0250: 54384A                     emod
+0253:                   eom      equ   *
+0253:                            end
+0 Pass 2 errors.
+
+SYMBOL TABLE
+   A.ACIAP 01 ff68    A.MODP 01 ff6c   A.TERMV 01 ffc0      A.V1 01 ffc1
+      A.V2 01 ffc2      A.V3 01 ffc3      A.V4 01 ffc4      A.V5 01 ffc5
+      A.V6 01 ffc6      A.V7 01 ffc7  ACIA2661 02 0003  ACIA6551 02 0002
+  ACIA6850 02 0001  ACIATYPE 03 0002  ALTERBIT 00 0004      ATRV 01 0080
+  ATTRMASK 00 00f0      B110 00 0000   B115200 00 000a     B1200 00 0003
+    B19200 00 0007     B2400 00 0004      B300 00 0001    B38400 00 0008
+     B4800 00 0005    B57600 00 0009      B600 00 0002     B9600 00 0006
+  BADINSTR 00 0040  BLOCKTYP 00 0001   BOOTSTR 02 0014   BORDREG 00 ff9a
+  BT.BLOCK 00 003b   BT.FLAG 00 8a34  BT.OFFST 00 0002    BT.SEC 00 0000
+   BT.SIZE 00 1080  BT.START 01 ed00  BT.TRACK 00 0022   BUFBUSY 00 0040
+    BUFMOD 00 0001  BYTETYPE 00 0002    C$BELL 01 0007     C$BSP 01 0008
+  C$CLSALL 01 0016   C$CLSGR 01 0015    C$COMA 01 002c      C$CR 01 000d
+     C$DEL 01 0018  C$DELETE 01 0010     C$DWN 01 001f      C$EL 01 0005
+     C$EOF 01 001b    C$FORM 01 000c    C$HOME 01 000b  C$INSERT 01 0011
+    C$INTR 01 0003      C$LF 01 000a     C$LFT 01 001d    C$NULL 01 0000
+    C$PAUS 01 0017    C$PERD 01 002e   C$PLINE 01 0013    C$QUIT 01 0005
+    C$RARR 01 0009     C$RGT 01 001c    C$RPET 01 0001    C$RPRT 01 0004
+  C$SHRARR 01 0019      C$SI 01 000f      C$SO 01 000e    C$SPAC 01 0020
+      C$UP 01 001e    C$XOFF 01 0013     C$XON 01 0011     CARRY 00 0001
+   CBLCODE 00 0005     CCODE 00 0004    CHGDIR 02 0061     CLOSE 02 0039
+  CNTRLBIT 00 0002    COCO.D 01 0001     COLOR 01 0001    COLOR3 01 0002
+    CONDEM 00 0002  CPUSPEED 01 0002   CPUTYPE 01 0002   CRCCON1 00 0080
+  CRCCON23 00 0fe3    CRCOFF 00 0000     CRCON 00 0001    CREATE 02 0065
+    D$GSTA 02 0009    D$INIT 02 0000    D$PSTA 02 000c    D$READ 02 0003
+    D$TERM 02 000f    D$WRIT 02 0006  D.ALTIRQ 02 00b2  D.APROCQ 02 0052
+  D.BLKMAP 02 0040    D.BOOT 02 0031   D.BORDR 02 009a   D.BTBUG 02 005e
+   D.BTPTR 02 0036    D.BTSZ 02 0038  D.CBSTRT 02 0071   D.CCMEM 02 00a5
+   D.CCSTK 02 00a7  D.CLDRES 02 005c   D.CLOCK 02 00e0  D.CLOCK2 02 00b6
+    D.CLTB 02 00b0  D.COCOXT 02 0009   D.CRASH 02 006b     D.CRC 02 003b
+     D.DAY 02 002a   D.DAYWK 02 0034  D.DBGMEM 02 000a  D.DEVTBL 02 0080
+  D.DMAREQ 02 008a D.DWSRVID 02 0010  D.DWSTAT 02 000eD.DWSUBADDR 02 000c
+  D.ERRCOD 02 0033  D.ERRRST 02 00ee    D.FIRQ 02 00f6   D.FLIP0 02 00a9
+   D.FLIP1 02 00ab   D.FRQER 02 0093   D.GPOLL 02 00b4   D.HINIT 02 0090
+   D.HOFF0 02 009f    D.HOUR 02 002b    D.INIT 02 0024     D.IRQ 02 00f8
+   D.IRQER 02 0092    D.IRQS 02 00af   D.MEMSZ 02 00a3     D.MIN 02 002c
+  D.MODDAT 02 005a  D.MODDIR 02 0044  D.MODEND 02 0058   D.MONTH 02 0029
+   D.MOTON 02 0032     D.NMI 02 00fc    D.PIPE 02 0061    D.POLL 02 0026
+  D.POLTBL 02 0082  D.PRCDBT 02 0048    D.PROC 02 0050  D.PTHDBT 02 0088
+    D.QCNT 02 007c    D.QIRQ 02 003f   D.QUICK 02 003e   D.RESV1 02 0096
+   D.RESV2 02 0097   D.RESV3 02 009b     D.SEC 02 002d   D.SLICE 02 002f
+   D.SPEED 02 00a0  D.SPROCQ 02 0056  D.SSTSKN 02 00a4  D.SVCIRQ 02 00ce
+     D.SWI 02 00fa    D.SWI2 02 00f4    D.SWI3 02 00f2  D.SWPAGE 02 0003
+  D.SYSDAT 02 004c  D.SYSDIS 02 00c2  D.SYSIRQ 02 00c4  D.SYSMEM 02 004e
+  D.SYSPRC 02 004a  D.SYSSTK 02 00cc  D.SYSSVC 02 00c0  D.SYSTSK 02 00d0
+  D.SYSVEC 02 00f0  D.TASK1N 02 003d   D.TASKS 02 0020  D.TENTHS 02 003c
+    D.TICK 02 002e    D.TIME 02 0028   D.TIMLS 02 0095   D.TIMMS 02 0094
+   D.TINIT 02 0091   D.TKCNT 02 0035  D.TMPDAT 02 0022  D.TSKIPT 02 00a1
+  D.TSLICE 02 0030  D.USRDIS 02 00c8  D.USRIRQ 02 00ca  D.USRSVC 02 00c6
+   D.VIDMD 02 0098   D.VIDRS 02 0099    D.VIRQ 02 00ad   D.VOFF0 02 009e
+   D.VOFF1 02 009d   D.VOFF2 02 009c  D.WDADDR 02 0000  D.WDBTDR 02 0002
+  D.WPROCQ 02 0054   D.XFIRQ 02 00e6    D.XIRQ 02 00e8    D.XNMI 02 00ec
+    D.XSWI 02 00ea   D.XSWI2 02 00e4   D.XSWI3 02 00e2    D.YEAR 02 0028
+  DAT.ADDR 00 ffe0  DAT.BLCT 00 0008  DAT.BLMX 00 003f  DAT.BLSZ 00 2000
+  DAT.BMSZ 00 0040  DAT.FREE 00 333e  DAT.IMSZ 00 0010  DAT.REGS 00 ffa0
+  DAT.TASK 00 ff91  DAT.TKCT 00 0020  DAT.WREN 00 0000  DAT.WRPR 00 0000
+      DATA 00 0040    DD.ATT 02 000d    DD.BIT 02 0006    DD.BSZ 02 0018
+     DD.BT 02 0015    DD.DAT 02 001a    DD.DIR 02 0008    DD.DSK 02 000e
+    DD.FMT 02 0010    DD.MAP 02 0004    DD.NAM 02 001f    DD.OPT 02 003f
+    DD.OWN 02 000b    DD.RES 02 0013    DD.SIZ 02 0015    DD.SPT 02 0011
+    DD.TKS 02 0003    DD.TOT 02 0000      DEAD 00 0001  DEFIOSIZ 00 0010
+    DELETE 02 0061    DEVCNT 02 000d     DEVIC 00 00f0    DEVSIZ 02 000d
+      DIR. 00 0080    DIR.FD 02 001d    DIR.NM 02 0000    DIR.SZ 02 0020
+      DIV0 00 0080   DNS.DTD 00 0002    DNS.FM 00 0000   DNS.FM0 00 0000
+   DNS.MFM 00 0001  DNS.MFM0 00 0004   DNS.STD 00 0000   DOWNBIT 00 0010
+     DPORT 01 ff40     DRIVR 00 00e0    DRVBEG 02 000f    DRVMEM 02 0026
+   DT.CDFM 00 0005    DT.NFM 00 0004   DT.PIPE 00 0002    DT.RBF 00 0001
+    DT.RFM 00 0006    DT.SBF 00 0003    DT.SCF 00 0000   E$ALIAS 02 00c7
+  E$ARROVF 02 0049  E$BADBUF 02 00c2   E$BMCRC 02 00e8    E$BMHP 02 00ec
+    E$BMID 02 00cd   E$BMODE 02 00cb    E$BNAM 02 00eb  E$BPADDR 02 00d2
+   E$BPNAM 02 00d7   E$BPNUM 02 00c9  E$BPRCID 02 00e0    E$BTYP 02 00f9
+  E$BUFSIZ 02 00bf     E$BUG 02 00be     E$CEF 02 00da     E$CRC 02 00f3
+  E$DEADLK 02 00fe   E$DELSP 02 00df  E$DEVBSY 02 00fa  E$DEVOVF 02 00cc
+    E$DIDC 02 00fb  E$DIMLRG 02 0019  E$DIRFUL 02 00ce  E$DIVZER 02 002d
+      E$DN 02 00c6     E$DNE 02 00ee  E$ENDQOU 02 0029     E$EOF 02 00d3
+  E$EXCVRB 02 000b  E$FLTOVF 02 0032     E$FNA 02 00d6    E$FULL 02 00f8
+  E$HANGUP 02 00dc     E$IBA 02 00db  E$ICHREF 02 000e  E$ICOORD 02 00bd
+   E$ICOVF 02 000d  E$IFORKP 02 00e6    E$ILLA 02 0043  E$ILLARG 02 00bb
+  E$ILLCMD 02 00c0  E$ILLCNT 02 0044  E$ILLDEC 02 0048  E$ILLDIM 02 0015
+  E$ILLEXP 02 0047  E$ILLFOR 02 0046  E$ILLINP 02 003d  E$ILLIVR 02 004d
+  E$ILLLIT 02 0016  E$ILLMOD 02 000f  E$ILLNUM 02 0010  E$ILLOPD 02 0012
+  E$ILLOPR 02 0013  E$ILLPNM 02 0040  E$ILLPRF 02 0011  E$ILLRET 02 0017
+  E$ILLRFN 02 0014  E$ILLSFX 02 0018  E$ILLSTC 02 000c  E$IOCONV 02 003c
+  E$IOFRPT 02 003e  E$IOFSYN 02 003f  E$IOMISM 02 003a   E$IONUM 02 003b
+  E$IPRCID 02 00e0    E$ISWI 02 00e3   E$IWDEF 02 00c3   E$IWTYP 02 00b7
+  E$KWNMOD 02 00e7  E$LINLRG 02 001a  E$LNCOMP 02 0033    E$LOCK 02 00fc
+  E$MEMFUL 02 00cf   E$MFULL 02 0020  E$MLTLIN 02 004b  E$MLTVAR 02 004c
+     E$MNF 02 00dd  E$MODBSY 02 00d1  E$MULPRC 02 002c   E$NEMOD 02 00ea
+     E$NES 02 00d5   E$NFONT 02 00b9  E$NOASSG 02 001b  E$NOCHLD 02 00e2
+  E$NOCOMA 02 001d  E$NODATA 02 004f   E$NODIM 02 001e    E$NODO 02 001f
+  E$NOGOTO 02 0021  E$NOLPAR 02 0022  E$NOLREF 02 0023  E$NONRCO 02 0042
+  E$NOOPRD 02 0024  E$NOPATH 02 001c   E$NORAM 02 00ed  E$NOROUT 02 0030
+  E$NORPAR 02 0025  E$NOTASK 02 00ef  E$NOTHEN 02 0026    E$NOTO 02 0027
+  E$NOTRDY 02 00f6  E$NOVREF 02 0028  E$PARMER 02 0038    E$PNNF 02 00d8
+    E$POLL 02 00ca  E$PRCABT 02 00e4  E$PRCFUL 02 00e5  E$PTHFUL 02 00c8
+    E$READ 02 00f4    E$SECT 02 00f1    E$SEEK 02 00f7  E$SEEKRG 02 004e
+   E$SHARE 02 00fd     E$SLF 02 00d9  E$STKOVF 02 00ba  E$STROVF 02 002f
+  E$SUBLRG 02 002a  E$SUBOVF 02 0035  E$SUBRNG 02 0037  E$SUBUND 02 0036
+  E$SYSOVF 02 0039  E$TBLFUL 02 00c1  E$TYPMIS 02 002e  E$UNDLIN 02 004a
+  E$UNDVAR 02 0031    E$UNIT 02 00f0  E$UNKPRC 02 002b  E$UNKSVC 02 00d0
+  E$UNKSYM 02 000a  E$UNMCNT 02 0045      E$UP 02 00c5   E$USIGP 02 00e9
+  E$VALRNG 02 0034   E$WADEF 02 00b8      E$WP 02 00f2   E$WRITE 02 00f5
+   E$WRSUB 02 0041  E$WUNDEF 02 00c4   EDITION 01 0005    ENTIRE 00 0080
+   EOFLOCK 00 0004       EOM 02 0253     EXEC. 00 0004   F$ALARM 02 001e
+  F$ALHRAM 02 0053   F$ALL64 02 0030  F$ALLBIT 02 0013  F$ALLIMG 02 003a
+  F$ALLPRC 02 004b  F$ALLRAM 02 0039  F$ALLTSK 02 003f   F$APROC 02 002c
+    F$BOOT 02 0035   F$BTMEM 02 0036   F$CHAIN 02 0005  F$CLRBLK 02 0050
+  F$CMPNAM 02 0011  F$CPYMEM 02 001b     F$CRC 02 0017  F$CRCMOD 02 0055
+  F$DATLOG 02 0044  F$DATTMP 02 0045   F$DEBUG 02 0023  F$DELBIT 02 0014
+  F$DELIMG 02 003b  F$DELPRC 02 004c  F$DELRAM 02 0051  F$DELTSK 02 0040
+   F$ELINK 02 004d    F$EXIT 02 0006  F$FIND64 02 002f  F$FMODUL 02 004e
+    F$FORK 02 0003  F$FREEHB 02 003e  F$FREELB 02 003d  F$GBLKMP 02 0019
+  F$GCMDIR 02 0052  F$GMODDR 02 001a  F$GPRDSC 02 0018  F$GPROCP 02 0037
+    F$ICPT 02 0009      F$ID 02 000c   F$IODEL 02 0033    F$IOQU 02 002b
+     F$IRQ 02 002a   F$LDABX 02 0049   F$LDAXY 02 0046  F$LDAXYP 02 0047
+  F$LDDDXY 02 0048    F$LINK 02 0000    F$LOAD 02 0001  F$MAPBLK 02 004f
+     F$MEM 02 0007    F$MOVE 02 0038  F$NMLINK 02 0021  F$NMLOAD 02 0022
+   F$NPROC 02 002d   F$NVRAM 02 0071    F$PERR 02 000f  F$PRSNAM 02 0010
+  F$REBOOT 02 0054  F$REGDMP 02 0070  F$RELTSK 02 0043  F$RESTSK 02 0042
+   F$RET64 02 0031  F$SCHBIT 02 0012    F$SEND 02 0008  F$SETIMG 02 003c
+  F$SETTSK 02 0041   F$SLEEP 02 000a   F$SLINK 02 0034  F$SPRIOR 02 000d
+  F$SRQMEM 02 0028  F$SRTMEM 02 0029    F$SSPD 02 000b    F$SSVC 02 0032
+    F$SSWI 02 000e   F$STABX 02 004a   F$STIME 02 0016   F$SUSER 02 001c
+  F$TIMALM 02 0026    F$TIME 02 0015     F$TPS 02 0025  F$UNLINK 02 0002
+  F$UNLOAD 02 001d  F$VBLOCK 02 0057    F$VIRQ 02 0027  F$VMODUL 02 002e
+    F$WAIT 02 0004   F$XTIME 02 0056     FALSE 00 0000    FD.ATT 02 0000
+  FD.CREAT 02 000d    FD.DAT 02 0003    FD.LNK 02 0008    FD.LS1 00 00fb
+    FD.LS2 00 00fa    FD.OWN 02 0001    FD.SEG 02 0010    FD.SIZ 02 0009
+     FDBUF 00 0004    FDSL.A 02 0000    FDSL.B 02 0003    FDSL.S 02 0005
+  FEATURE1 02 001b  FEATURE2 02 001c  FILELOCK 00 0002  FIRQMASK 00 0040
+     FLMGR 00 00d0    FMCDIR 02 0009    FMCLOS 02 0024    FMCREA 02 0000
+    FMDLET 02 000c    FMGSTA 02 001e    FMMDIR 02 0006    FMOPEN 02 0003
+    FMRDLN 02 0018    FMREAD 02 0012    FMSEEK 02 000f    FMSSTA 02 0021
+   FMT.DNS 00 0002  FMT.SIDE 00 0001  FMT.T0DN 00 0020  FMT.TDNS 00 0004
+    FMWRIT 02 0015    FMWRLN 02 001b  FRTNCODE 00 0006    GETSTT 02 0033
+  GIMEREGS 00 ff00     H6309 06 0000  HALFCRRY 00 0020   HW.PAGE 01 0007
+      HZ50 00 0001      HZ60 00 0002  I$ATTACH 02 0080  I$CHGDIR 02 0086
+   I$CLOSE 02 008f  I$CREATE 02 0083  I$DELETE 02 0087  I$DELETX 02 0090
+  I$DETACH 02 0081     I$DUP 02 0082  I$GETSTT 02 008d  I$MAKDIR 02 0085
+    I$OPEN 02 0084    I$READ 02 0089  I$READLN 02 008b    I$SEEK 02 0088
+  I$SETSTT 02 008e   I$WRITE 02 008a  I$WRITLN 02 008c     ICODE 00 0002
+    IMGCHG 00 0010  INDRIVER 00 0020   INITSTR 02 000eINSTALLNAME 02 001f
+  INTMASKS 00 0050    IOADDR 00 007f   IOBLOCK 00 003f   IOENTRY 00 00fe
+    IRQENR 00 ff92   IRQMASK 00 0010     ISIZ. 00 0020    IT.ALF 02 0017
+    IT.BAU 02 0027    IT.BDC 02 0035    IT.BGC 02 0034    IT.BSE 02 0024
+    IT.BSO 02 0014    IT.BSP 02 001b    IT.COL 02 002c    IT.CPX 02 0031
+    IT.CPY 02 0032    IT.CYL 02 0017    IT.D2P 02 0028    IT.DEL 02 001c
+    IT.DLO 02 0015    IT.DNS 02 0016    IT.DRV 02 0013    IT.DTP 02 0012
+    IT.DUP 02 0020    IT.DVC 02 0012   IT.ECNT 02 0014    IT.EKO 02 0016
+    IT.EOF 02 001e    IT.EOR 02 001d   IT.ESIZ 02 0013  IT.EXTEN 02 0022
+    IT.FGC 02 0033    IT.ILV 02 001f    IT.INT 02 0022  IT.LLDRV 02 0028
+    IT.MPI 02 002a    IT.NUL 02 0018    IT.OFS 02 0026    IT.OVF 02 0025
+    IT.PAG 02 001a    IT.PAR 02 0026    IT.PAU 02 0019    IT.PDC 00 0012
+    IT.PSC 02 0021    IT.QUT 02 0023    IT.ROW 02 002d    IT.RPR 02 001f
+    IT.RWC 02 0028    IT.SAS 02 0020    IT.SCT 02 001b    IT.SID 02 0019
+  IT.SOFF1 02 0025  IT.SOFF2 02 0026  IT.SOFF3 02 0027  IT.STOFF 02 0024
+    IT.STP 02 0014    IT.STY 02 0030    IT.T0S 02 001d    IT.TFM 02 0021
+    IT.TYP 02 0015    IT.UPC 02 0013    IT.VAL 02 002f    IT.VFY 02 001a
+    IT.WND 02 002e    IT.WPC 02 0025   IT.XOFF 02 002b    IT.XON 02 002a
+   IT.XTYP 02 002e   KEYRPTD 02 0029   KEYRPTS 02 0028    KRNBLK 01 003f
+     L0060 02 0081     L007A 02 009b     L007B 02 009c     L008E 02 0046
+     L009C 02 0052     L00A9 02 005f     L00C8 02 0112     L00DB 02 00c2
+     L00E0 02 00d1     L00ED 02 00d9     L00F1 02 00dd     L00F2 02 00df
+     L00FF 02 00f1     L0100 02 00f2     L0124 02 020c     L0137 02 01d1
+     L0138 02 01e0     L014B 02 01e9     L014F 02 01ed     L0150 02 01ee
+     L015C 02 0202     L0160 02 0147     L0173 02 015a     L0185 02 016c
+     L0189 02 0170     L018B 02 021c     L01B9 02 0243     L01BB 02 0245
+     L01BD 02 0204     L01CC 02 0172     L01DE 02 0184     L01E3 02 0187
+     L01EC 02 0190     L01F2 02 0123     L01F9 02 012a     L0207 02 0138
+     L0212 02 0143  LANGMASK 00 000f   LASTRAM 00 003f   LEFTBIT 00 0020
+     LEVEL 00 0002   LIMITED 00 0001    M$DTYP 02 0012    M$EXEC 02 0009
+    M$FMGR 02 0009      M$ID 02 0000     M$ID1 00 0087    M$ID12 00 87cd
+     M$ID2 00 00cd  M$IDSIZE 02 0009     M$MEM 02 000b    M$MODE 02 000d
+    M$NAME 02 0004     M$OPT 02 0011  M$PARITY 02 0008    M$PDEV 02 000b
+    M$PORT 02 000e    M$REVS 02 0007    M$SIZE 02 0002    M$TYPE 02 0006
+    MAKDIR 02 0061  MAPPEDIO 02 0000    MAXMEM 02 0009  MD$ESIZE 02 0008
+   MD$LINK 02 0006  MD$MBSIZ 02 0002  MD$MPDAT 02 0000   MD$MPTR 02 0004
+    MINSEC 01 0010  MODBLOCK 00 0002    MODNAT 00 0020   MODPROT 00 0040
+   MONTYPE 02 0025  MOUSEINF 02 0026  MOVEBLKS 00 0005  MPI.SLCT 01 ff7f
+  MPI.SLOT 01 0003     MULTI 00 0030      NAME 02 000d   NAMEMAX 01 001d
+  NEFIOSIZ 00 000c  NEGATIVE 00 0008   NOS9MAJ 00 0000   NOS9MIN 00 0001
+   NOS9VER 00 0001    NOTRAM 00 0080    NPATHS 01 0010  NUMPATHS 00 0010
+   OBJ6309 00 0007     OBJCT 00 0001    ONEMHZ 00 0001      OPEN 02 0065
+    OPTCNT 00 001a     OS9.D 01 0001  OS9MAJOR 00 0000  OS9MINOR 00 0001
+   OS9VRSN 00 0001   OSLEVEL 02 0017   OSMAJOR 02 0019   OSMINOR 02 001a
+    OSNAME 02 001d     OSVER 02 0018     OTHER 02 0247     P$AGE 02 000b
+   P$ALARM 02 00c3     P$CID 02 0003  P$DATBEG 02 00bd  P$DATIMG 02 0040
+  P$DEADLK 02 001e     P$DIO 02 0020  P$FCALLS 02 00b5  P$ICALLS 02 00b9
+      P$ID 02 0000    P$IOQN 02 0010    P$IOQP 02 000f   P$LINKS 02 0080
+     P$NIO 02 00a0  P$PAGCNT 02 0007    P$PATH 02 0030     P$PID 02 0001
+  P$PMODUL 02 0011   P$PRIOR 02 000a   P$QUEUE 02 000d    P$SELP 02 00ac
+     P$SID 02 0002  P$SIGDAT 02 001c  P$SIGNAL 02 0019  P$SIGVEC 02 001a
+    P$SIZE 02 0200      P$SP 02 0004   P$STACK 02 0200   P$STATE 02 000c
+  P$STICKS 02 00b1     P$SWI 02 0013    P$SWI2 02 0015    P$SWI3 02 0017
+    P$TASK 02 0006  P$TIMBEG 02 00c0    P$USER 02 0008  P$UTICKS 02 00ad
+     P.CNT 02 0001     P.CPR 02 0000    P.FLAG 02 0003     P.SIG 02 0002
+    PALADR 00 ffb0   PAREVEN 00 0060   PARMARK 00 00a0   PARMASK 00 00e0
+   PARNONE 00 0000    PARODD 00 0020  PARSPACE 00 00e0     PCODE 00 0003
+    PD.ALF 02 0025    PD.ATT 02 0033    PD.BAU 02 0035   PD.BCNT 02 001a
+    PD.BSE 02 0032    PD.BSO 02 0022    PD.BSP 02 0029    PD.BUF 02 0008
+    PD.CNT 02 0002     PD.CP 02 000b    PD.CPR 02 0005    PD.CYL 02 0025
+    PD.D2P 02 0036    PD.DCP 02 003a    PD.DEL 02 002a    PD.DEV 02 0003
+    PD.DFD 02 0037    PD.DLO 02 0023    PD.DNS 02 0024    PD.DRV 02 0021
+    PD.DSK 02 001c    PD.DTB 02 001e    PD.DTP 02 0020    PD.DUP 02 002e
+    PD.DV2 02 000a    PD.DVT 02 003e   PD.ECNT 02 0022    PD.EKO 02 0024
+    PD.END 02 0012    PD.EOF 02 002c    PD.EOR 02 002b    PD.ERR 02 003a
+   PD.ESIZ 02 0021  PD.EXTEN 02 0030     PD.FD 02 0034    PD.FST 02 000a
+    PD.ILV 02 002d    PD.INT 02 0030   PD.KEEP 02 001d    PD.MAX 02 000d
+    PD.MIN 02 000f    PD.MOD 02 0001   PD.NAME 02 0023    PD.NUL 02 0026
+   PD.NXTI 02 0014   PD.NXTO 02 0016    PD.OPT 02 0020    PD.OVF 02 0033
+    PD.OWN 02 001c    PD.PAG 02 0028    PD.PAR 02 0034    PD.PAU 02 0027
+     PD.PD 02 0000    PD.PLP 02 003d    PD.PSC 02 002f    PD.PST 02 003f
+   PD.QSIZ 02 001e    PD.QUT 02 0031    PD.RAW 02 000c    PD.RCT 02 000b
+   PD.READ 02 000a   PD.REOR 02 000d   PD.RFLG 02 0018    PD.RGS 02 0006
+   PD.RPID 02 000a    PD.RPR 02 002d   PD.RSIG 02 000c    PD.SAS 02 002e
+    PD.SBL 02 0013    PD.SBP 02 0016    PD.SCT 02 0029    PD.SID 02 0027
+    PD.SIZ 02 000f    PD.SMF 02 000a    PD.SSZ 02 0019    PD.STM 02 0012
+  PD.STOFF 02 0032    PD.STP 02 0022    PD.STS 02 0010    PD.T0S 02 002b
+    PD.TBL 02 003b    PD.TFM 02 002f    PD.TYP 02 0023    PD.UPC 02 0021
+    PD.VFY 02 0028    PD.WCT 02 000f   PD.WEOR 02 0011   PD.WPID 02 000e
+   PD.WRIT 02 000e   PD.WRTN 02 0019   PD.WSIG 02 0010   PD.XOFF 02 0039
+    PD.XON 02 0038    PDELIM 00 002f      PDIR 00 002e    PDSIZE 02 0040
+  PE.CONFL 02 0005  PE.FILNM 02 0020  PE.HILCK 02 000c   PE.LOCK 02 0007
+  PE.LOLCK 02 0008  PE.NXFIL 02 0003  PE.OWNER 02 0014  PE.PDPTR 02 0001
+     PE.PE 02 0000  PE.PRIOR 02 0016    PE.REQ 02 0015  PE.SIGID 02 0018
+  PE.SIGSG 02 0017  PE.TMOUT 02 0012   PE.WAIT 02 0010    PENTIR 00 0040
+    PEXEC. 00 0020  PIA0BASE 00 ff00  PIA1BASE 00 ff20    PIPE.D 01 0001
+   PMANMEM 02 0008   POLLCNT 02 000c    POLSIZ 02 000b   PP.DATA 02 0008
+   PP.NEXT 02 0002     PP.PD 02 0000   PP.PREV 02 0004   PP.RSRV 02 0006
+    PREAD. 00 0008     PRGRM 00 0010  PROC6309 00 0002  PROC6809 00 0000
+  PROTFLAG 02 0016   PST.DCD 00 0001    PWRIT. 00 0010  PWRLNFRQ 01 0002
+    Q$FLIP 02 0002     Q$MAP 02 0009    Q$MASK 02 0003    Q$POLL 02 0000
+    Q$PRTY 02 0008    Q$SERV 02 0004    Q$STAT 02 0006       R$A 00 0001
+       R$B 00 0002      R$CC 00 0000       R$D 00 0001      R$DP 00 0003
+      R$PC 00 000a    R$SIZE 00 000c       R$U 00 0008       R$X 00 0004
+       R$Y 00 0006  RAMCHECK 00 0001  RAMCOUNT 00 0001  RAMINUSE 00 0001
+     RBF.D 01 0001   RCDLOCK 00 0001      READ 02 00a4     READ. 00 0001
+   READ.EX 02 0110  READ.OUT 02 00f7    READLN 02 00a1     REENT 00 0080
+       REV 01 0000  REVSMASK 00 000f  RIGHTBIT 00 0040  ROMBLOCK 00 003f
+  ROMCHECK 00 0001  ROMCOUNT 00 0001   S$ABORT 02 0002   S$ALARM 02 0005
+     S$HUP 02 0004  S$INTRPT 02 0003    S$KILL 02 0000    S$WAKE 02 0001
+  S$WINDOW 02 0004     SBRTN 00 0020     SCF.D 01 0001      SEEK 02 0024
+    SETSTT 02 0036    SHARE. 00 0040  SHELLSUB 00 0050  SHIFTBIT 00 0001
+      SIGN 00 0080    SINBUF 00 0002      SIZE 02 0000  SPACEBIT 00 0080
+  SS.AAGBF 02 0080  SS.ALFAS 02 001c  SS.ANPAL 02 009a   SS.ARAM 00 00ca
+  SS.ASCRN 02 008b   SS.ATTR 02 001c  SS.BLKRD 02 0014  SS.BLKWR 02 0015
+  SS.BREAK 02 001d  SS.CDREL 02 009b  SS.CDSIG 02 009a  SS.CDSTA 02 0099
+  SS.CLOSE 02 002a  SS.COMST 02 0028  SS.CURSR 02 0025   SS.DCMD 02 000d
+  SS.DEVNM 02 000e  SS.DFPAL 02 0097 SS.DIRENT 02 0020   SS.DRAM 00 00cb
+  SS.DREAD 02 0080  SS.DRVCH 02 0086  SS.DSCRN 02 008c  SS.DSIZE 02 0026
+  SS.DSTAT 02 0012  SS.DWRIT 02 0080    SS.ECC 02 00b0   SS.ELOG 02 0019
+    SS.EOF 02 0006  SS.FBRGS 02 0096   SS.FCLR 00 0081     SS.FD 02 000f
+  SS.FDINF 00 0020   SS.FEED 02 0009   SS.FILL 02 00a0  SS.FNDBF 02 009b
+    SS.FRZ 02 000a  SS.FSCRN 02 008d   SS.FSET 00 00c7   SS.FSIG 02 002c
+    SS.GIP 02 0094   SS.GIP2 02 0099   SS.HIST 02 00a1  SS.HNGUP 02 002b
+    SS.JOY 02 0013   SS.KCLR 00 00c9   SS.KSET 00 00c8  SS.KYSNS 02 0027
+   SS.LINK 02 0007   SS.LOCK 02 0011  SS.MNSEL 02 0087   SS.MOFF 02 0082
+  SS.MONTR 02 0092  SS.MOTIM 02 0083  SS.MOUNT 02 0082  SS.MOUSE 02 0089
+  SS.MPGPB 02 0084  SS.MSSIG 02 008a   SS.OPEN 02 0029    SS.OPT 02 0000
+  SS.PALET 02 0091    SS.POS 02 0005  SS.PSCRN 02 008e  SS.RDNET 02 0083
+  SS.READY 02 0001  SS.RELEA 02 001b  SS.RESET 02 0003  SS.RETEN 02 0016
+    SS.RFM 02 0018  SS.RSBIT 02 001e   SS.SBAR 02 0088  SS.SCINF 02 008f
+  SS.SCSIZ 02 0026  SS.SCTYP 02 0093   SS.SDRD 02 0084  SS.SDWRT 02 0084
+  SS.SETMF 02 0024   SS.SIZE 02 0002  SS.SLEEP 02 0085  SS.SLGBF 02 0081
+  SS.SLOTS 02 0085    SS.SPT 02 000b    SS.SQD 02 000c   SS.SSIG 02 001a
+  SS.TICKS 02 0010   SS.TONE 02 0098  SS.ULINK 02 0008  SS.UMBAR 02 0095
+  SS.UNFRZ 02 0081SS.VARSECT 02 0012   SS.VCTR 00 0080   SS.VSIG 00 0081
+    SS.WFM 02 0017  SS.WNSET 02 0086   SS.WTRK 02 0004     START 02 0015
+    STDSTR 02 0012     STOP1 00 0000     STOP2 00 0010  STP.12MS 00 0002
+  STP.20MS 00 0001  STP.30MS 00 0000   STP.6MS 00 0003   SUSPEND 00 0008
+  SYSSTATE 00 0080    SYSSTR 02 0010   SYSTASK 00 0000     SYSTM 00 00c0
+    TIMOUT 00 0020  TIMSLEEP 00 0040  TKPERSEC 01 003c      TRUE 00 0001
+    TWOMHZ 00 0002  TWOSOVFL 00 0002      TYLG 01 00d1   TYP.256 00 0000
+     TYP.3 00 0001     TYP.5 00 0000   TYP.512 00 0004   TYP.CCF 00 0020
+   TYP.FLP 00 0000  TYP.HARD 00 0080  TYP.NCCF 00 0000   TYP.NSF 00 0040
+   TYP.SBO 00 0002   TYP.SOF 00 0000  TYPEMASK 00 00f0 TYPH.1024 00 0002
+ TYPH.2048 00 0003  TYPH.256 00 0000  TYPH.512 00 0001 TYPH.DRSV 00 000c
+  TYPH.DSQ 00 0010  TYPH.SSM 00 0003  UNLIMITD 00 0002  UNLOCKED 00 0000
+     UPBIT 00 0008    UPDAT. 00 0003    V$DESC 02 0004    V$DRIV 02 0000
+  V$DRIVEX 02 0009    V$FMGR 02 0006  V$FMGREX 02 000b    V$STAT 02 0002
+    V$USRS 02 0008  V.BMAPSZ 02 001c     V.BMB 02 0017    V.BUSY 02 0004
+    V.DEV2 02 0009  V.DISKID 02 001a     V.ERR 02 000e  V.FILEHD 02 0018
+    V.INTR 02 000b   V.KANJI 02 0011    V.KBUF 02 0012    V.LINE 02 0007
+    V.LIST 02 0006    V.LPRC 02 0003  V.MAPSCT 02 001d  V.MODADR 02 0014
+    V.NDRV 02 0006    V.PAGE 02 0000    V.PAUS 02 0008    V.PCHR 02 000d
+   V.PDLHD 02 0016    V.PORT 02 0001    V.QUIT 02 000c  V.RESBIT 02 001e
+     V.RSV 02 0018     V.SCF 02 001d  V.SCOFST 02 0020  V.SCTKOF 02 001f
+  V.TKOFST 02 0021    V.TRAK 02 0015    V.TYPE 02 0006    V.USER 02 0006
+    V.WAKE 02 0005    V.XOFF 02 0010     V.XON 02 000f    VD.OFS 02 0061
+    VD.STP 02 0060    VI.CNT 02 0000  VI.IFLAG 00 0001   VI.PKSZ 02 0005
+    VI.RST 02 0002   VI.STAT 02 0004    VIDRAM 00 0004     WORD7 00 0020
+     WORD8 00 0000     WRITE 02 01b0    WRITE. 00 0002  WRITE.IN 02 0196
+    WRITLN 02 01ad      ZERO 00 0004

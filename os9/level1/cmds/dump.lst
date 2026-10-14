@@ -1,0 +1,699 @@
+0000:                   ********************************************************************
+0000:                   * Dump - Show file contents in hex
+0000:                   *
+0000:                   * $Id$
+0000:                   *
+0000:                   * Dump follows the function of the original Microware version but now
+0000:                   * supports large files over 64K, and is free from the problems of garbage
+0000:                   * in wide listings.
+0000:                   *
+0000:                   * In addition it now allows dumping of memory modules and command modules
+0000:                   * in the execution directory.
+0000:                   *
+0000:                   * Edt/Rev  YYYY/MM/DD  Modified by
+0000:                   * Comment
+0000:                   * ------------------------------------------------------------------
+0000:                   *   5      ????/??/??
+0000:                   * From Tandy OS-9 Level One VR 02.00.00.
+0000:                   *
+0000:                   *   6      2002/12/23  Boisy G. Pitre
+0000:                   * Incorporated R. Telkman's additions from 1987, added -d option,
+0000:                   * added defs to conditionally assemble without help or screen size check.
+0000:                   *
+0000:                   *          2003/01/17  Boisy G. Pitre
+0000:                   * Removed -d option.
+0000:                   *
+0000:                   *          2003/01/21  Boisy G. Pitre
+0000:                   * Narrow screen now shows properly, only dumps 16 bits worth of address
+0000:                   * data to make room.
+0000:                   *
+0000:                   *          2003/03/03  Boisy G. Pitre
+0000:                   * Fixed bug where header would be shown even if there was no data in a file.
+0000:                   *
+0000:                   *   7      2003/06/06  Rodney V. Hamilton
+0000:                   * Restored Rubout processing for terminals.
+0000:                   
+0000:                           nam     Dump
+0000:                           ttl     Show file contents in hex
+0000:                   
+0000:                           ifp1
+0000:                           use     defsfile
+0000:                           endc
+0000:                   
+0000:                   * Tweakable options
+0001:                   DOSCSIZ set     1       1 = include SS.ScSiz code, 0 = leave out
+0000:                   DOHELP  set     0       1 = include help message, 0 = leave out
+0050:                   BUFSZ   set     80
+0000:                   
+0011:                   tylg    set     Prgrm+Objct
+0081:                   atrv    set     ReEnt+rev
+0001:                   rev     set     1
+0007:                   edition set     7
+0000:                   
+0000:                           org     0
+0000:                   nonopts rmb     1
+0001:                   D.Prm   rmb     2
+0003:                   D.Hdr   rmb     1
+0004:                   D.Mem   rmb     1
+0005:                           IFNE    DOSCSIZ
+0005:                   narrow  rmb     1
+0006:                           ENDC
+0006:                   Mode    rmb     1
+0007:                   D.Opn   rmb     1
+0008:                   D.Beg   rmb     2
+000A:                   D.End   rmb     2
+000C:                   D.Adr   rmb     4
+0010:                   D.Len   rmb     2
+0012:                   D.Ptr   rmb     2
+0014:                   D.Txt   rmb     2
+0016:                   Datbuf  rmb     16
+0026:                   Txtbuf  rmb     BUFSZ
+0076:                           rmb     128
+00F6:                   datsz   equ     .
+00F6:                   
+0000: 87CD02FE000D1181          mod     length,name,tylg,atrv,start,datsz
+0009: 00F200F6
+0000:                   
+000D: 44756DF0          name    fcs     /Dump/
+0011: 07                        fcb     edition
+0012:                   
+0012: 4164647265737320  title   fcc     /Address   0 1  2 3  4 5  6 7  8 9  A B  C D  E F  0 2 4 6 8 A C E/
+001B: 2030203120203220
+0023: 3320203420352020
+002B: 3620372020382039
+0033: 2020412042202043
+003B: 2044202045204620
+0043: 2030203220342036
+004B: 2038204120432045
+0041:                   titlelen equ    *-title
+0053: 0D                caret   fcb     C$CR
+0054: 2D2D2D2D2D2D2D2D  flund   fcc     /-------- ---- ---- ---- ---- ---- ---- ---- ----  ----------------/
+005D: 2D2D2D2D202D2D2D
+0065: 2D202D2D2D2D202D
+006D: 2D2D2D202D2D2D2D
+0075: 202D2D2D2D202D2D
+007D: 2D2D202D2D2D2D20
+0085: 202D2D2D2D2D2D2D
+008D: 2D2D2D2D2D2D2D2D
+0095: 2D
+0096: 0D                        fcb     C$CR
+0097:                           IFNE    DOSCSIZ
+0097: 2020202020302031  short   fcc     /     0 1 2 3 4 5 6 7  0 2 4 6/
+00A0: 3220332034203520
+00A8: 3620372020302032
+00B0: 20342036
+00B4: 0A                        fcb     C$LF
+00B5: 4164647220382039          fcc     /Addr 8 9 A B C D E F  8 A C E/
+00BE: 4120422043204420
+00C6: 4520462020382041
+00CE: 20432045
+00D2: 0D                        fcb     C$CR
+00D3: 3D3D3D3D202B2D2B  shund   fcc     /==== +-+-+-+-+-+-+-+- +-+-+-+-/
+00DC: 2B2D2B2D2B2D2B2D
+00E4: 2B2D2B2D202B2D2B
+00EC: 2D2B2D2B2D
+00F1: 0D                        fcb     C$CR
+00F2:                           ENDC
+00F2:                   
+00F2: 9F01              start   stx     <D.Prm
+00F4: 4F                        clra
+00F5: 9703                      sta     <D.Hdr
+00F7: 9704                      sta     <D.Mem
+00F9: 9700                      sta     <nonopts        assume no non-opts
+00FB: 4C                        inca
+00FC: 9706                      sta     <Mode           READ.
+00FE:                   
+00FE:                           IFNE    DOSCSIZ
+00FE: 0F05                      clr     <narrow         assume wide
+0100:                   
+0100:                   * Check screen size
+0100: C626                      ldb     #SS.ScSiz
+0102: 103F8D                    os9     I$GetStt
+0105: 2509                      bcs     Pass1
+0107:                   
+0107: 8C0042                    cmpx    #titlelen+1
+010A: 2C02                      bge     PrePass
+010C:                   
+010C: 9705                      sta     <narrow
+010E:                   
+010E: 9E01              PrePass ldx     <D.Prm
+0110:                           ENDC
+0110:                   
+0110:                   * Pass1 - process any options
+0110:                   * Entry: X = ptr to cmd line
+0110:                   Pass1
+0110:                   * Skip over spaces
+0110: A680                      lda     ,x+
+0112: 8120                      cmpa    #C$SPAC
+0114: 27FA                      beq     Pass1
+0116:                   
+0116:                   * Check for EOL
+0116: 810D                      cmpa    #C$CR
+0118: 272C                      beq     Pass2
+011A:                   
+011A:                   * Check for option
+011A: 812D                      cmpa    #'-
+011C: 26F2                      bne     Pass1
+011E:                   
+011E:                   * Here, X points to an option char
+011E: A680              OptPass lda     ,x+
+0120: 8120                      cmpa    #C$SPAC
+0122: 27EC                      beq     Pass1
+0124: 810D                      cmpa    #C$CR
+0126: 271E                      beq     Pass2
+0128:                   
+0128: 84DF                      anda    #$DF
+012A:                   
+012A: 8148              IsItH   cmpa    #'H
+012C: 2604                      bne     IsItM
+012E:                   
+012E:                   * Process H here
+012E: 9703                      sta     <D.Hdr
+0130: 20EC                      bra     OptPass
+0132:                   
+0132: 814D              IsItM   cmpa    #'M
+0134: 2604                      bne     IsItX
+0136:                   
+0136:                   * Process M here
+0136: 9704                      sta     <D.Mem
+0138: 20E4                      bra     OptPass
+013A:                   
+013A: 8158              IsItX   cmpa    #'X
+013C: 2635                      bne     ShowHelp
+013E:                   
+013E:                   * Process X here
+013E: 9606                      lda     <Mode
+0140: 8A04                      ora     #EXEC.
+0142: 9706                      sta     <Mode
+0144: 20D8                      bra     OptPass
+0146:                   
+0146:                           IFNE    DOHELP
+0173:                   ShowHelp leax   HelpMsg,pcr
+0146:                           lda     #2
+0146:                           ldy     #HelpLen
+0146:                           os9     I$Write
+0146:                           bra     ExitOk
+0146:                           ENDC
+0146:                   
+0146:                   * Pass2 - process any non-options
+0146:                   * Entry: X = ptr to cmd line
+0146:                   Pass2
+0146: 9E01                      ldx     <D.Prm
+0148:                   Pass21
+0148:                   * Skip over spaces
+0148: A680                      lda     ,x+
+014A: 8120                      cmpa    #C$SPAC
+014C: 27FA                      beq     Pass21
+014E: 812D                      cmpa    #'-
+0150: 260A                      bne     Pass22
+0152:                   
+0152: A680              EatOpts lda     ,x+
+0154: 8120                      cmpa    #C$SPAC
+0156: 27F0                      beq     Pass21
+0158: 810D                      cmpa    #C$CR
+015A: 26F6                      bne     EatOpts
+015C:                   
+015C:                   * Check for EOL
+015C: 810D              Pass22  cmpa    #C$CR
+015E: 2708                      beq     EndOfL
+0160:                   
+0160: 301F              Call    leax    -1,x
+0162: A740                      sta     nonopts,u
+0164: 8D1F                      bsr     DumpFile
+0166: 20E0                      bra     Pass21
+0168:                   
+0168: 0D00              EndOfL  tst     <nonopts        any non-options on cmd line?
+016A: 2607                      bne     ExitOk
+016C: 0D04                      tst     <D.Mem          memory option specified?
+016E: 2603                      bne     ShowHelp        yes, no module specified, show help
+0170: 4F                        clra                    stdin
+0171: 8D28                      bsr     DumpIn
+0173:                           IFEQ    DOHELP
+0173:                   ShowHelp
+0173:                           ENDC
+0173: 5F                ExitOk  clrb
+0174: 103F06            DoExit  os9     F$Exit
+0177:                   
+0177: 4F                mlink   clra
+0178: 3440                      pshs    u
+017A: 103F00                    os9     F$Link
+017D: DF08                      stu     <D.Beg
+017F: 3540                      puls    u
+0181: 2418                      bcc     DumpIn
+0183: 20EF                      bra     DoExit
+0185:                   
+0185: 0D04              DumpFile tst    <D.Mem
+0187: 26EE                      bne     mlink
+0189: 9606                      lda     <Mode
+018B: 1F12              opath   tfr     x,y
+018D: 103F84                    os9     I$Open
+0190: 2409                      bcc     DumpIn
+0192: 1F21                      tfr     y,x
+0194: 8A80                      ora     #DIR.           try directory mode
+0196: 103F84                    os9     I$Open          open it
+0199: 25D9                      bcs     DoExit          branch if error
+019B: 9F01              DumpIn  stx     <D.Prm
+019D: 9707                      sta     <D.Opn
+019F: 9E08                      ldx     <D.Beg
+01A1: EC02                      ldd     M$Size,x
+01A3: 308B                      leax    d,x
+01A5: 9F0A                      stx     <D.End
+01A7: 4F                        clra
+01A8: 5F                        clrb
+01A9: 1F01                      tfr     d,x
+01AB: DD0E              onpas   std     <D.Adr+2
+01AD: 2402                      bcc     notbg
+01AF: 3001                      leax    1,x
+01B1: 9F0C              notbg   stx     <D.Adr
+01B3: 0D03                      tst     <D.Hdr
+01B5: 263A                      bne     nohed
+01B7:                           IFNE    DOSCSIZ
+01B7: 0D05                      tst     <narrow
+01B9: 2701                      beq     flpag
+01BB: 58                        aslb
+01BC:                           ENDC
+01BC: 5D                flpag   tstb
+01BD: 2632                      bne     nohed
+01BF: 1700DC                    lbsr    iseof
+01C2: 2403                      bcc     flpag2
+01C4: 9E01                      ldx     <D.Prm
+01C6: 39                        rts
+01C7: 308DFE88          flpag2  leax    caret,pcr
+01CB: 17008C                    lbsr    print
+01CE: C610                      ldb     #16
+01D0: 308DFE3E                  leax    title,pcr
+01D4: 318DFE7C                  leay    flund,pcr
+01D8:                           IFNE    DOSCSIZ
+01D8: 0D05                      tst     <narrow
+01DA: 270A                      beq     doprt
+01DC: C608                      ldb     #8
+01DE: 308DFEB5                  leax    short,pcr
+01E2: 318DFEED                  leay    shund,pcr
+01E6:                           ENDC
+01E6: 3420              doprt   pshs    y
+01E8: 4F                        clra
+01E9: DD10                      std     <D.Len
+01EB: 8D6D                      bsr     print
+01ED: 3510                      puls    x
+01EF: 8D69                      bsr     print
+01F1: 30C826            nohed   leax    Txtbuf,u
+01F4: 9F12                      stx     <D.Ptr
+01F6: D611                      ldb     <D.Len+1
+01F8: 8603                      lda     #3
+01FA: 3D                        mul
+01FB: C30002                    addd    #2
+01FE:                           IFNE    DOSCSIZ
+01FE: 0D05                      tst     <narrow
+0200: 2703                      beq     leayit
+0202: 830004                    subd    #4
+0205:                           ENDC
+0205: 318B              leayit  leay    d,x
+0207: 109F14                    sty     <D.Txt
+020A: 8620                      lda     #C$SPAC
+020C: C64F                      ldb     #BUFSZ-1
+020E: A785              clbuf   sta     b,x
+0210: 5A                        decb
+0211: 2AFB                      bpl     clbuf
+0213: C60C                      ldb     #D.Adr
+0215:                           IFNE    DOSCSIZ
+0215: 0D05                      tst     <narrow
+0217: 2702                      beq     adlop
+0219: 5C                        incb                    we  skip first two bytes ...
+021A: 5C                        incb                    ...  if on a narrow screen
+021B:                           ENDC
+021B: A6C5              adlop   lda     b,u
+021D: 1700CD                    lbsr    onbyt
+0220: 5C                        incb
+0221: C110                      cmpb    #D.Adr+4
+0223: 26F6                      bne     adlop
+0225: 9E12                      ldx     <D.Ptr
+0227: 3001                      leax    1,x
+0229: 9F12                      stx     <D.Ptr
+022B: 8D3B                      bsr     readi
+022D: 2563                      bcs     eofck
+022F: 1700A1            onlin   lbsr    onchr
+0232: 5A                        decb
+0233: 2F11                      ble     enlin
+0235: 17009B                    lbsr    onchr
+0238: 5A                        decb
+0239: 2F0B                      ble     enlin
+023B:                           IFNE    DOSCSIZ
+023B: 0D05                      tst     <narrow
+023D: 26F0                      bne     onlin
+023F:                           ENDC
+023F: 8620                      lda     #C$SPAC
+0241: 170085                    lbsr    savec
+0244: 20E9                      bra     onlin
+0246: 860D              enlin   lda     #C$CR
+0248: 9E14                      ldx     <D.Txt
+024A: A784                      sta     ,x
+024C: 30C826                    leax    Txtbuf,u
+024F: 8D09                      bsr     print
+0251: DC0E                      ldd     <D.Adr+2
+0253: 9E0C                      ldx     <D.Adr
+0255: D310                      addd    <D.Len
+0257: 16FF51                    lbra    onpas
+025A: 108E0050          print   ldy     #BUFSZ
+025E: 8601                      lda     #1
+0260: 103F8C                    os9     I$WritLn
+0263: 1025FF0D                  lbcs    DoExit
+0267: 39                        rts
+0268: 109E10            readi   ldy     <D.Len
+026B: 5F                        clrb
+026C: 0D04                      tst     <D.Mem
+026E: 260D                      bne     redad
+0270: 30C816                    leax    Datbuf,u
+0273: 9607                      lda     <D.Opn
+0275: 103F89                    os9     I$Read
+0278: 2502                      bcs     reded
+027A: 1F20                      tfr     y,d
+027C: 39                reded   rts
+027D:                   
+027D: 8D35              redad   bsr     iseofm
+027F: 2401                      bcc     setct
+0281: 39                        rts
+0282: 9310              setct   subd    <D.Len
+0284: 2502                      bcs     redof
+0286: 4F                        clra
+0287: 5F                        clrb
+0288: D310              redof   addd    <D.Len
+028A: 6F7F                      clr     -1,s
+028C: 318B                      leay    d,x
+028E: 109F08                    sty     <D.Beg
+0291: 39                        rts
+0292:                   
+0292: C1D3              eofck   cmpb    #E$EOF
+0294: 1A01                      orcc    #Carry
+0296: 1026FEDA                  lbne    DoExit
+029A: 5F                        clrb
+029B: 9E01                      ldx     <D.Prm
+029D: 39                        rts
+029E:                   
+029E: 0D04              iseof   tst     <D.Mem
+02A0: 2612                      bne     iseofm
+02A2: 9607                      lda     <D.Opn
+02A4: C606                      ldb     #SS.EOF
+02A6: 103F8D                    os9     I$GetStt
+02A9: C1D3                      cmpb    #E$EOF
+02AB: 2702                      beq     iseofex
+02AD: 5F                        clrb
+02AE: 39                iseofok rts
+02AF: 1A01              iseofex orcc    #Carry
+02B1: C6D3                      ldb     #E$EOF
+02B3: 39                        rts
+02B4: DC0A              iseofm  ldd     <D.End
+02B6: 9E08                      ldx     <D.Beg
+02B8: 9308                      subd    <D.Beg
+02BA: 27F3                      beq     iseofex
+02BC: 1CFE                      andcc   #^Carry
+02BE: 39                        rts
+02BF:                   
+02BF: 840F              onibl   anda    #$0F
+02C1: 8109                      cmpa    #9
+02C3: 2302                      bls     nocom
+02C5: 8B07                      adda    #7
+02C7: 8B30              nocom   adda    #'0
+02C9: 3410              savec   pshs    x
+02CB: 9E12                      ldx     <D.Ptr
+02CD: A780                      sta     ,x+
+02CF: 9F12                      stx     <D.Ptr
+02D1: 3590                      puls    x,pc
+02D3: A680              onchr   lda     ,x+
+02D5: 8D16                      bsr     onbyt
+02D7: 3412                      pshs    x,a
+02D9: 847F                      anda    #$7F
+02DB: 8120                      cmpa    #C$SPAC         control char?
+02DD: 2504                      blo     cntrl
+02DF: 817F                      cmpa    #$7F            rubout?
+02E1: 2502                      blo     savet
+02E3: 862E              cntrl   lda     #'.             make printable
+02E5: 9E14              savet   ldx     <D.Txt
+02E7: A780                      sta     ,x+
+02E9: 9F14                      stx     <D.Txt
+02EB: 3592                      puls    a,x,pc
+02ED: 3402              onbyt   pshs    a
+02EF: 44                        lsra
+02F0: 44                        lsra
+02F1: 44                        lsra
+02F2: 44                        lsra
+02F3: 8DCA                      bsr     onibl
+02F5: A6E4                      lda     ,s
+02F7: 8DC6                      bsr     onibl
+02F9: 3582                      puls    a,pc
+02FB:                   
+02FB:                           IFNE    DOHELP
+00FF:                   HelpMsg fcc     "Use: Dump [opts] [<path>] [opts]"
+02FB:                           fcb     C$CR,C$LF
+02FB:                           fcc     "  -h = no header"
+02FB:                           fcb     C$CR,C$LF
+02FB:                           fcc     "  -m = module in memory"
+02FB:                           fcb     C$CR,C$LF
+02FB:                           fcc     "  -x = file in exec dir"
+02FB:                           fcb     C$CR,C$LF
+00FF:                   HelpLen equ     *-HelpMsg
+02FB:                           ENDC
+02FB:                   
+02FB: 4CD59D                    emod
+02FE:                   length  equ     *
+02FE:                           end
+0 Pass 2 errors.
+
+SYMBOL TABLE
+   A.ACIAP 01 ff68    A.MODP 01 ff6c   A.TERMV 01 ffc0      A.V1 01 ffc1
+      A.V2 01 ffc2      A.V3 01 ffc3      A.V4 01 ffc4      A.V5 01 ffc5
+      A.V6 01 ffc6      A.V7 01 ffc7  ACIA2661 02 0003  ACIA6551 02 0002
+  ACIA6850 02 0001  ACIATYPE 03 0002     ADLOP 02 021b  ALTERBIT 00 0004
+      ATRV 01 0081  ATTRMASK 00 00f0      B110 00 0000   B115200 00 000a
+     B1200 00 0003    B19200 00 0007     B2400 00 0004      B300 00 0001
+    B38400 00 0008     B4800 00 0005    B57600 00 0009      B600 00 0002
+     B9600 00 0006  BADINSTR 00 0040    BMAPSZ 00 0020   BOOTSTR 02 0014
+    BT.SEC 00 0000   BT.SIZE 00 1080  BT.START 00 ee00  BT.TRACK 00 0022
+   BUFBUSY 00 0040    BUFMOD 00 0001     BUFSZ 01 0050    C$BELL 01 0007
+     C$BSP 01 0008  C$CLSALL 01 0016   C$CLSGR 01 0015    C$COMA 01 002c
+      C$CR 01 000d     C$DEL 01 0018  C$DELETE 01 0010     C$DWN 01 001f
+      C$EL 01 0005     C$EOF 01 001b    C$FORM 01 000c    C$HOME 01 000b
+  C$INSERT 01 0011    C$INTR 01 0003      C$LF 01 000a     C$LFT 01 001d
+    C$NULL 01 0000    C$PAUS 01 0017    C$PERD 01 002e   C$PLINE 01 0013
+    C$QUIT 01 0005    C$RARR 01 0009     C$RGT 01 001c    C$RPET 01 0001
+    C$RPRT 01 0004  C$SHRARR 01 0019      C$SI 01 000f      C$SO 01 000e
+    C$SPAC 01 0020      C$UP 01 001e    C$XOFF 01 0013     C$XON 01 0011
+      CALL 02 0160     CARET 02 0053     CARRY 00 0001   CBLCODE 00 0005
+     CCODE 00 0004CHECK_FOR_VALID_ 00 0001     CLBUF 02 020e     CNTRL 02 02e3
+  CNTRLBIT 00 0002    COCO.D 01 0001     COLOR 01 0001    COLOR3 01 0002
+    CONDEM 00 0002  CPUSPEED 01 0001   CPUTYPE 01 0001   CRCCON1 00 0080
+  CRCCON23 00 0fe3    CRCOFF 00 0000     CRCON 00 0001    D$GSTA 02 0009
+    D$INIT 02 0000    D$PSTA 02 000c    D$READ 02 0003    D$TERM 02 000f
+    D$WRIT 02 0006     D.ADR 02 000c  D.ALTIRQ 02 006b  D.APROCQ 02 004d
+     D.BEG 02 0008    D.BOOT 02 0083    D.BTHI 02 0068    D.BTLO 02 0066
+  D.CBSTRT 02 0071   D.CLOCK 02 0081  D.CLOCK2 02 008a    D.CLTB 02 0086
+  D.COCOXT 02 0009     D.CRC 02 0089     D.DAY 02 0055  D.DBGMEM 02 000a
+  D.DEVTBL 02 0060  D.DMAREQ 02 006a  D.DSKTMR 02 006f D.DWSRVID 02 0010
+  D.DWSTAT 02 000eD.DWSUBADDR 02 000c     D.END 02 000a    D.FIRQ 02 0030
+    D.FMBM 02 0020     D.HDR 02 0003    D.HOUR 02 0056    D.INIT 02 002a
+    D.IOMH 02 005e    D.IOML 02 005c     D.IRQ 02 0032  D.KBDSTA 02 006d
+     D.LEN 02 0010   D.MDREG 02 0088     D.MEM 02 0004     D.MIN 02 0057
+    D.MLIM 02 0024  D.MODDIR 02 0026   D.MONTH 02 0054     D.NMI 02 0036
+     D.OPN 02 0007    D.POLL 02 003a  D.POLTBL 02 0062  D.PRCDBT 02 0049
+     D.PRM 02 0001    D.PROC 02 004b  D.PTHDBT 02 0064     D.PTR 02 0012
+     D.SEC 02 0058   D.SLICE 02 0048  D.SPROCQ 02 0051  D.SVCIRQ 02 0038
+     D.SWI 02 0034    D.SWI2 02 002e    D.SWI3 02 002c  D.SWPAGE 02 0003
+  D.SYSDIS 02 0046  D.SYSIRQ 02 003e  D.SYSSVC 02 0042    D.TICK 02 0059
+    D.TIME 02 0053    D.TSEC 02 005a  D.TSLICE 02 005b     D.TXT 02 0014
+  D.URTOSS 02 0084  D.USRDIS 02 0044  D.USRIRQ 02 003c  D.USRSVC 02 0040
+  D.WDADDR 02 0000  D.WDBTDR 02 0002  D.WPROCQ 02 004f   D.XFIRQ 02 010f
+    D.XIRQ 02 010c    D.XNMI 02 0109    D.XSWI 02 0106   D.XSWI2 02 0103
+   D.XSWI3 02 0100    D.YEAR 02 0053      DATA 00 0040    DATBUF 02 0016
+     DATSZ 02 00f6    DD.ATT 02 000d    DD.BIT 02 0006    DD.BSZ 02 0018
+     DD.BT 02 0015    DD.DAT 02 001a    DD.DIR 02 0008    DD.DSK 02 000e
+    DD.FMT 02 0010    DD.MAP 02 0004    DD.NAM 02 001f    DD.OPT 02 003f
+    DD.OWN 02 000b    DD.RES 02 0013    DD.SIZ 02 0015    DD.SPT 02 0011
+    DD.TKS 02 0003    DD.TOT 02 0000      DEAD 00 0001  DEFIOSIZ 00 000c
+    DEVCNT 02 000d     DEVIC 00 00f0    DEVSIZ 02 0009      DIR. 00 0080
+    DIR.FD 02 001d    DIR.NM 02 0000    DIR.SZ 02 0020      DIV0 00 0080
+   DNS.DTD 00 0002    DNS.FM 00 0000   DNS.FM0 00 0000   DNS.MFM 00 0001
+  DNS.MFM0 00 0004   DNS.STD 00 0000    DOEXIT 02 0174    DOHELP 01 0000
+     DOPRT 02 01e6   DOSCSIZ 01 0001   DOWNBIT 00 0010     DPORT 01 ff40
+     DRIVR 00 00e0    DRVBEG 02 000f    DRVMEM 02 0026   DT.CDFM 00 0005
+    DT.NFM 00 0004   DT.PIPE 00 0002    DT.RBF 00 0001    DT.RFM 00 0006
+    DT.SBF 00 0003    DT.SCF 00 0000  DUMPFILE 02 0185    DUMPIN 02 019b
+   E$ALIAS 02 00c7  E$ARROVF 02 0049  E$BADBUF 02 00c2   E$BMCRC 02 00e8
+    E$BMHP 02 00ec    E$BMID 02 00cd   E$BMODE 02 00cb    E$BNAM 02 00eb
+  E$BPADDR 02 00d2   E$BPNAM 02 00d7   E$BPNUM 02 00c9  E$BPRCID 02 00e0
+    E$BTYP 02 00f9  E$BUFSIZ 02 00bf     E$BUG 02 00be     E$CEF 02 00da
+     E$CRC 02 00f3  E$DEADLK 02 00fe   E$DELSP 02 00df  E$DEVBSY 02 00fa
+  E$DEVOVF 02 00cc    E$DIDC 02 00fb  E$DIMLRG 02 0019  E$DIRFUL 02 00ce
+  E$DIVZER 02 002d      E$DN 02 00c6     E$DNE 02 00ee  E$ENDQOU 02 0029
+     E$EOF 02 00d3  E$EXCVRB 02 000b  E$FLTOVF 02 0032     E$FNA 02 00d6
+    E$FULL 02 00f8  E$HANGUP 02 00dc     E$IBA 02 00db  E$ICHREF 02 000e
+  E$ICOORD 02 00bd   E$ICOVF 02 000d  E$IFORKP 02 00e6    E$ILLA 02 0043
+  E$ILLARG 02 00bb  E$ILLCMD 02 00c0  E$ILLCNT 02 0044  E$ILLDEC 02 0048
+  E$ILLDIM 02 0015  E$ILLEXP 02 0047  E$ILLFOR 02 0046  E$ILLINP 02 003d
+  E$ILLIVR 02 004d  E$ILLLIT 02 0016  E$ILLMOD 02 000f  E$ILLNUM 02 0010
+  E$ILLOPD 02 0012  E$ILLOPR 02 0013  E$ILLPNM 02 0040  E$ILLPRF 02 0011
+  E$ILLRET 02 0017  E$ILLRFN 02 0014  E$ILLSFX 02 0018  E$ILLSTC 02 000c
+  E$IOCONV 02 003c  E$IOFRPT 02 003e  E$IOFSYN 02 003f  E$IOMISM 02 003a
+   E$IONUM 02 003b  E$IPRCID 02 00e0    E$ISWI 02 00e3   E$IWDEF 02 00c3
+   E$IWTYP 02 00b7  E$KWNMOD 02 00e7  E$LINLRG 02 001a  E$LNCOMP 02 0033
+    E$LOCK 02 00fc  E$MEMFUL 02 00cf   E$MFULL 02 0020  E$MLTLIN 02 004b
+  E$MLTVAR 02 004c     E$MNF 02 00dd  E$MODBSY 02 00d1  E$MULPRC 02 002c
+   E$NEMOD 02 00ea     E$NES 02 00d5   E$NFONT 02 00b9  E$NOASSG 02 001b
+  E$NOCHLD 02 00e2  E$NOCOMA 02 001d  E$NODATA 02 004f   E$NODIM 02 001e
+    E$NODO 02 001f  E$NOGOTO 02 0021  E$NOLPAR 02 0022  E$NOLREF 02 0023
+  E$NONRCO 02 0042  E$NOOPRD 02 0024  E$NOPATH 02 001c   E$NORAM 02 00ed
+  E$NOROUT 02 0030  E$NORPAR 02 0025  E$NOTASK 02 00ef  E$NOTHEN 02 0026
+    E$NOTO 02 0027  E$NOTRDY 02 00f6  E$NOVREF 02 0028  E$PARMER 02 0038
+    E$PNNF 02 00d8    E$POLL 02 00ca  E$PRCABT 02 00e4  E$PRCFUL 02 00e5
+  E$PTHFUL 02 00c8    E$READ 02 00f4    E$SECT 02 00f1    E$SEEK 02 00f7
+  E$SEEKRG 02 004e   E$SHARE 02 00fd     E$SLF 02 00d9  E$STKOVF 02 00ba
+  E$STROVF 02 002f  E$SUBLRG 02 002a  E$SUBOVF 02 0035  E$SUBRNG 02 0037
+  E$SUBUND 02 0036  E$SYSOVF 02 0039  E$TBLFUL 02 00c1  E$TYPMIS 02 002e
+  E$UNDLIN 02 004a  E$UNDVAR 02 0031    E$UNIT 02 00f0  E$UNKPRC 02 002b
+  E$UNKSVC 02 00d0  E$UNKSYM 02 000a  E$UNMCNT 02 0045      E$UP 02 00c5
+   E$USIGP 02 00e9  E$VALRNG 02 0034   E$WADEF 02 00b8      E$WP 02 00f2
+   E$WRITE 02 00f5   E$WRSUB 02 0041  E$WUNDEF 02 00c4   EATOPTS 02 0152
+   EDITION 01 0007    ENDOFL 02 0168     ENLIN 02 0246    ENTIRE 00 0080
+     EOFCK 02 0292     EXEC. 00 0004    EXITOK 02 0173   F$ALL64 02 0030
+  F$ALLBIT 02 0013   F$APROC 02 002c   F$CHAIN 02 0005  F$CMPNAM 02 0011
+     F$CRC 02 0017   F$DEBUG 02 0023  F$DELBIT 02 0014    F$EXIT 02 0006
+  F$FIND64 02 002f    F$FORK 02 0003    F$ICPT 02 0009      F$ID 02 000c
+   F$IODEL 02 0033    F$IOQU 02 002b     F$IRQ 02 002a    F$LINK 02 0000
+    F$LOAD 02 0001     F$MEM 02 0007   F$NPROC 02 002d    F$PERR 02 000f
+  F$PRSNAM 02 0010   F$RET64 02 0031  F$SCHBIT 02 0012    F$SEND 02 0008
+   F$SLEEP 02 000a  F$SPRIOR 02 000d  F$SRQMEM 02 0028  F$SRTMEM 02 0029
+    F$SSPD 02 000b    F$SSVC 02 0032    F$SSWI 02 000e   F$STIME 02 0016
+    F$TIME 02 0015  F$UNLINK 02 0002    F$VIRQ 02 0027  F$VMODUL 02 002e
+    F$WAIT 02 0004     FALSE 00 0000    FD.ATT 02 0000  FD.CREAT 02 000d
+    FD.DAT 02 0003    FD.LNK 02 0008    FD.LS1 00 00fb    FD.LS2 00 00fa
+    FD.OWN 02 0001    FD.SEG 02 0010    FD.SIZ 02 0009     FDBUF 00 0004
+    FDSL.A 02 0000    FDSL.B 02 0003    FDSL.S 02 0005  FEATURE1 02 001b
+  FEATURE2 02 001c  FIRQMASK 00 0040     FLMGR 00 00d0     FLPAG 02 01bc
+    FLPAG2 02 01c7     FLUND 02 0054    FMCDIR 02 0009    FMCLOS 02 0024
+    FMCREA 02 0000    FMDLET 02 000c    FMGSTA 02 001e    FMMDIR 02 0006
+    FMOPEN 02 0003    FMRDLN 02 0018    FMREAD 02 0012    FMSEEK 02 000f
+    FMSSTA 02 0021   FMT.DNS 00 0002  FMT.SIDE 00 0001  FMT.T0DN 00 0020
+  FMT.TDNS 00 0004    FMWRIT 02 0015    FMWRLN 02 001b  FRTNCODE 00 0006
+     H6309 06 0000  HALFCRRY 00 0020   HW.PAGE 01 00ff      HZ50 00 0001
+      HZ60 00 0002  I$ATTACH 02 0080  I$CHGDIR 02 0086   I$CLOSE 02 008f
+  I$CREATE 02 0083  I$DELETE 02 0087  I$DELETX 02 0090  I$DETACH 02 0081
+     I$DUP 02 0082  I$GETSTT 02 008d  I$MAKDIR 02 0085    I$OPEN 02 0084
+    I$READ 02 0089  I$READLN 02 008b    I$SEEK 02 0088  I$SETSTT 02 008e
+   I$WRITE 02 008a  I$WRITLN 02 008c     ICODE 00 0002    IMGCHG 00 0010
+  INDRIVER 00 0020   INITSTR 02 000eINSTALLNAME 02 001f  INTMASKS 00 0050
+   IRQMASK 00 0010     ISEOF 02 029e   ISEOFEX 02 02af    ISEOFM 02 02b4
+   ISEOFOK 02 02ae     ISITH 02 012a     ISITM 02 0132     ISITX 02 013a
+     ISIZ. 00 0020    IT.ALF 02 0017    IT.BAU 02 0027    IT.BSE 02 0024
+    IT.BSO 02 0014    IT.BSP 02 001b    IT.COL 02 002c    IT.CYL 02 0017
+    IT.D2P 02 0028    IT.DEL 02 001c    IT.DLO 02 0015    IT.DNS 02 0016
+    IT.DRV 02 0013    IT.DTP 02 0012    IT.DUP 02 0020    IT.DVC 02 0012
+    IT.EKO 02 0016    IT.EOF 02 001e    IT.EOR 02 001d  IT.EXTEN 02 0022
+    IT.ILV 02 001f    IT.INT 02 0022  IT.LLDRV 02 0028    IT.MPI 02 002a
+    IT.NUL 02 0018    IT.OFS 02 0026    IT.OVF 02 0025    IT.PAG 02 001a
+    IT.PAR 02 0026    IT.PAU 02 0019    IT.PSC 02 0021    IT.QUT 02 0023
+    IT.ROW 02 002d    IT.RPR 02 001f    IT.RWC 02 0028    IT.SAS 02 0020
+    IT.SCT 02 001b    IT.SID 02 0019  IT.SOFF1 02 0025  IT.SOFF2 02 0026
+  IT.SOFF3 02 0027  IT.STOFF 02 0024    IT.STP 02 0014    IT.T0S 02 001d
+    IT.TFM 02 0021    IT.TYP 02 0015    IT.UPC 02 0013    IT.VFY 02 001a
+    IT.WPC 02 0025   IT.XOFF 02 002b    IT.XON 02 002a   IT.XTYP 02 002e
+  LANGMASK 00 000f    LEAYIT 02 0205   LEFTBIT 00 0020    LENGTH 02 02fe
+     LEVEL 00 0001    M$DTYP 02 0012    M$EXEC 02 0009    M$FMGR 02 0009
+      M$ID 02 0000     M$ID1 00 0087    M$ID12 00 87cd     M$ID2 00 00cd
+  M$IDSIZE 02 0009     M$MEM 02 000b    M$MODE 02 000d    M$NAME 02 0004
+     M$OPT 02 0011  M$PARITY 02 0008    M$PDEV 02 000b    M$PORT 02 000e
+    M$REVS 02 0007    M$SIZE 02 0002    M$TYPE 02 0006    MAXMEM 02 0009
+  MD$ESIZE 02 0004   MD$LINK 02 0002   MD$MPTR 02 0000    MINSEC 01 0010
+     MLINK 02 0177      MODE 02 0006    MODNAT 00 0020   MODPROT 00 0040
+  MPI.SLCT 01 ff7f  MPI.SLOT 01 0003     MULTI 00 0030      NAME 02 000d
+    NARROW 02 0005  NEGATIVE 00 0008     NOCOM 02 02c7     NOHED 02 01f1
+   NONOPTS 02 0000   NOS9MAJ 00 0000   NOS9MIN 00 0001   NOS9VER 00 0001
+     NOTBG 02 01b1  NUMPATHS 00 0010   OBJ6309 00 0007     OBJCT 00 0001
+     ONBYT 02 02ed     ONCHR 02 02d3    ONEMHZ 00 0001     ONIBL 02 02bf
+     ONLIN 02 022f     ONPAS 02 01ab     OPATH 02 018b    OPTCNT 00 001a
+   OPTPASS 02 011e     OS9.D 01 0001  OS9MAJOR 00 0000  OS9MINOR 00 0001
+   OS9VRSN 00 0001   OSLEVEL 02 0017   OSMAJOR 02 0019   OSMINOR 02 001a
+    OSNAME 02 001d     OSVER 02 0018    P$ADDR 02 0007     P$AGE 02 000c
+    P$CHAP 02 0006     P$CID 02 0003     P$DIO 02 001a      P$ID 02 0000
+    P$IOQN 02 0011    P$IOQP 02 0010     P$NIO 02 003b  P$PAGCNT 02 0008
+    P$PATH 02 0026     P$PID 02 0001  P$PMODUL 02 0012   P$PRIOR 02 000b
+   P$QUEUE 02 000e     P$SID 02 0002  P$SIGDAT 02 0039  P$SIGNAL 02 0036
+  P$SIGVEC 02 0037    P$SIZE 02 0040      P$SP 02 0004   P$STATE 02 000d
+     P$SWI 02 0014    P$SWI2 02 0016    P$SWI3 02 0018    P$USER 02 0009
+   PAREVEN 00 0060   PARMARK 00 00a0   PARMASK 00 00e0   PARNONE 00 0000
+    PARODD 00 0020  PARSPACE 00 00e0     PASS1 02 0110     PASS2 02 0146
+    PASS21 02 0148    PASS22 02 015c     PCODE 00 0003    PD.ALF 02 0025
+    PD.ATT 02 0033    PD.BAU 02 0035    PD.BSE 02 0032    PD.BSO 02 0022
+    PD.BSP 02 0029    PD.BUF 02 0008    PD.CNT 02 0002     PD.CP 02 000b
+    PD.CPR 02 0005    PD.CYL 02 0025    PD.D2P 02 0036    PD.DCP 02 003a
+    PD.DEL 02 002a    PD.DEV 02 0003    PD.DFD 02 0037    PD.DLO 02 0023
+    PD.DNS 02 0024    PD.DRV 02 0021    PD.DSK 02 001c    PD.DTB 02 001e
+    PD.DTP 02 0020    PD.DUP 02 002e    PD.DV2 02 000a    PD.DVT 02 003e
+    PD.EKO 02 0024    PD.EOF 02 002c    PD.EOR 02 002b    PD.ERR 02 003a
+  PD.EXTEN 02 0030     PD.FD 02 0034    PD.FST 02 000a    PD.ILV 02 002d
+    PD.INT 02 0030    PD.MAX 02 000d    PD.MIN 02 000f    PD.MOD 02 0001
+    PD.NUL 02 0026    PD.OPT 02 0020    PD.OVF 02 0033    PD.PAG 02 0028
+    PD.PAR 02 0034    PD.PAU 02 0027     PD.PD 02 0000    PD.PLP 02 003d
+    PD.PSC 02 002f    PD.PST 02 003f    PD.QUT 02 0031    PD.RAW 02 000c
+    PD.RGS 02 0006    PD.RPR 02 002d    PD.SAS 02 002e    PD.SBL 02 0013
+    PD.SBP 02 0016    PD.SCT 02 0029    PD.SID 02 0027    PD.SIZ 02 000f
+    PD.SMF 02 000a    PD.SSZ 02 0019    PD.STM 02 0012  PD.STOFF 02 0032
+    PD.STP 02 0022    PD.STS 02 0010    PD.T0S 02 002b    PD.TBL 02 003b
+    PD.TFM 02 002f    PD.TYP 02 0023    PD.UPC 02 0021    PD.VFY 02 0028
+   PD.XOFF 02 0039    PD.XON 02 0038    PDELIM 00 002f      PDIR 00 002e
+    PDSIZE 02 0040    PENTIR 00 0040    PEXEC. 00 0020  PIA0BASE 00 ff00
+  PIA1BASE 00 ff20   POLLCNT 02 000c    POLSIZ 02 0009    PREAD. 00 0008
+   PREPASS 02 010e     PRGRM 00 0010     PRINT 02 025a  PROC6309 00 0002
+  PROC6809 00 0000  PROTFLAG 02 0016   PST.DCD 00 0001    PWRIT. 00 0010
+  PWRLNFRQ 01 0002    Q$FLIP 02 0002    Q$MASK 02 0003    Q$POLL 02 0000
+    Q$PRTY 02 0008    Q$SERV 02 0004    Q$STAT 02 0006       R$A 00 0001
+       R$B 00 0002      R$CC 00 0000       R$D 00 0001      R$DP 00 0003
+      R$PC 00 000a    R$SIZE 00 000c       R$U 00 0008       R$X 00 0004
+       R$Y 00 0006     RBF.D 01 0001     READ. 00 0001     READI 02 0268
+     REDAD 02 027d     REDED 02 027c     REDOF 02 0288     REENT 00 0080
+       REV 01 0001  REVSMASK 00 000f  RIGHTBIT 00 0040   S$ABORT 02 0002
+   S$ALARM 02 0005     S$HUP 02 0004  S$INTRPT 02 0003    S$KILL 02 0000
+    S$WAKE 02 0001  S$WINDOW 02 0004     SAVEC 02 02c9     SAVET 02 02e5
+     SBRTN 00 0020     SCF.D 01 0001     SETCT 02 0282    SHARE. 00 0040
+  SHELLSUB 00 0050  SHIFTBIT 00 0001     SHORT 02 0097  SHOWHELP 02 0173
+     SHUND 02 00d3      SIGN 00 0080    SINBUF 00 0002  SPACEBIT 00 0080
+  SS.AAGBF 02 0080  SS.ALFAS 02 001c  SS.ANPAL 02 009a  SS.ASCRN 02 008b
+   SS.ATTR 02 001c  SS.BLKRD 02 0014  SS.BLKWR 02 0015  SS.BREAK 02 001d
+  SS.CDREL 02 009b  SS.CDSIG 02 009a  SS.CDSTA 02 0099  SS.CLOSE 02 002a
+  SS.COMST 02 0028  SS.CURSR 02 0025   SS.DCMD 02 000d  SS.DEVNM 02 000e
+  SS.DFPAL 02 0097 SS.DIRENT 02 0020  SS.DSCRN 02 008c  SS.DSIZE 02 0026
+  SS.DSTAT 02 0012    SS.ECC 02 00b0   SS.ELOG 02 0019    SS.EOF 02 0006
+  SS.FBRGS 02 0096     SS.FD 02 000f  SS.FDINF 00 0020   SS.FEED 02 0009
+   SS.FILL 02 00a0  SS.FNDBF 02 009b    SS.FRZ 02 000a  SS.FSCRN 02 008d
+   SS.FSIG 02 002c    SS.GIP 02 0094   SS.GIP2 02 0099   SS.HIST 02 00a1
+  SS.HNGUP 02 002b    SS.JOY 02 0013  SS.KYSNS 02 0027   SS.LINK 02 0007
+   SS.LOCK 02 0011  SS.MNSEL 02 0087  SS.MONTR 02 0092  SS.MOUNT 02 0082
+  SS.MOUSE 02 0089  SS.MPGPB 02 0084  SS.MSSIG 02 008a   SS.OPEN 02 0029
+    SS.OPT 02 0000  SS.PALET 02 0091    SS.POS 02 0005  SS.PSCRN 02 008e
+  SS.RDNET 02 0083  SS.READY 02 0001  SS.RELEA 02 001b  SS.RESET 02 0003
+  SS.RETEN 02 0016    SS.RFM 02 0018  SS.RSBIT 02 001e   SS.SBAR 02 0088
+  SS.SCINF 02 008f  SS.SCSIZ 02 0026  SS.SCTYP 02 0093  SS.SETMF 02 0024
+   SS.SIZE 02 0002  SS.SLGBF 02 0081  SS.SLOTS 02 0085    SS.SPT 02 000b
+    SS.SQD 02 000c   SS.SSIG 02 001a  SS.TICKS 02 0010   SS.TONE 02 0098
+  SS.ULINK 02 0008  SS.UMBAR 02 0095SS.VARSECT 02 0012    SS.WFM 02 0017
+  SS.WNSET 02 0086   SS.WTRK 02 0004     START 02 00f2    STDSTR 02 0012
+     STOP1 00 0000     STOP2 00 0010  STP.12MS 00 0002  STP.20MS 00 0001
+  STP.30MS 00 0000   STP.6MS 00 0003    SVCTNM 00 0002    SVCTSZ 00 006e
+  SYSSTATE 00 0080    SYSSTR 02 0010     SYSTM 00 00c0    TIMOUT 00 0020
+  TIMSLEEP 00 0040     TITLE 02 0012  TITLELEN 00 0041  TKPERSEC 01 003c
+      TRUE 00 0001    TWOMHZ 00 0002  TWOSOVFL 00 0002    TXTBUF 02 0026
+      TYLG 01 0011   TYP.256 00 0000     TYP.3 00 0001     TYP.5 00 0000
+   TYP.512 00 0004   TYP.CCF 00 0020   TYP.FLP 00 0000  TYP.HARD 00 0080
+  TYP.NCCF 00 0000   TYP.NSF 00 0040   TYP.SBO 00 0002   TYP.SOF 00 0000
+  TYPEMASK 00 00f0 TYPH.1024 00 0002 TYPH.2048 00 0003  TYPH.256 00 0000
+  TYPH.512 00 0001 TYPH.DRSV 00 000c  TYPH.DSQ 00 0010  TYPH.SSM 00 0003
+     UPBIT 00 0008    UPDAT. 00 0003    V$DESC 02 0004    V$DRIV 02 0000
+    V$FMGR 02 0006    V$STAT 02 0002    V$USRS 02 0008  V.BMAPSZ 02 001c
+     V.BMB 02 0017    V.BUSY 02 0004    V.DEV2 02 0009  V.DISKID 02 001a
+     V.ERR 02 000e  V.FILEHD 02 0018    V.INTR 02 000b   V.KANJI 02 0011
+    V.KBUF 02 0012    V.LINE 02 0007    V.LPRC 02 0003  V.MAPSCT 02 001d
+  V.MODADR 02 0014    V.NDRV 02 0006    V.PAGE 02 0000    V.PAUS 02 0008
+    V.PCHR 02 000d   V.PDLHD 02 0016    V.PORT 02 0001    V.QUIT 02 000c
+  V.RESBIT 02 001e     V.RSV 02 0018     V.SCF 02 001d  V.SCOFST 02 0020
+  V.SCTKOF 02 001f  V.TKOFST 02 0021    V.TRAK 02 0015    V.TYPE 02 0006
+    V.USER 02 0006    V.WAKE 02 0005    V.XOFF 02 0010     V.XON 02 000f
+    VD.OFS 02 0061    VD.STP 02 0060    VI.CNT 02 0000  VI.IFLAG 00 0001
+   VI.PKSZ 02 0005    VI.RST 02 0002   VI.STAT 02 0004     WORD7 00 0020
+     WORD8 00 0000    WRITE. 00 0002      ZERO 00 0004

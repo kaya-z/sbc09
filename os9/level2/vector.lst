@@ -1,0 +1,38 @@
+0000:                           org      $ffd0
+F100:                   entry   equ      $f100
+FFD0:                   
+FFD0: 4F                reset   clra
+FFD1: 1F8B                      tfr      a,dp
+FFD3: 8EFF90                    ldx      #$ff90
+FFD6: A701                      sta      1,x       use system mmu
+FFD8: A78810                    sta      $10,x     set 0 page
+FFDB: 863F                      lda      #$3f
+FFDD: A78817                    sta      $17,x     set IO/os9p1 page
+FFE0:                       ifndef bootdbg
+FFE0: 8639                      lda      #$39
+FFE2: 975E                      sta      <$5E      
+FFE4:                       else
+FFE4:                           ldd      #$b7ff    Bt.Bug hook
+FFE4:                           std      <$5E      sta $ff81
+FFE4:                           ldd      #$8139    rts
+FFE4:                           std      <$5E+2      
+FFE4:                       endc
+FFE4: 6E9D0008                  jmp      [<vector,pcr]
+FFE8:                   
+FFE8:                           org      $fff0
+FFF0:                   vector  
+FFF0: FF1F                      fdb      $ff1f     os9entry
+FFF2: FF03                      fdb      $ff03     SWI3
+FFF4: FF06                      fdb      $ff06     SWI2
+FFF6: FF09                      fdb      $ff09     FIRQ
+FFF8: FF0C                      fdb      $ff0c     IRQ
+FFFA: FF0F                      fdb      $ff0f     SWI
+FFFC: FF1F                      fdb      $ff1f     NMI
+FFFE:                   vreset
+FFFE: FFD0                      fdb      reset
+0000:                   
+0 Pass 2 errors.
+
+SYMBOL TABLE
+   BOOTDBG 06 0000     ENTRY 00 f100     RESET 02 ffd0    VECTOR 02 fff0
+    VRESET 02 fffe

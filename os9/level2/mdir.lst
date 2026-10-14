@@ -1,0 +1,654 @@
+0000:                   ********************************************************************
+0000:                   * MDir - Show module information
+0000:                   *
+0000:                   * $Id$
+0000:                   *
+0000:                   * Edt/Rev  YYYY/MM/DD  Modified by
+0000:                   * Comment
+0000:                   * ------------------------------------------------------------------
+0000:                   *  7       ????/??/??
+0000:                   * Original Tandy/Microware version.
+0000:                   *
+0000:                   *  8       2003/01/14  Boisy Pitre
+0000:                   * Changed option to -e, optimized slightly. Could use greater optimization.
+0000:                   *
+0000:                   *  9       2003/08/24  Rodney Hamilton
+0000:                   * Corrected leading zero supression, more optimizations.
+0000:                   *
+0000:                   *  9r1     2005/04/19  Boisy G. Pitre
+0000:                   * Made column computation and use more efficient.
+0000:                   
+0000:                            nam   MDir
+0000:                            ttl   Show module information
+0000:                   
+0000:                   * Disassembled 98/09/11 11:57:27 by Disasm v1.6 (C) 1988 by RML
+0000:                   
+0000:                            ifp1
+0000:                            use   defsfile
+0000:                            endc
+0000:                   
+0011:                   tylg     set   Prgrm+Objct   
+0081:                   atrv     set   ReEnt+rev
+0001:                   rev      set   $01
+0009:                   edition  set   9
+0000:                   
+0000: 87CD02ED000D1181           mod   eom,name,tylg,atrv,start,size
+0009: 00CE11AF
+0000:                   
+0000:                   ParamPtr rmb   2
+0002:                   zflag    rmb   1        supress leading zeros flag
+0003:                   bufptr   rmb   2        current position in the line buffer
+0005:                   datebuf  rmb   3
+0008:                   timebuf  rmb   3
+000B:                   narrow   rmb   1
+000C:                   u000C    rmb   1        name field width
+000D:                   u000D    rmb   1        last starting column
+000E:                   linebuf  rmb   80
+005E:                   u005E    rmb   2        ptr to module dir end
+0060:                   u0060    rmb   2        ptr to module dir start
+0062:                   u0062    rmb   4096
+1062:                   u1062    rmb   64       module name buffer
+10A2:                   u10A2    rmb   13       module stats ??
+10AF:                            rmb   256      stack area
+11AF:                   size     equ   .
+11AF:                   
+000D: 4D4469F2          name     fcs   /MDir/
+0011: 09                         fcb   edition
+0012:                   
+0012: 2020204D6F64756C  header   fcs   "   Module Directory at "
+001B: 204469726563746F
+0023: 7279206174A0
+0029: 426C6F636B204F66  header2  fcs   "Block Offset Size Typ Rev Attr  Use Module Name"
+0032: 7365742053697A65
+003A: 2054797020526576
+0042: 2041747472202055
+004A: 7365204D6F64756C
+0052: 65204E616DE5
+0058: 2D2D2D2D2D202D2D  header3  fcs   "----- ------ ---- --- --- ---- ---- ------------"
+0061: 2D2D2D202D2D2D2D
+0069: 202D2D2D202D2D2D
+0071: 202D2D2D2D202D2D
+0079: 2D2D202D2D2D2D2D
+0081: 2D2D2D2D2D2DAD
+0088: 426C6B204F667374  sheader1 fcs   "Blk Ofst Size Ty Rv At Uc  Name"
+0091: 53697A6520547920
+0099: 5276204174205563
+00A1: 20204E616DE5
+00A7: 5F5F5F205F5F5F5F  sheader2 fcs   "___ ____ ____ __ __ __ __ ______"
+00B0: 5F5F5F5F205F5F20
+00B8: 5F5F205F5F205F5F
+00C0: 205F5F5F5F5FDF
+00C7: 4C6F636BA0        lock     fcs   "Lock "
+00CC: 4CEB              slock    fcs   "Lk"
+00CE:                   
+00CE: 3440              start    pshs  u
+00D0: 33C91062                   leau  >u1062,u
+00D4: 6FC2              L00D4    clr   ,-u
+00D6: 11A3E4                     cmpu  ,s
+00D9: 22F9                       bhi   L00D4
+00DB: 3540                       puls  u
+00DD: 0F02                       clr   <zflag           clear leading zero supression
+00DF: 0F0B                       clr   <narrow          default to wide
+00E1:                   *         ldd   #$0C30          wide column width=12/last start col=48
+00E1:                   *         std   <u000C
+00E1: 9F00                       stx   <ParamPtr        save args ptr
+00E3: 304E                       leax  linebuf,u
+00E5: 9F03                       stx   <bufptr
+00E7: 170192                     lbsr  writeBUF
+00EA: CC0126                     ldd   #$01*256+SS.ScSiz        standard output and get screen size
+00ED: 103F8D                     os9   I$GetStt         get it!
+00F0: 2400                       bcc   L00FF            branch if ok
+00F2:                   *         cmpb  #E$UnkSvc       unknown service?
+00F2:                   *         lbne  L0241           exit with error if not
+00F2:                   *         bra   L010C           else ignore screen width test
+00F2:                   
+00F2: 1F10              L00FF    tfr   x,d
+00F4: C128                       cmpb  #40              compare against 51
+00F6: 2E05                       bgt   higher           if greater or equal, go on
+00F8: 0C0B                       inc   <narrow          else set narrow flag
+00FA: 860A                       lda   #10
+00FC: 8C                         fcb   $8C
+00FD: 860C              higher   lda   #12              narrow column width=10/last start col=21
+00FF: 3402                       pshs  a
+0101: E0E0                       subb  ,s+
+0103: DD0C                       std   <u000C
+0105: 318DFF09          L010C    leay  >header,pcr      point to main header
+0109: 170168                     lbsr  copySTR
+010C: 3045                       leax  datebuf,u        date/time buffer
+010E: 103F15                     os9   F$Time           get current date & time
+0111: 3048                       leax  timebuf,u        only wanted the time
+0113: 17017B                     lbsr  L02B8            print TIME as HH:MM:SS
+0116: 170163                     lbsr  writeBUF
+0119: 30C862                     leax  <u0062,u         buffer for module directory
+011C: 3440                       pshs  u
+011E: 103F1A                     os9   F$GModDr         get module directory
+0121: 109F5E                     sty   <u005E           save local end ptr
+0124: DF60                       stu   <u0060           save system start ptr
+0126: 3540                       puls  u
+0128: 3018                       leax  -MD$ESize,x
+012A: 109E00                     ldy   <ParamPtr
+012D: ECA0                       ldd   ,y+
+012F: C4DF                       andb  #$DF
+0131: 10832D45                   cmpd  #$2D45           -e option?
+0135: 264E                       bne   L018E
+0137: 170142                     lbsr  writeBUF
+013A: 318DFEEB          L0149    leay  >header2,pcr
+013E: 0D0B                       tst   <narrow
+0140: 2704                       beq   L014D
+0142: 318DFF42                   leay  >sheader1,pcr
+0146: 17012B            L014D    lbsr  copySTR
+0149: 170130                     lbsr  writeBUF
+014C: 318DFF08          L015D    leay  >header3,pcr
+0150: 0D0B                       tst   <narrow
+0152: 2704                       beq   L0161
+0154: 318DFF4F                   leay  >sheader2,pcr
+0158: 170119            L0161    lbsr  copySTR
+015B: 17011E                     lbsr  writeBUF
+015E: 30C862                     leax  <u0062,u
+0161: 1600C1                     lbra  L023A
+0164:                   
+0164:                   * just print the module names, no E flag
+0164: 170171            L016D    lbsr  L0308
+0167: 271C                       beq   L018E
+0169: 170142                     lbsr  L02DE
+016C: 170105                     lbsr  copySTR
+016F: 1700F4            L0178    lbsr  outSP
+0172: D604                       ldb   <bufptr+1
+0174: C00E                       subb  #$0E
+0176: D10D                       cmpb  <u000D
+0178: 2208                       bhi   L018B
+017A: D00C              L0183    subb  <u000C
+017C: 22FC                       bhi   L0183
+017E: 26EF                       bne   L0178
+0180: 2003                       bra   L018E
+0182:                   
+0182: 1700F7            L018B    lbsr  writeBUF
+0185: 3008              L018E    leax  MD$ESize,x
+0187: 9C5E                       cmpx  <u005E
+0189: 25D9                       bcs   L016D
+018B: 1700EE                     lbsr  writeBUF         final/partial line
+018E: 16009A                     lbra  L0240            exit OK
+0191:                   
+0191:                   * print extended info line for each module
+0191: 170144            L019A    lbsr  L0308
+0194: 1027008B                   lbeq  L0238            skip if DAT image ptr==0
+0198: 1F02                       tfr   d,y
+019A: ECA4                       ldd   ,y
+019C: 0D0B                       tst   <narrow
+019E: 2708                       beq   L01B1
+01A0: 1700C3                     lbsr  outSP
+01A3: 170091                     lbsr  outb2HS          2-digit block number
+01A6: 2009                       bra   L01BE
+01A8: 170084            L01B1    lbsr  out4HS           4-digit block number
+01AB: 1700B8                     lbsr  outSP
+01AE: 1700B5                     lbsr  outSP
+01B1:                   * module offset
+01B1: EC04              L01BE    ldd   MD$MPtr,x
+01B3: 8D7A                       bsr   out4HS           4-digit offset
+01B5: 0D0B                       tst   <narrow
+01B7: 2603                       bne   L01CA
+01B9: 1700AA                     lbsr  outSP
+01BC: 1700EF            L01CA    lbsr  L02DE            read module's header info
+01BF: 31C910A2                   leay  >u10A2,u
+01C3:                   * module size
+01C3: EC22                       ldd   M$Size,y
+01C5: 8D68                       bsr   out4HS           4-digit size
+01C7: 0D0B                       tst   <narrow
+01C9: 2603                       bne   L01DC
+01CB: 170098                     lbsr  outSP
+01CE:                   * type/lang
+01CE: A626              L01DC    lda   M$Type,y
+01D0: 8D67                       bsr   out2HS           2-digit type/lang
+01D2: 0D0B                       tst   <narrow
+01D4: 2603                       bne   L01E7
+01D6: 17008D                     lbsr  outSP
+01D9:                   * att/rev
+01D9: A627              L01E7    lda   M$Revs,y
+01DB: 840F                       anda  #RevsMask
+01DD: 8D5A                       bsr   out2HS           2-digit revision
+01DF: E627                       ldb   M$Revs,y         upper half = attributes
+01E1: 8672                       lda   #'r
+01E3: 8D78                       bsr   L0291            bit7: ReEnt (reentrant module)
+01E5: 0D0B                       tst   <narrow
+01E7: 260C                       bne   L0207
+01E9: 8677                       lda   #'w              bit6: ModProt (writeable module)
+01EB: 8D70                       bsr   L0291
+01ED: 8633                       lda   #'3              bit5: ModNat (native mode 6309)
+01EF: 8D6C                       bsr   L0291
+01F1: 863F                       lda   #'?              bit4 undefined
+01F3: 8D68                       bsr   L0291
+01F5:                   * user count
+01F5: 8D6F              L0207    bsr   outSP
+01F7: EC06                       ldd   MD$Link,x        D=user count
+01F9: 1083FFFF                   cmpd  #$FFFF           if -1,
+01FD: 2610                       bne   L0223
+01FF: 318DFEC4          L021B    leay  >lock,pcr        print "Lock"
+0203: 0D0B                       tst   <narrow
+0205: 2604                       bne   L021F
+0207: 318DFEC1                   leay  >slock,pcr
+020B: 8D67              L021F    bsr   copySTR
+020D: 200C                       bra   L0230
+020F:                   
+020F: 0D0B              L0223    tst   <narrow
+0211: 2706                       beq   L022E
+0213: 8D51                       bsr   outSP
+0215: 8D20                       bsr   outb2HS          2-digit user count
+0217: 2002                       bra   L0230
+0219:                   
+0219: 8D14              L022E    bsr   out4HS           4-digit user count
+021B:                   * module name
+021B: 31C91062          L0230    leay  >u1062,u         point to name buffer
+021F: 8D53                       bsr   copySTR
+0221: 8D59                       bsr   writeBUF
+0223: 3008              L0238    leax  MD$ESize,x       next entry
+0225: 9C5E              L023A    cmpx  <u005E           more to do?
+0227: 1025FF66                   lbcs  L019A            yes, continue
+022B: 5F                L0240    clrb  
+022C: 103F06            L0241    os9   F$Exit   
+022F:                   
+022F:                   * print regD as 4 hex digits plus space
+022F: 0C02              out4HS   inc   <zflag           supress leading zeros
+0231: 0C02                       inc   <zflag
+0233: 8D08                       bsr   out2H            print MSB as 2 hex
+0235: 0A02                       dec   <zflag
+0237:                   * print regB as 2 hex digits plus space
+0237: 1F98              outb2HS  tfr   b,a              print LSB as 2 hex
+0239:                   
+0239:                   * print regA as 2 hex digits plus space
+0239: 8D02              out2HS   bsr   out2H
+023B: 2029                       bra   outSP
+023D:                   
+023D: 0C02              out2H    inc   <zflag           supress leading zero
+023F: 3402                       pshs  a
+0241: 44                         lsra  
+0242: 44                         lsra  
+0243: 44                         lsra  
+0244: 44                         lsra  
+0245: 8D04                       bsr   L026C            print MSdigit
+0247: 3502                       puls  a                print LSdigit
+0249: 840F                       anda  #$0F             is this a zero?
+024B: 2604              L026C    bne   L027B            no, print it
+024D: 0D02                       tst   <zflag           still supressing zeros?
+024F: 2E13                       bgt   outZSP           yes, count it and print space
+0251: 0F02              L027B    clr   <zflag           nonzero, print all the rest
+0253: 8B30                       adda  #'0
+0255: 8139                       cmpa  #'9
+0257: 230F                       bls   outCH
+0259: 8B07                       adda  #$07
+025B: 200B                       bra   outCH
+025D:                   
+025D:                   * process attribute flag bit
+025D: 59                L0291    rolb  
+025E: 2508                       bcs   outCH
+0260: 862E                       lda   #'.
+0262: 2004                       bra   outCH
+0264:                   
+0264: 0A02              outZSP   dec   <zflag           count down to last digit
+0266: 8620              outSP    lda   #C$SPAC          append a SPACE to the line buffer
+0268:                   
+0268:                   * Append character in regA to the line buffer
+0268: 3410              outCH    pshs  x
+026A: 9E03                       ldx   <bufptr
+026C: A780                       sta   ,x+
+026E: 9F03                       stx   <bufptr
+0270: 3590                       puls  pc,x
+0272:                   
+0272:                   * Copy an FCS string to the line buffer
+0272: 8DF4              L0296    bsr   outCH
+0274: A6A0              copySTR  lda   ,y+
+0276: 2AFA                       bpl   L0296
+0278: 847F                       anda  #$7F
+027A: 20EC                       bra   outCH
+027C:                   
+027C:                   * Append a CR and send entire line to stdout
+027C: 3432              writeBUF pshs  y,x,a
+027E: 860D                       lda   #C$CR
+0280: 8DE6                       bsr   outCH
+0282: 304E                       leax  linebuf,u
+0284: 9F03                       stx   <bufptr
+0286: 108E0050                   ldy   #80
+028A: 8601                       lda   #$01
+028C: 103F8C                     os9   I$WritLn 
+028F: 35B2                       puls  pc,y,x,a
+0291:                   
+0291:                   * Print TIME as HH:MM:SS
+0291: 8D06              L02B8    bsr   L02C0            print HH
+0293: 8D00                       bsr   L02BC            print :MM
+0295:                   *                               print :SS and return
+0295: 863A              L02BC    lda   #':
+0297: 8DCF                       bsr   outCH
+0299: E680              L02C0    ldb   ,x+
+029B: C064              L02C4    subb  #100
+029D: 24FC                       bcc   L02C4
+029F:                   * code to print 100's digit removed - max timefield value is 59
+029F: 863A              L02CF    lda   #'9+1
+02A1: 4A                L02D1    deca  
+02A2: CB0A                       addb  #10
+02A4: 24FB                       bcc   L02D1
+02A6: 8DC0                       bsr   outCH            tens digit
+02A8: 1F98                       tfr   b,a
+02AA: 8B30                       adda  #'0
+02AC: 20BA                       bra   outCH            units digit
+02AE:                   
+02AE:                   * copy module header & name to local buffers
+02AE: 3450              L02DE    pshs  u,x
+02B0: 8D26                       bsr   L0308            D=ptr to mdir entry
+02B2: AE04                       ldx   4,x              X=MD$MPtr
+02B4: 108E000D                   ldy   #13
+02B8: 33C910A2                   leau  >u10A2,u         buffer for module header data
+02BC: 103F1B                     os9   F$CpyMem         copy 13 bytes of module header
+02BF: 3406                       pshs  b,a              save DAT image ptr
+02C1: EC44                       ldd   4,u              name offset
+02C3: 308B                       leax  d,x              X=name ptr
+02C5: 3506                       puls  b,a              restore DAT image ptr
+02C7: EE62                       ldu   2,s
+02C9: 33C91062                   leau  >u1062,u         U=ptr to name buffer
+02CD: 108E0040                   ldy   #64
+02D1: 103F1B                     os9   F$CpyMem         copy 64 bytes of name data
+02D4: 1F32                       tfr   u,y              Y=ptr to name buf
+02D6: 35D0                       puls  pc,u,x
+02D8:                   
+02D8:                   * calculate local buffer address for current mdir entry (DAT image ptr)
+02D8: EC84              L0308    ldd   ,x               D=MD$MPDAT
+02DA: 270D                       beq   L0319            if 0, skip empty slot
+02DC: 3420                       pshs  y
+02DE: 31C862                     leay  <u0062,u         Y=local MDIR buffer
+02E1: 3420                       pshs  y
+02E3: 9360                       subd  <u0060           D=offset (MD$MPDAT-mdstart)
+02E5: E3E1                       addd  ,s++             D=ptr to local mdir entry
+02E7: 3520                       puls  y
+02E9: 39                L0319    rts
+02EA:                   
+02EA: ACECB6                     emod
+02ED:                   eom      equ   *
+02ED:                            end
+0 Pass 2 errors.
+
+SYMBOL TABLE
+   A.ACIAP 01 ff68    A.MODP 01 ff6c   A.TERMV 01 ffc0      A.V1 01 ffc1
+      A.V2 01 ffc2      A.V3 01 ffc3      A.V4 01 ffc4      A.V5 01 ffc5
+      A.V6 01 ffc6      A.V7 01 ffc7  ACIA2661 02 0003  ACIA6551 02 0002
+  ACIA6850 02 0001  ACIATYPE 03 0002  ALTERBIT 00 0004      ATRV 01 0081
+  ATTRMASK 00 00f0      B110 00 0000   B115200 00 000a     B1200 00 0003
+    B19200 00 0007     B2400 00 0004      B300 00 0001    B38400 00 0008
+     B4800 00 0005    B57600 00 0009      B600 00 0002     B9600 00 0006
+  BADINSTR 00 0040  BLOCKTYP 00 0001   BOOTSTR 02 0014   BORDREG 00 ff9a
+  BT.BLOCK 00 003b   BT.FLAG 00 8a34  BT.OFFST 00 0002    BT.SEC 00 0000
+   BT.SIZE 00 1080  BT.START 01 ed00  BT.TRACK 00 0022   BUFBUSY 00 0040
+    BUFMOD 00 0001    BUFPTR 02 0003  BYTETYPE 00 0002    C$BELL 01 0007
+     C$BSP 01 0008  C$CLSALL 01 0016   C$CLSGR 01 0015    C$COMA 01 002c
+      C$CR 01 000d     C$DEL 01 0018  C$DELETE 01 0010     C$DWN 01 001f
+      C$EL 01 0005     C$EOF 01 001b    C$FORM 01 000c    C$HOME 01 000b
+  C$INSERT 01 0011    C$INTR 01 0003      C$LF 01 000a     C$LFT 01 001d
+    C$NULL 01 0000    C$PAUS 01 0017    C$PERD 01 002e   C$PLINE 01 0013
+    C$QUIT 01 0005    C$RARR 01 0009     C$RGT 01 001c    C$RPET 01 0001
+    C$RPRT 01 0004  C$SHRARR 01 0019      C$SI 01 000f      C$SO 01 000e
+    C$SPAC 01 0020      C$UP 01 001e    C$XOFF 01 0013     C$XON 01 0011
+     CARRY 00 0001   CBLCODE 00 0005     CCODE 00 0004  CNTRLBIT 00 0002
+    COCO.D 01 0001     COLOR 01 0001    COLOR3 01 0002    CONDEM 00 0002
+   COPYSTR 02 0274  CPUSPEED 01 0002   CPUTYPE 01 0002   CRCCON1 00 0080
+  CRCCON23 00 0fe3    CRCOFF 00 0000     CRCON 00 0001    D$GSTA 02 0009
+    D$INIT 02 0000    D$PSTA 02 000c    D$READ 02 0003    D$TERM 02 000f
+    D$WRIT 02 0006  D.ALTIRQ 02 00b2  D.APROCQ 02 0052  D.BLKMAP 02 0040
+    D.BOOT 02 0031   D.BORDR 02 009a   D.BTBUG 02 005e   D.BTPTR 02 0036
+    D.BTSZ 02 0038  D.CBSTRT 02 0071   D.CCMEM 02 00a5   D.CCSTK 02 00a7
+  D.CLDRES 02 005c   D.CLOCK 02 00e0  D.CLOCK2 02 00b6    D.CLTB 02 00b0
+  D.COCOXT 02 0009   D.CRASH 02 006b     D.CRC 02 003b     D.DAY 02 002a
+   D.DAYWK 02 0034  D.DBGMEM 02 000a  D.DEVTBL 02 0080  D.DMAREQ 02 008a
+ D.DWSRVID 02 0010  D.DWSTAT 02 000eD.DWSUBADDR 02 000c  D.ERRCOD 02 0033
+  D.ERRRST 02 00ee    D.FIRQ 02 00f6   D.FLIP0 02 00a9   D.FLIP1 02 00ab
+   D.FRQER 02 0093   D.GPOLL 02 00b4   D.HINIT 02 0090   D.HOFF0 02 009f
+    D.HOUR 02 002b    D.INIT 02 0024     D.IRQ 02 00f8   D.IRQER 02 0092
+    D.IRQS 02 00af   D.MEMSZ 02 00a3     D.MIN 02 002c  D.MODDAT 02 005a
+  D.MODDIR 02 0044  D.MODEND 02 0058   D.MONTH 02 0029   D.MOTON 02 0032
+     D.NMI 02 00fc    D.PIPE 02 0061    D.POLL 02 0026  D.POLTBL 02 0082
+  D.PRCDBT 02 0048    D.PROC 02 0050  D.PTHDBT 02 0088    D.QCNT 02 007c
+    D.QIRQ 02 003f   D.QUICK 02 003e   D.RESV1 02 0096   D.RESV2 02 0097
+   D.RESV3 02 009b     D.SEC 02 002d   D.SLICE 02 002f   D.SPEED 02 00a0
+  D.SPROCQ 02 0056  D.SSTSKN 02 00a4  D.SVCIRQ 02 00ce     D.SWI 02 00fa
+    D.SWI2 02 00f4    D.SWI3 02 00f2  D.SWPAGE 02 0003  D.SYSDAT 02 004c
+  D.SYSDIS 02 00c2  D.SYSIRQ 02 00c4  D.SYSMEM 02 004e  D.SYSPRC 02 004a
+  D.SYSSTK 02 00cc  D.SYSSVC 02 00c0  D.SYSTSK 02 00d0  D.SYSVEC 02 00f0
+  D.TASK1N 02 003d   D.TASKS 02 0020  D.TENTHS 02 003c    D.TICK 02 002e
+    D.TIME 02 0028   D.TIMLS 02 0095   D.TIMMS 02 0094   D.TINIT 02 0091
+   D.TKCNT 02 0035  D.TMPDAT 02 0022  D.TSKIPT 02 00a1  D.TSLICE 02 0030
+  D.USRDIS 02 00c8  D.USRIRQ 02 00ca  D.USRSVC 02 00c6   D.VIDMD 02 0098
+   D.VIDRS 02 0099    D.VIRQ 02 00ad   D.VOFF0 02 009e   D.VOFF1 02 009d
+   D.VOFF2 02 009c  D.WDADDR 02 0000  D.WDBTDR 02 0002  D.WPROCQ 02 0054
+   D.XFIRQ 02 00e6    D.XIRQ 02 00e8    D.XNMI 02 00ec    D.XSWI 02 00ea
+   D.XSWI2 02 00e4   D.XSWI3 02 00e2    D.YEAR 02 0028  DAT.ADDR 00 ffe0
+  DAT.BLCT 00 0008  DAT.BLMX 00 003f  DAT.BLSZ 00 2000  DAT.BMSZ 00 0040
+  DAT.FREE 00 333e  DAT.IMSZ 00 0010  DAT.REGS 00 ffa0  DAT.TASK 00 ff91
+  DAT.TKCT 00 0020  DAT.WREN 00 0000  DAT.WRPR 00 0000      DATA 00 0040
+   DATEBUF 02 0005    DD.ATT 02 000d    DD.BIT 02 0006    DD.BSZ 02 0018
+     DD.BT 02 0015    DD.DAT 02 001a    DD.DIR 02 0008    DD.DSK 02 000e
+    DD.FMT 02 0010    DD.MAP 02 0004    DD.NAM 02 001f    DD.OPT 02 003f
+    DD.OWN 02 000b    DD.RES 02 0013    DD.SIZ 02 0015    DD.SPT 02 0011
+    DD.TKS 02 0003    DD.TOT 02 0000      DEAD 00 0001  DEFIOSIZ 00 0010
+    DEVCNT 02 000d     DEVIC 00 00f0    DEVSIZ 02 000d      DIR. 00 0080
+    DIR.FD 02 001d    DIR.NM 02 0000    DIR.SZ 02 0020      DIV0 00 0080
+   DNS.DTD 00 0002    DNS.FM 00 0000   DNS.FM0 00 0000   DNS.MFM 00 0001
+  DNS.MFM0 00 0004   DNS.STD 00 0000   DOWNBIT 00 0010     DPORT 01 ff40
+     DRIVR 00 00e0    DRVBEG 02 000f    DRVMEM 02 0026   DT.CDFM 00 0005
+    DT.NFM 00 0004   DT.PIPE 00 0002    DT.RBF 00 0001    DT.RFM 00 0006
+    DT.SBF 00 0003    DT.SCF 00 0000   E$ALIAS 02 00c7  E$ARROVF 02 0049
+  E$BADBUF 02 00c2   E$BMCRC 02 00e8    E$BMHP 02 00ec    E$BMID 02 00cd
+   E$BMODE 02 00cb    E$BNAM 02 00eb  E$BPADDR 02 00d2   E$BPNAM 02 00d7
+   E$BPNUM 02 00c9  E$BPRCID 02 00e0    E$BTYP 02 00f9  E$BUFSIZ 02 00bf
+     E$BUG 02 00be     E$CEF 02 00da     E$CRC 02 00f3  E$DEADLK 02 00fe
+   E$DELSP 02 00df  E$DEVBSY 02 00fa  E$DEVOVF 02 00cc    E$DIDC 02 00fb
+  E$DIMLRG 02 0019  E$DIRFUL 02 00ce  E$DIVZER 02 002d      E$DN 02 00c6
+     E$DNE 02 00ee  E$ENDQOU 02 0029     E$EOF 02 00d3  E$EXCVRB 02 000b
+  E$FLTOVF 02 0032     E$FNA 02 00d6    E$FULL 02 00f8  E$HANGUP 02 00dc
+     E$IBA 02 00db  E$ICHREF 02 000e  E$ICOORD 02 00bd   E$ICOVF 02 000d
+  E$IFORKP 02 00e6    E$ILLA 02 0043  E$ILLARG 02 00bb  E$ILLCMD 02 00c0
+  E$ILLCNT 02 0044  E$ILLDEC 02 0048  E$ILLDIM 02 0015  E$ILLEXP 02 0047
+  E$ILLFOR 02 0046  E$ILLINP 02 003d  E$ILLIVR 02 004d  E$ILLLIT 02 0016
+  E$ILLMOD 02 000f  E$ILLNUM 02 0010  E$ILLOPD 02 0012  E$ILLOPR 02 0013
+  E$ILLPNM 02 0040  E$ILLPRF 02 0011  E$ILLRET 02 0017  E$ILLRFN 02 0014
+  E$ILLSFX 02 0018  E$ILLSTC 02 000c  E$IOCONV 02 003c  E$IOFRPT 02 003e
+  E$IOFSYN 02 003f  E$IOMISM 02 003a   E$IONUM 02 003b  E$IPRCID 02 00e0
+    E$ISWI 02 00e3   E$IWDEF 02 00c3   E$IWTYP 02 00b7  E$KWNMOD 02 00e7
+  E$LINLRG 02 001a  E$LNCOMP 02 0033    E$LOCK 02 00fc  E$MEMFUL 02 00cf
+   E$MFULL 02 0020  E$MLTLIN 02 004b  E$MLTVAR 02 004c     E$MNF 02 00dd
+  E$MODBSY 02 00d1  E$MULPRC 02 002c   E$NEMOD 02 00ea     E$NES 02 00d5
+   E$NFONT 02 00b9  E$NOASSG 02 001b  E$NOCHLD 02 00e2  E$NOCOMA 02 001d
+  E$NODATA 02 004f   E$NODIM 02 001e    E$NODO 02 001f  E$NOGOTO 02 0021
+  E$NOLPAR 02 0022  E$NOLREF 02 0023  E$NONRCO 02 0042  E$NOOPRD 02 0024
+  E$NOPATH 02 001c   E$NORAM 02 00ed  E$NOROUT 02 0030  E$NORPAR 02 0025
+  E$NOTASK 02 00ef  E$NOTHEN 02 0026    E$NOTO 02 0027  E$NOTRDY 02 00f6
+  E$NOVREF 02 0028  E$PARMER 02 0038    E$PNNF 02 00d8    E$POLL 02 00ca
+  E$PRCABT 02 00e4  E$PRCFUL 02 00e5  E$PTHFUL 02 00c8    E$READ 02 00f4
+    E$SECT 02 00f1    E$SEEK 02 00f7  E$SEEKRG 02 004e   E$SHARE 02 00fd
+     E$SLF 02 00d9  E$STKOVF 02 00ba  E$STROVF 02 002f  E$SUBLRG 02 002a
+  E$SUBOVF 02 0035  E$SUBRNG 02 0037  E$SUBUND 02 0036  E$SYSOVF 02 0039
+  E$TBLFUL 02 00c1  E$TYPMIS 02 002e  E$UNDLIN 02 004a  E$UNDVAR 02 0031
+    E$UNIT 02 00f0  E$UNKPRC 02 002b  E$UNKSVC 02 00d0  E$UNKSYM 02 000a
+  E$UNMCNT 02 0045      E$UP 02 00c5   E$USIGP 02 00e9  E$VALRNG 02 0034
+   E$WADEF 02 00b8      E$WP 02 00f2   E$WRITE 02 00f5   E$WRSUB 02 0041
+  E$WUNDEF 02 00c4   EDITION 01 0009    ENTIRE 00 0080   EOFLOCK 00 0004
+       EOM 02 02ed     EXEC. 00 0004   F$ALARM 02 001e  F$ALHRAM 02 0053
+   F$ALL64 02 0030  F$ALLBIT 02 0013  F$ALLIMG 02 003a  F$ALLPRC 02 004b
+  F$ALLRAM 02 0039  F$ALLTSK 02 003f   F$APROC 02 002c    F$BOOT 02 0035
+   F$BTMEM 02 0036   F$CHAIN 02 0005  F$CLRBLK 02 0050  F$CMPNAM 02 0011
+  F$CPYMEM 02 001b     F$CRC 02 0017  F$CRCMOD 02 0055  F$DATLOG 02 0044
+  F$DATTMP 02 0045   F$DEBUG 02 0023  F$DELBIT 02 0014  F$DELIMG 02 003b
+  F$DELPRC 02 004c  F$DELRAM 02 0051  F$DELTSK 02 0040   F$ELINK 02 004d
+    F$EXIT 02 0006  F$FIND64 02 002f  F$FMODUL 02 004e    F$FORK 02 0003
+  F$FREEHB 02 003e  F$FREELB 02 003d  F$GBLKMP 02 0019  F$GCMDIR 02 0052
+  F$GMODDR 02 001a  F$GPRDSC 02 0018  F$GPROCP 02 0037    F$ICPT 02 0009
+      F$ID 02 000c   F$IODEL 02 0033    F$IOQU 02 002b     F$IRQ 02 002a
+   F$LDABX 02 0049   F$LDAXY 02 0046  F$LDAXYP 02 0047  F$LDDDXY 02 0048
+    F$LINK 02 0000    F$LOAD 02 0001  F$MAPBLK 02 004f     F$MEM 02 0007
+    F$MOVE 02 0038  F$NMLINK 02 0021  F$NMLOAD 02 0022   F$NPROC 02 002d
+   F$NVRAM 02 0071    F$PERR 02 000f  F$PRSNAM 02 0010  F$REBOOT 02 0054
+  F$REGDMP 02 0070  F$RELTSK 02 0043  F$RESTSK 02 0042   F$RET64 02 0031
+  F$SCHBIT 02 0012    F$SEND 02 0008  F$SETIMG 02 003c  F$SETTSK 02 0041
+   F$SLEEP 02 000a   F$SLINK 02 0034  F$SPRIOR 02 000d  F$SRQMEM 02 0028
+  F$SRTMEM 02 0029    F$SSPD 02 000b    F$SSVC 02 0032    F$SSWI 02 000e
+   F$STABX 02 004a   F$STIME 02 0016   F$SUSER 02 001c  F$TIMALM 02 0026
+    F$TIME 02 0015     F$TPS 02 0025  F$UNLINK 02 0002  F$UNLOAD 02 001d
+  F$VBLOCK 02 0057    F$VIRQ 02 0027  F$VMODUL 02 002e    F$WAIT 02 0004
+   F$XTIME 02 0056     FALSE 00 0000    FD.ATT 02 0000  FD.CREAT 02 000d
+    FD.DAT 02 0003    FD.LNK 02 0008    FD.LS1 00 00fb    FD.LS2 00 00fa
+    FD.OWN 02 0001    FD.SEG 02 0010    FD.SIZ 02 0009     FDBUF 00 0004
+    FDSL.A 02 0000    FDSL.B 02 0003    FDSL.S 02 0005  FEATURE1 02 001b
+  FEATURE2 02 001c  FILELOCK 00 0002  FIRQMASK 00 0040     FLMGR 00 00d0
+    FMCDIR 02 0009    FMCLOS 02 0024    FMCREA 02 0000    FMDLET 02 000c
+    FMGSTA 02 001e    FMMDIR 02 0006    FMOPEN 02 0003    FMRDLN 02 0018
+    FMREAD 02 0012    FMSEEK 02 000f    FMSSTA 02 0021   FMT.DNS 00 0002
+  FMT.SIDE 00 0001  FMT.T0DN 00 0020  FMT.TDNS 00 0004    FMWRIT 02 0015
+    FMWRLN 02 001b  FRTNCODE 00 0006  GIMEREGS 00 ff00     H6309 06 0000
+  HALFCRRY 00 0020    HEADER 02 0012   HEADER2 02 0029   HEADER3 02 0058
+    HIGHER 02 00fd   HW.PAGE 01 0007      HZ50 00 0001      HZ60 00 0002
+  I$ATTACH 02 0080  I$CHGDIR 02 0086   I$CLOSE 02 008f  I$CREATE 02 0083
+  I$DELETE 02 0087  I$DELETX 02 0090  I$DETACH 02 0081     I$DUP 02 0082
+  I$GETSTT 02 008d  I$MAKDIR 02 0085    I$OPEN 02 0084    I$READ 02 0089
+  I$READLN 02 008b    I$SEEK 02 0088  I$SETSTT 02 008e   I$WRITE 02 008a
+  I$WRITLN 02 008c     ICODE 00 0002    IMGCHG 00 0010  INDRIVER 00 0020
+   INITSTR 02 000eINSTALLNAME 02 001f  INTMASKS 00 0050    IOADDR 00 007f
+   IOBLOCK 00 003f   IOENTRY 00 00fe    IRQENR 00 ff92   IRQMASK 00 0010
+     ISIZ. 00 0020    IT.ALF 02 0017    IT.BAU 02 0027    IT.BDC 02 0035
+    IT.BGC 02 0034    IT.BSE 02 0024    IT.BSO 02 0014    IT.BSP 02 001b
+    IT.COL 02 002c    IT.CPX 02 0031    IT.CPY 02 0032    IT.CYL 02 0017
+    IT.D2P 02 0028    IT.DEL 02 001c    IT.DLO 02 0015    IT.DNS 02 0016
+    IT.DRV 02 0013    IT.DTP 02 0012    IT.DUP 02 0020    IT.DVC 02 0012
+    IT.EKO 02 0016    IT.EOF 02 001e    IT.EOR 02 001d  IT.EXTEN 02 0022
+    IT.FGC 02 0033    IT.ILV 02 001f    IT.INT 02 0022  IT.LLDRV 02 0028
+    IT.MPI 02 002a    IT.NUL 02 0018    IT.OFS 02 0026    IT.OVF 02 0025
+    IT.PAG 02 001a    IT.PAR 02 0026    IT.PAU 02 0019    IT.PSC 02 0021
+    IT.QUT 02 0023    IT.ROW 02 002d    IT.RPR 02 001f    IT.RWC 02 0028
+    IT.SAS 02 0020    IT.SCT 02 001b    IT.SID 02 0019  IT.SOFF1 02 0025
+  IT.SOFF2 02 0026  IT.SOFF3 02 0027  IT.STOFF 02 0024    IT.STP 02 0014
+    IT.STY 02 0030    IT.T0S 02 001d    IT.TFM 02 0021    IT.TYP 02 0015
+    IT.UPC 02 0013    IT.VAL 02 002f    IT.VFY 02 001a    IT.WND 02 002e
+    IT.WPC 02 0025   IT.XOFF 02 002b    IT.XON 02 002a   IT.XTYP 02 002e
+   KEYRPTD 02 0029   KEYRPTS 02 0028    KRNBLK 01 003f     L00D4 02 00d4
+     L00FF 02 00f2     L010C 02 0105     L0149 02 013a     L014D 02 0146
+     L015D 02 014c     L0161 02 0158     L016D 02 0164     L0178 02 016f
+     L0183 02 017a     L018B 02 0182     L018E 02 0185     L019A 02 0191
+     L01B1 02 01a8     L01BE 02 01b1     L01CA 02 01bc     L01DC 02 01ce
+     L01E7 02 01d9     L0207 02 01f5     L021B 02 01ff     L021F 02 020b
+     L0223 02 020f     L022E 02 0219     L0230 02 021b     L0238 02 0223
+     L023A 02 0225     L0240 02 022b     L0241 02 022c     L026C 02 024b
+     L027B 02 0251     L0291 02 025d     L0296 02 0272     L02B8 02 0291
+     L02BC 02 0295     L02C0 02 0299     L02C4 02 029b     L02CF 02 029f
+     L02D1 02 02a1     L02DE 02 02ae     L0308 02 02d8     L0319 02 02e9
+  LANGMASK 00 000f   LASTRAM 00 003f   LEFTBIT 00 0020     LEVEL 00 0002
+   LIMITED 00 0001   LINEBUF 02 000e      LOCK 02 00c7    M$DTYP 02 0012
+    M$EXEC 02 0009    M$FMGR 02 0009      M$ID 02 0000     M$ID1 00 0087
+    M$ID12 00 87cd     M$ID2 00 00cd  M$IDSIZE 02 0009     M$MEM 02 000b
+    M$MODE 02 000d    M$NAME 02 0004     M$OPT 02 0011  M$PARITY 02 0008
+    M$PDEV 02 000b    M$PORT 02 000e    M$REVS 02 0007    M$SIZE 02 0002
+    M$TYPE 02 0006  MAPPEDIO 02 0000    MAXMEM 02 0009  MD$ESIZE 02 0008
+   MD$LINK 02 0006  MD$MBSIZ 02 0002  MD$MPDAT 02 0000   MD$MPTR 02 0004
+    MINSEC 01 0010  MODBLOCK 00 0002    MODNAT 00 0020   MODPROT 00 0040
+   MONTYPE 02 0025  MOUSEINF 02 0026  MOVEBLKS 00 0005  MPI.SLCT 01 ff7f
+  MPI.SLOT 01 0003     MULTI 00 0030      NAME 02 000d    NARROW 02 000b
+  NEFIOSIZ 00 000c  NEGATIVE 00 0008   NOS9MAJ 00 0000   NOS9MIN 00 0001
+   NOS9VER 00 0001    NOTRAM 00 0080  NUMPATHS 00 0010   OBJ6309 00 0007
+     OBJCT 00 0001    ONEMHZ 00 0001    OPTCNT 00 001a     OS9.D 01 0001
+  OS9MAJOR 00 0000  OS9MINOR 00 0001   OS9VRSN 00 0001   OSLEVEL 02 0017
+   OSMAJOR 02 0019   OSMINOR 02 001a    OSNAME 02 001d     OSVER 02 0018
+     OUT2H 02 023d    OUT2HS 02 0239    OUT4HS 02 022f   OUTB2HS 02 0237
+     OUTCH 02 0268     OUTSP 02 0266    OUTZSP 02 0264     P$AGE 02 000b
+   P$ALARM 02 00c3     P$CID 02 0003  P$DATBEG 02 00bd  P$DATIMG 02 0040
+  P$DEADLK 02 001e     P$DIO 02 0020  P$FCALLS 02 00b5  P$ICALLS 02 00b9
+      P$ID 02 0000    P$IOQN 02 0010    P$IOQP 02 000f   P$LINKS 02 0080
+     P$NIO 02 00a0  P$PAGCNT 02 0007    P$PATH 02 0030     P$PID 02 0001
+  P$PMODUL 02 0011   P$PRIOR 02 000a   P$QUEUE 02 000d    P$SELP 02 00ac
+     P$SID 02 0002  P$SIGDAT 02 001c  P$SIGNAL 02 0019  P$SIGVEC 02 001a
+    P$SIZE 02 0200      P$SP 02 0004   P$STACK 02 0200   P$STATE 02 000c
+  P$STICKS 02 00b1     P$SWI 02 0013    P$SWI2 02 0015    P$SWI3 02 0017
+    P$TASK 02 0006  P$TIMBEG 02 00c0    P$USER 02 0008  P$UTICKS 02 00ad
+    PALADR 00 ffb0  PARAMPTR 02 0000   PAREVEN 00 0060   PARMARK 00 00a0
+   PARMASK 00 00e0   PARNONE 00 0000    PARODD 00 0020  PARSPACE 00 00e0
+     PCODE 00 0003    PD.ALF 02 0025    PD.ATT 02 0033    PD.BAU 02 0035
+    PD.BSE 02 0032    PD.BSO 02 0022    PD.BSP 02 0029    PD.BUF 02 0008
+    PD.CNT 02 0002     PD.CP 02 000b    PD.CPR 02 0005    PD.CYL 02 0025
+    PD.D2P 02 0036    PD.DCP 02 003a    PD.DEL 02 002a    PD.DEV 02 0003
+    PD.DFD 02 0037    PD.DLO 02 0023    PD.DNS 02 0024    PD.DRV 02 0021
+    PD.DSK 02 001c    PD.DTB 02 001e    PD.DTP 02 0020    PD.DUP 02 002e
+    PD.DV2 02 000a    PD.DVT 02 003e    PD.EKO 02 0024    PD.EOF 02 002c
+    PD.EOR 02 002b    PD.ERR 02 003a  PD.EXTEN 02 0030     PD.FD 02 0034
+    PD.FST 02 000a    PD.ILV 02 002d    PD.INT 02 0030    PD.MAX 02 000d
+    PD.MIN 02 000f    PD.MOD 02 0001    PD.NUL 02 0026    PD.OPT 02 0020
+    PD.OVF 02 0033    PD.PAG 02 0028    PD.PAR 02 0034    PD.PAU 02 0027
+     PD.PD 02 0000    PD.PLP 02 003d    PD.PSC 02 002f    PD.PST 02 003f
+    PD.QUT 02 0031    PD.RAW 02 000c    PD.RGS 02 0006    PD.RPR 02 002d
+    PD.SAS 02 002e    PD.SBL 02 0013    PD.SBP 02 0016    PD.SCT 02 0029
+    PD.SID 02 0027    PD.SIZ 02 000f    PD.SMF 02 000a    PD.SSZ 02 0019
+    PD.STM 02 0012  PD.STOFF 02 0032    PD.STP 02 0022    PD.STS 02 0010
+    PD.T0S 02 002b    PD.TBL 02 003b    PD.TFM 02 002f    PD.TYP 02 0023
+    PD.UPC 02 0021    PD.VFY 02 0028   PD.XOFF 02 0039    PD.XON 02 0038
+    PDELIM 00 002f      PDIR 00 002e    PDSIZE 02 0040  PE.CONFL 02 0005
+  PE.FILNM 02 0020  PE.HILCK 02 000c   PE.LOCK 02 0007  PE.LOLCK 02 0008
+  PE.NXFIL 02 0003  PE.OWNER 02 0014  PE.PDPTR 02 0001     PE.PE 02 0000
+  PE.PRIOR 02 0016    PE.REQ 02 0015  PE.SIGID 02 0018  PE.SIGSG 02 0017
+  PE.TMOUT 02 0012   PE.WAIT 02 0010    PENTIR 00 0040    PEXEC. 00 0020
+  PIA0BASE 00 ff00  PIA1BASE 00 ff20   POLLCNT 02 000c    POLSIZ 02 000b
+    PREAD. 00 0008     PRGRM 00 0010  PROC6309 00 0002  PROC6809 00 0000
+  PROTFLAG 02 0016   PST.DCD 00 0001    PWRIT. 00 0010  PWRLNFRQ 01 0002
+    Q$FLIP 02 0002     Q$MAP 02 0009    Q$MASK 02 0003    Q$POLL 02 0000
+    Q$PRTY 02 0008    Q$SERV 02 0004    Q$STAT 02 0006       R$A 00 0001
+       R$B 00 0002      R$CC 00 0000       R$D 00 0001      R$DP 00 0003
+      R$PC 00 000a    R$SIZE 00 000c       R$U 00 0008       R$X 00 0004
+       R$Y 00 0006  RAMCHECK 00 0001  RAMCOUNT 00 0001  RAMINUSE 00 0001
+     RBF.D 01 0001   RCDLOCK 00 0001     READ. 00 0001     REENT 00 0080
+       REV 01 0001  REVSMASK 00 000f  RIGHTBIT 00 0040  ROMBLOCK 00 003f
+  ROMCHECK 00 0001  ROMCOUNT 00 0001   S$ABORT 02 0002   S$ALARM 02 0005
+     S$HUP 02 0004  S$INTRPT 02 0003    S$KILL 02 0000    S$WAKE 02 0001
+  S$WINDOW 02 0004     SBRTN 00 0020     SCF.D 01 0001    SHARE. 00 0040
+  SHEADER1 02 0088  SHEADER2 02 00a7  SHELLSUB 00 0050  SHIFTBIT 00 0001
+      SIGN 00 0080    SINBUF 00 0002      SIZE 02 11af     SLOCK 02 00cc
+  SPACEBIT 00 0080  SS.AAGBF 02 0080  SS.ALFAS 02 001c  SS.ANPAL 02 009a
+   SS.ARAM 00 00ca  SS.ASCRN 02 008b   SS.ATTR 02 001c  SS.BLKRD 02 0014
+  SS.BLKWR 02 0015  SS.BREAK 02 001d  SS.CDREL 02 009b  SS.CDSIG 02 009a
+  SS.CDSTA 02 0099  SS.CLOSE 02 002a  SS.COMST 02 0028  SS.CURSR 02 0025
+   SS.DCMD 02 000d  SS.DEVNM 02 000e  SS.DFPAL 02 0097 SS.DIRENT 02 0020
+   SS.DRAM 00 00cb  SS.DREAD 02 0080  SS.DRVCH 02 0086  SS.DSCRN 02 008c
+  SS.DSIZE 02 0026  SS.DSTAT 02 0012  SS.DWRIT 02 0080    SS.ECC 02 00b0
+   SS.ELOG 02 0019    SS.EOF 02 0006  SS.FBRGS 02 0096   SS.FCLR 00 0081
+     SS.FD 02 000f  SS.FDINF 00 0020   SS.FEED 02 0009   SS.FILL 02 00a0
+  SS.FNDBF 02 009b    SS.FRZ 02 000a  SS.FSCRN 02 008d   SS.FSET 00 00c7
+   SS.FSIG 02 002c    SS.GIP 02 0094   SS.GIP2 02 0099   SS.HIST 02 00a1
+  SS.HNGUP 02 002b    SS.JOY 02 0013   SS.KCLR 00 00c9   SS.KSET 00 00c8
+  SS.KYSNS 02 0027   SS.LINK 02 0007   SS.LOCK 02 0011  SS.MNSEL 02 0087
+   SS.MOFF 02 0082  SS.MONTR 02 0092  SS.MOTIM 02 0083  SS.MOUNT 02 0082
+  SS.MOUSE 02 0089  SS.MPGPB 02 0084  SS.MSSIG 02 008a   SS.OPEN 02 0029
+    SS.OPT 02 0000  SS.PALET 02 0091    SS.POS 02 0005  SS.PSCRN 02 008e
+  SS.RDNET 02 0083  SS.READY 02 0001  SS.RELEA 02 001b  SS.RESET 02 0003
+  SS.RETEN 02 0016    SS.RFM 02 0018  SS.RSBIT 02 001e   SS.SBAR 02 0088
+  SS.SCINF 02 008f  SS.SCSIZ 02 0026  SS.SCTYP 02 0093   SS.SDRD 02 0084
+  SS.SDWRT 02 0084  SS.SETMF 02 0024   SS.SIZE 02 0002  SS.SLEEP 02 0085
+  SS.SLGBF 02 0081  SS.SLOTS 02 0085    SS.SPT 02 000b    SS.SQD 02 000c
+   SS.SSIG 02 001a  SS.TICKS 02 0010   SS.TONE 02 0098  SS.ULINK 02 0008
+  SS.UMBAR 02 0095  SS.UNFRZ 02 0081SS.VARSECT 02 0012   SS.VCTR 00 0080
+   SS.VSIG 00 0081    SS.WFM 02 0017  SS.WNSET 02 0086   SS.WTRK 02 0004
+     START 02 00ce    STDSTR 02 0012     STOP1 00 0000     STOP2 00 0010
+  STP.12MS 00 0002  STP.20MS 00 0001  STP.30MS 00 0000   STP.6MS 00 0003
+   SUSPEND 00 0008  SYSSTATE 00 0080    SYSSTR 02 0010   SYSTASK 00 0000
+     SYSTM 00 00c0   TIMEBUF 02 0008    TIMOUT 00 0020  TIMSLEEP 00 0040
+  TKPERSEC 01 003c      TRUE 00 0001    TWOMHZ 00 0002  TWOSOVFL 00 0002
+      TYLG 01 0011   TYP.256 00 0000     TYP.3 00 0001     TYP.5 00 0000
+   TYP.512 00 0004   TYP.CCF 00 0020   TYP.FLP 00 0000  TYP.HARD 00 0080
+  TYP.NCCF 00 0000   TYP.NSF 00 0040   TYP.SBO 00 0002   TYP.SOF 00 0000
+  TYPEMASK 00 00f0 TYPH.1024 00 0002 TYPH.2048 00 0003  TYPH.256 00 0000
+  TYPH.512 00 0001 TYPH.DRSV 00 000c  TYPH.DSQ 00 0010  TYPH.SSM 00 0003
+     U000C 02 000c     U000D 02 000d     U005E 02 005e     U0060 02 0060
+     U0062 02 0062     U1062 02 1062     U10A2 02 10a2  UNLIMITD 00 0002
+  UNLOCKED 00 0000     UPBIT 00 0008    UPDAT. 00 0003    V$DESC 02 0004
+    V$DRIV 02 0000  V$DRIVEX 02 0009    V$FMGR 02 0006  V$FMGREX 02 000b
+    V$STAT 02 0002    V$USRS 02 0008  V.BMAPSZ 02 001c     V.BMB 02 0017
+    V.BUSY 02 0004    V.DEV2 02 0009  V.DISKID 02 001a     V.ERR 02 000e
+  V.FILEHD 02 0018    V.INTR 02 000b   V.KANJI 02 0011    V.KBUF 02 0012
+    V.LINE 02 0007    V.LPRC 02 0003  V.MAPSCT 02 001d  V.MODADR 02 0014
+    V.NDRV 02 0006    V.PAGE 02 0000    V.PAUS 02 0008    V.PCHR 02 000d
+   V.PDLHD 02 0016    V.PORT 02 0001    V.QUIT 02 000c  V.RESBIT 02 001e
+     V.RSV 02 0018     V.SCF 02 001d  V.SCOFST 02 0020  V.SCTKOF 02 001f
+  V.TKOFST 02 0021    V.TRAK 02 0015    V.TYPE 02 0006    V.USER 02 0006
+    V.WAKE 02 0005    V.XOFF 02 0010     V.XON 02 000f    VD.OFS 02 0061
+    VD.STP 02 0060    VI.CNT 02 0000  VI.IFLAG 00 0001   VI.PKSZ 02 0005
+    VI.RST 02 0002   VI.STAT 02 0004    VIDRAM 00 0004     WORD7 00 0020
+     WORD8 00 0000    WRITE. 00 0002  WRITEBUF 02 027c      ZERO 00 0004
+     ZFLAG 02 0002

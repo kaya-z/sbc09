@@ -1,21 +1,15 @@
-MIT License
+This repository contains files under different licenses. There is no single license for the whole tree.
 
-Copyright (c) 2026 Shin'ichi KAYANUMA
+  * The simulator (src/), the tests, the OS-9 programs and tools written for this project
+    (jwp, skk, dhry's timing code, mkskkdic, mkrbf, ...) and the documentation are
+    licensed under the MIT License: LICENSES/MIT.txt.
+  * Files taken or derived from the sbc09 project (tools/a09.c and friends, os9/level1,
+    os9/level2, the disk images and ROM) are under the GNU General Public License
+    version 2: LICENSES/GPL-2.0.txt.
+  * The prebuilt OS-9 modules jwp, jwp-l2 and dhry contain the run time library of CMOC and
+    are under the GNU General Public License version 3: LICENSES/GPL-3.0.txt.
+  * The NitrOS-9 sources (os9/nitros9-code and what is derived from them) and the Dhrystone
+    benchmark are third party works whose terms are NOT verified; see LICENSES.md.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+LICENSES.md lists, directory by directory and file by file, which license applies and why.
+Files carry an SPDX-License-Identifier line where they are covered by this project's own license.

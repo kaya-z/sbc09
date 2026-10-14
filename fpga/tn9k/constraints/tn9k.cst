@@ -1,0 +1,47 @@
+// SPDX-License-Identifier: MIT
+// Sipeed Tang Nano 9K (GW1NR-LV9QN88PC6/I5): the pins are those of the board's schematic
+// (Tang_nano_9K_3674_schematics.pdf: TF card on pins 36-39) and of Sipeed's examples.
+IO_LOC "sys_clk" 52;
+IO_PORT "sys_clk" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+IO_LOC "sys_resetn" 4;
+IO_PORT "sys_resetn" PULL_MODE=UP;
+
+// the USB serial port (BL702)
+IO_LOC "uart_tx" 17;
+IO_PORT "uart_tx" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;
+IO_LOC "uart_rx" 18;
+IO_PORT "uart_rx" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+// LEDs (low = on)
+IO_LOC "led[5]" 16;
+IO_PORT "led[5]" PULL_MODE=UP DRIVE=8;
+IO_LOC "led[4]" 15;
+IO_PORT "led[4]" PULL_MODE=UP DRIVE=8;
+IO_LOC "led[3]" 14;
+IO_PORT "led[3]" PULL_MODE=UP DRIVE=8;
+IO_LOC "led[2]" 13;
+IO_PORT "led[2]" PULL_MODE=UP DRIVE=8;
+IO_LOC "led[1]" 11;
+IO_PORT "led[1]" PULL_MODE=UP DRIVE=8;
+IO_LOC "led[0]" 10;
+IO_PORT "led[0]" PULL_MODE=UP DRIVE=8;
+
+// the SPI flash of the board (MSPI pins, used as GPIO after the configuration): the kanji image
+IO_LOC "flash_csb" 60;
+IO_PORT "flash_csb" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;
+IO_LOC "flash_clk" 59;
+IO_PORT "flash_clk" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
+IO_LOC "flash_mosi" 61;
+IO_PORT "flash_mosi" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
+IO_LOC "flash_miso" 62;
+IO_PORT "flash_miso" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+// microSD slot in SPI mode: DAT3 = CS, CMD = MOSI, CLK, DAT0 = MISO
+IO_LOC "sd_cs" 38;
+IO_PORT "sd_cs" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;
+IO_LOC "sd_mosi" 37;
+IO_PORT "sd_mosi" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;
+IO_LOC "sd_clk" 36;
+IO_PORT "sd_clk" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;
+IO_LOC "sd_miso" 39;
+IO_PORT "sd_miso" IO_TYPE=LVCMOS33 PULL_MODE=UP;

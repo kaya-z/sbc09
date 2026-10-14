@@ -1,0 +1,500 @@
+0000:                   ********************************************************************
+0000:                   * Boot - disk booter of the sim09 / sbc09 "v09" machine (Level 1)
+0000:                   *
+0000:                   * SPDX-License-Identifier: MIT
+0000:                   * Copyright (c) 2026 sim09 contributors
+0000:                   *
+0000:                   * Reads the boot file (OS9Boot) of drive 0 through the DMA disk port at
+0000:                   * $E040 (the one the PDisk driver uses; on the FPGA it is the SD card)
+0000:                   * and hands it to the kernel.  The reading of LSN 0 and of the boot file
+0000:                   * is done by boot_common.asm (NitrOS-9, used unchanged): this file only
+0000:                   * provides HWInit, HWTerm and HWRead.
+0000:                   *
+0000:                   * The port:  +0 command ($81 = read a sector) / result (0 = ok)
+0000:                   *            +1 drive   +2..+4 LSN (24 bits)   +5,+6 address of the buffer
+0000:                   
+0000:                            nam   Boot
+0000:                            ttl   Boot from the v09 disk port
+0000:                   
+0000:                            ifp1
+0000:                            use   defsfile
+0000:                            endc
+0000:                   
+00C1:                   tylg     set   Systm+Objct
+0080:                   atrv     set   ReEnt+rev
+0000:                   rev      set   $00
+0001:                   edition  set   1
+0000:                   
+0000: 87CD00C5000DC180           mod   eom,name,tylg,atrv,start,size
+0009: 0035000A
+0000:                   
+0000:                   * NOTE: these are U-stack offsets (boot_common.asm uses them)
+0000:                   seglist  rmb   2                pointer to segment list
+0002:                   blockloc rmb   2                pointer to memory requested
+0004:                   blockimg rmb   2                duplicate of the above
+0006:                   bootsize rmb   2                size in bytes
+0008:                   LSN0Ptr  rmb   2                in memory LSN0 pointer
+000A:                   size     equ   .
+000A:                   
+000D: 426F6FF4          name     fcs   /Boot/
+0011: 01                         fcb   edition
+0012:                   
+0001:                   LSN24BIT equ   1
+0000:                   FLOPPY   equ   0
+0012:                   
+0012:                   * HWInit - nothing to do (the disk port is always ready)
+0012:                   *   Entry: Y = hardware address
+0012:                   *   Exit:  Carry Clear = OK
+0012: 5F                HWInit   clrb
+0013: 39                         rts
+0014:                   
+0014:                   * HWTerm
+0014: 5F                HWTerm   clrb
+0015: 39                         rts
+0016:                   
+0016:                   * HWRead - read a 256 byte sector
+0016:                   *   Entry: Y = hardware address
+0016:                   *          B = bits 23-16 of LSN
+0016:                   *          X = bits 15-0  of LSN
+0016:                   *          blockloc,u = ptr to 256 byte sector
+0016:                   *   Exit:  X = ptr to data (i.e. ptr in blockloc,u)
+0016:                   *          Carry Clear = OK, Set = Error (B = error)
+0016: E722              HWRead   stb   2,y              LSN, bits 23-16
+0018: 1F10                       tfr   x,d
+001A: A723                       sta   3,y
+001C: E724                       stb   4,y
+001E: 6F21                       clr   1,y              drive 0
+0020: EC42                       ldd   blockloc,u
+0022: A725                       sta   5,y              address of the buffer
+0024: E726                       stb   6,y
+0026: 8681                       lda   #$81
+0028: A7A4                       sta   ,y               read (the CPU waits for the transfer)
+002A: E6A4                       ldb   ,y               result
+002C: 2604                       bne   HWRErr
+002E: AE42                       ldx   blockloc,u
+0030: 5F                         clrb
+0031: 39                         rts
+0032: 1A01              HWRErr   orcc  #1
+0034: 39                         rts
+0035:                   
+0035:                   ********************************************************************
+0035:                   * Boot Common - Common code for NitrOS-9 booters
+0035:                   *
+0035:                   * $Id$
+0035:                   *
+0035:                   * This common file is not a stand-alone module, but is 'used' by boot module
+0035:                   * source files to bring in support for booting from RBF file systems that have
+0035:                   * either standard or new-style fragmented bootfiles.
+0035:                   *
+0035:                   * This code uses several static variables which are expected to be defined in
+0035:                   * the main boot source code.  See a booter like boot_1773.asm for an example on
+0035:                   * how to write a booter which uses this code.
+0035:                   *
+0035:                   * Important Notes:
+0035:                   * For certain devices, only the lower 16 bits of DD.BT are used.  This special
+0035:                   * case allows us to save some code by ignoring the loading LSN bits 23-16 in
+0035:                   * DD.BT and FDSL.A.  Booters for such devices (floppy, RAMPak) should have the
+0035:                   * following line in their code to take advantage of this optimization:
+0035:                   *
+0035:                   * LSN24BIT equ 0
+0035:                   *
+0035:                   * Floppy booters require the acquistion of DD.TKS and DD.FMT from LSN0 to make
+0035:                   * certain decisions about the boot process.  In most cases, non-floppy booters
+0035:                   * do not need these values.  Hence, floppy booters should have this line in their
+0035:                   * source code file:
+0035:                   *
+0035:                   * FLOPPY equ 1
+0035:                   *
+0035:                   * Edt/Rev  YYYY/MM/DD  Modified by
+0035:                   * Comment
+0035:                   * ------------------------------------------------------------------
+0035:                   *          2005/10/14  Boisy G. Pitre
+0035:                   * Created as a stand-alone file.
+0035:                   *
+0035:                   *          2005/10/16  Boisy G. Pitre
+0035:                   * Further optimizations made
+0035:                   *
+0035:                   *          2006/01/04  P.Harvey-Smith.
+0035:                   * Added pointer to loaded LSN0 to data passed to hardware dependent section.
+0035:                   *
+0035:                   *          2007/08/23  Boisy G. Pitre
+0035:                   * Added 'subd #$00FF' to counteract earlier 'addd #$00FF'.  We need to undo
+0035:                   * to give F$SRqMem the right amount of memory to allocate.
+0035:                   *
+0035:                   *          2007/08/24  Boisy G. Pitre
+0035:                   * We no longer use F$SRqMem to get the 256 byte buffer for LSN0, but
+0035:                   * instead allocate the memory temporarily off the stack.  This gives us
+0035:                   * two system ram pages that were not available before, and also prevents
+0035:                   * a needless system call.
+0035:                   * Note: For Level 1, we actually use the page above the stack at $500-$5FF
+0035:                   * to hold LSN0 during the bootfile acquisition process. This is because the
+0035:                   * system stack is only 256 bytes and we are using more than that.  Since
+0035:                   * the module directory table is at $400-$4FF, we must do this; otherwise, we
+0035:                   * would overwrite the bottom portion of the module directory table and corrupt
+0035:                   * it (it's already setup by krn before boot is called!)
+0035:                   
+0035: 1A50              start    orcc  #IntMasks  ensure IRQs are off (necessary?)
+0037:                   * allocate memory on stack for vars and sector buffer
+0037:                          IFEQ  Level-1
+0037:                   * Level 1: stack is only 256 bytes and its bottom runs against moddir ptrs..
+0037:                   * so cheat and use free page just above stack as 256-byte disk buffer
+0037: 3276                       leas  -size,s
+0039: 1F43                       tfr   s,u        get pointer to data area
+003B: 8E0500                     ldx   #$500
+003E:                          ELSE
+003E:                            leas  -size-256,s
+003E:                            tfr   s,u        get pointer to data area
+003E:                            leax  size,u     point U to 256 byte sector buffer
+003E:                          ENDC
+003E: 3440                       pshs  u          save pointer to data area
+0040: AF42                       stx   blockloc,u
+0042:                   
+0042:                   * Initialize Hardware
+0042: 10AE8D0079                 ldy   Address,pcr  get hardware address
+0047: 17FFC8                     lbsr  HWInit
+004A:                   
+004A:                   * Read LSN0
+004A:                          IFNE  LSN24BIT
+004A: 5F                         clrb             MSB sector
+004B:                          ENDC
+004B: 8E0000                     ldx   #0         LSW sector
+004E: 17FFC5                     lbsr  HWRead     read LSN 0
+0051: 2524                       bcs   error      branch if error
+0053:                   
+0053:                          IFGT  Level-1
+0053:                            lda   #'0        --- loaded in LSN0'
+0053:                            jsr   <D.BtBug   ---
+0053:                          ENDC
+0053:                   
+0053: AF48                       stx   LSN0Ptr,u    Save LSN0 pointer
+0055:                   * Pull relevant values from LSN0
+0055:                          IFNE  FLOPPY
+0055:                            lda   DD.TKS,x   number of tracks on this disk
+0055:                            ldb   DD.FMT,x   disk format byte
+0055:                            std   ddtks,u    TAKE NOTE!  ASSUMES ADJACENT VARS!
+0055:                          ENDC
+0055: EC8818                     ldd   DD.BSZ,x   os9boot size in bytes
+0058: 2720                       beq   FragBoot   if zero, do frag boot
+005A: ED46                       std   bootsize,u
+005C:                   * Old style boot -- make a fake FD segment right from LSN0!
+005C: 308815                     leax  DD.BT,x
+005F: C300FF                     addd  #$00FF     round up to next page
+0062:                   * Important note: We are making an assumption that the upper 8 bits of the
+0062:                   * FDSL.B field will always be zero.  That is a safe assumption, since an
+0062:                   * FDSL.B value of $00FF would mean the file is 65280 bytes.  A bootfile
+0062:                   * under NitrOS-9 cannot be this large, and therefore this assumption
+0062:                   * is safe.
+0062: A704                       sta   FDSL.B+1,x save file size
+0064:                          IFNE  LSN24BIT
+0064: 6F05                       clr   FDSL.S,x   make next segment entry 0
+0066:                          ENDC
+0066: 6F06                       clr   FDSL.S+1,x
+0068: 6F07                       clr   FDSL.S+2,x
+006A: 8300FF                     subd  #$00FF     undo previous add #$00FF
+006D: 201B                       bra   GrabBootMem
+006F:                   
+006F: 17FFA2            Back2Krn lbsr  HWTerm     call HW termination routine
+0072: AE44                       ldx   blockimg,u pointer to start of os9boot in memory
+0074: 5F                         clrb             clear carry
+0075: EC46                       ldd   bootsize,u
+0077:                   error
+0077:                          IFEQ  Level-1
+0077: 326C                       leas  2+size,s      reset the stack    same as PULS U
+0079:                          ELSE
+0079:                            leas  2+size+256,s  reset the stack    same as PULS U
+0079:                          ENDC
+0079: 39                         rts              return to kernel
+007A:                   
+007A:                   
+007A:                   * NEW! Fragmented boot support!
+007A:                   *FragBoot ldb   bootloc,u  MSB fd sector location
+007A:                   *         ldx   bootloc+1,u LSW fd sector location
+007A: E68815            FragBoot ldb   DD.BT,x    MSB fd sector location
+007D: AE8816                     ldx   DD.BT+1,x  LSW fd sector location
+0080: 17FF93                     lbsr  HWRead     get fd sector
+0083: EC0B                       ldd   FD.SIZ+2,x get file size (we skip first two bytes)
+0085: ED46                       std   bootsize,u
+0087: 308810                     leax  FD.SEG,x   point to segment table
+008A:                   
+008A:                   GrabBootMem
+008A:                          IFGT  Level-1
+008A:                            os9   F$BtMem
+008A:                          ELSE
+008A: 103F28                     os9   F$SRqMem
+008D:                          ENDC
+008D: 25E8                       bcs   error
+008F:                   * Save off alloced mem from F$SRqMem into blockloc,u and restore
+008F:                   * the statics pointer in U
+008F: 1F30                       tfr   u,d        save pointer to requested memory
+0091: EEE4                       ldu   ,s         recover pointer to data stack
+0093: ED42                       std   blockloc,u
+0095: ED44                       std   blockimg,u
+0097:                   
+0097:                   * Get os9boot into memory
+0097: AF40              BootLoop stx   seglist,u  update segment list
+0099:                          IFNE  LSN24BIT
+0099: E600                       ldb   FDSL.A,x   MSB sector location
+009B:                          ENDC
+009B: AE01              BL2      ldx   FDSL.A+1,x LSW sector location
+009D:                          IFNE  LSN24BIT
+009D: 2603                       bne   BL3
+009F: 5D                         tstb
+00A0:                          ENDC
+00A0: 27CD                       beq   Back2Krn
+00A2: 17FF71            BL3      lbsr  HWRead
+00A5: 6C42                       inc   blockloc,u point to next input sector in mem
+00A7:                   
+00A7:                          IFGT  Level-1
+00A7:                            lda   #'.        show .'
+00A7:                            jsr   <D.BtBug
+00A7:                          ENDC
+00A7:                   
+00A7: AE40                       ldx   seglist,u  get pointer to segment list
+00A9: 6A04                       dec   FDSL.B+1,x get segment size
+00AB: 270F                       beq   NextSeg    if <=0, get next segment
+00AD:                   
+00AD: EC01                       ldd   FDSL.A+1,x update sector location by one
+00AF: C30001                     addd  #1
+00B2: ED01                       std   FDSL.A+1,x
+00B4:                          IFNE  LSN24BIT
+00B4: E600                       ldb   FDSL.A,x
+00B6: C900                       adcb  #0
+00B8: E700                       stb   FDSL.A,x
+00BA:                          ENDC
+00BA: 20DF                       bra   BL2
+00BC:                   
+00BC: 3005              NextSeg  leax  FDSL.S,x   advance to next segment entry
+00BE: 20D7                       bra   BootLoop
+00BE:                   
+00C0:                   
+00C0: E040              Address  fdb   $E040
+00C2: F8B16A                     emod
+00C5:                   eom      equ   *
+0 Pass 2 errors.
+
+SYMBOL TABLE
+   A.ACIAP 01 ff68    A.MODP 01 ff6c   A.TERMV 01 ffc0      A.V1 01 ffc1
+      A.V2 01 ffc2      A.V3 01 ffc3      A.V4 01 ffc4      A.V5 01 ffc5
+      A.V6 01 ffc6      A.V7 01 ffc7  ACIA2661 02 0003  ACIA6551 02 0002
+  ACIA6850 02 0001  ACIATYPE 03 0002   ADDRESS 02 00c0  ALTERBIT 00 0004
+      ATRV 01 0080  ATTRMASK 00 00f0      B110 00 0000   B115200 00 000a
+     B1200 00 0003    B19200 00 0007     B2400 00 0004      B300 00 0001
+    B38400 00 0008     B4800 00 0005    B57600 00 0009      B600 00 0002
+     B9600 00 0006  BACK2KRN 02 006f  BADINSTR 00 0040       BL2 02 009b
+       BL3 02 00a2  BLOCKIMG 02 0004  BLOCKLOC 02 0002    BMAPSZ 00 0020
+  BOOTLOOP 02 0097  BOOTSIZE 02 0006   BOOTSTR 02 0014    BT.SEC 00 0000
+   BT.SIZE 00 1080  BT.START 00 ee00  BT.TRACK 00 0022   BUFBUSY 00 0040
+    BUFMOD 00 0001    C$BELL 01 0007     C$BSP 01 0008  C$CLSALL 01 0016
+   C$CLSGR 01 0015    C$COMA 01 002c      C$CR 01 000d     C$DEL 01 0018
+  C$DELETE 01 0010     C$DWN 01 001f      C$EL 01 0005     C$EOF 01 001b
+    C$FORM 01 000c    C$HOME 01 000b  C$INSERT 01 0011    C$INTR 01 0003
+      C$LF 01 000a     C$LFT 01 001d    C$NULL 01 0000    C$PAUS 01 0017
+    C$PERD 01 002e   C$PLINE 01 0013    C$QUIT 01 0005    C$RARR 01 0009
+     C$RGT 01 001c    C$RPET 01 0001    C$RPRT 01 0004  C$SHRARR 01 0019
+      C$SI 01 000f      C$SO 01 000e    C$SPAC 01 0020      C$UP 01 001e
+    C$XOFF 01 0013     C$XON 01 0011     CARRY 00 0001   CBLCODE 00 0005
+     CCODE 00 0004CHECK_FOR_VALID_ 00 0001  CNTRLBIT 00 0002    COCO.D 01 0001
+     COLOR 01 0001    COLOR3 01 0002    CONDEM 00 0002  CPUSPEED 01 0001
+   CPUTYPE 01 0001   CRCCON1 00 0080  CRCCON23 00 0fe3    CRCOFF 00 0000
+     CRCON 00 0001    D$GSTA 02 0009    D$INIT 02 0000    D$PSTA 02 000c
+    D$READ 02 0003    D$TERM 02 000f    D$WRIT 02 0006  D.ALTIRQ 02 006b
+  D.APROCQ 02 004d    D.BOOT 02 0083    D.BTHI 02 0068    D.BTLO 02 0066
+  D.CBSTRT 02 0071   D.CLOCK 02 0081  D.CLOCK2 02 008a    D.CLTB 02 0086
+  D.COCOXT 02 0009     D.CRC 02 0089     D.DAY 02 0055  D.DBGMEM 02 000a
+  D.DEVTBL 02 0060  D.DMAREQ 02 006a  D.DSKTMR 02 006f D.DWSRVID 02 0010
+  D.DWSTAT 02 000eD.DWSUBADDR 02 000c    D.FIRQ 02 0030    D.FMBM 02 0020
+    D.HOUR 02 0056    D.INIT 02 002a    D.IOMH 02 005e    D.IOML 02 005c
+     D.IRQ 02 0032  D.KBDSTA 02 006d   D.MDREG 02 0088     D.MIN 02 0057
+    D.MLIM 02 0024  D.MODDIR 02 0026   D.MONTH 02 0054     D.NMI 02 0036
+    D.POLL 02 003a  D.POLTBL 02 0062  D.PRCDBT 02 0049    D.PROC 02 004b
+  D.PTHDBT 02 0064     D.SEC 02 0058   D.SLICE 02 0048  D.SPROCQ 02 0051
+  D.SVCIRQ 02 0038     D.SWI 02 0034    D.SWI2 02 002e    D.SWI3 02 002c
+  D.SWPAGE 02 0003  D.SYSDIS 02 0046  D.SYSIRQ 02 003e  D.SYSSVC 02 0042
+    D.TICK 02 0059    D.TIME 02 0053    D.TSEC 02 005a  D.TSLICE 02 005b
+  D.URTOSS 02 0084  D.USRDIS 02 0044  D.USRIRQ 02 003c  D.USRSVC 02 0040
+  D.WDADDR 02 0000  D.WDBTDR 02 0002  D.WPROCQ 02 004f   D.XFIRQ 02 010f
+    D.XIRQ 02 010c    D.XNMI 02 0109    D.XSWI 02 0106   D.XSWI2 02 0103
+   D.XSWI3 02 0100    D.YEAR 02 0053      DATA 00 0040    DD.ATT 02 000d
+    DD.BIT 02 0006    DD.BSZ 02 0018     DD.BT 02 0015    DD.DAT 02 001a
+    DD.DIR 02 0008    DD.DSK 02 000e    DD.FMT 02 0010    DD.MAP 02 0004
+    DD.NAM 02 001f    DD.OPT 02 003f    DD.OWN 02 000b    DD.RES 02 0013
+    DD.SIZ 02 0015    DD.SPT 02 0011    DD.TKS 02 0003    DD.TOT 02 0000
+      DEAD 00 0001  DEFIOSIZ 00 000c    DEVCNT 02 000d     DEVIC 00 00f0
+    DEVSIZ 02 0009      DIR. 00 0080    DIR.FD 02 001d    DIR.NM 02 0000
+    DIR.SZ 02 0020      DIV0 00 0080   DNS.DTD 00 0002    DNS.FM 00 0000
+   DNS.FM0 00 0000   DNS.MFM 00 0001  DNS.MFM0 00 0004   DNS.STD 00 0000
+   DOWNBIT 00 0010     DPORT 01 ff40     DRIVR 00 00e0    DRVBEG 02 000f
+    DRVMEM 02 0026   DT.CDFM 00 0005    DT.NFM 00 0004   DT.PIPE 00 0002
+    DT.RBF 00 0001    DT.RFM 00 0006    DT.SBF 00 0003    DT.SCF 00 0000
+   E$ALIAS 02 00c7  E$ARROVF 02 0049  E$BADBUF 02 00c2   E$BMCRC 02 00e8
+    E$BMHP 02 00ec    E$BMID 02 00cd   E$BMODE 02 00cb    E$BNAM 02 00eb
+  E$BPADDR 02 00d2   E$BPNAM 02 00d7   E$BPNUM 02 00c9  E$BPRCID 02 00e0
+    E$BTYP 02 00f9  E$BUFSIZ 02 00bf     E$BUG 02 00be     E$CEF 02 00da
+     E$CRC 02 00f3  E$DEADLK 02 00fe   E$DELSP 02 00df  E$DEVBSY 02 00fa
+  E$DEVOVF 02 00cc    E$DIDC 02 00fb  E$DIMLRG 02 0019  E$DIRFUL 02 00ce
+  E$DIVZER 02 002d      E$DN 02 00c6     E$DNE 02 00ee  E$ENDQOU 02 0029
+     E$EOF 02 00d3  E$EXCVRB 02 000b  E$FLTOVF 02 0032     E$FNA 02 00d6
+    E$FULL 02 00f8  E$HANGUP 02 00dc     E$IBA 02 00db  E$ICHREF 02 000e
+  E$ICOORD 02 00bd   E$ICOVF 02 000d  E$IFORKP 02 00e6    E$ILLA 02 0043
+  E$ILLARG 02 00bb  E$ILLCMD 02 00c0  E$ILLCNT 02 0044  E$ILLDEC 02 0048
+  E$ILLDIM 02 0015  E$ILLEXP 02 0047  E$ILLFOR 02 0046  E$ILLINP 02 003d
+  E$ILLIVR 02 004d  E$ILLLIT 02 0016  E$ILLMOD 02 000f  E$ILLNUM 02 0010
+  E$ILLOPD 02 0012  E$ILLOPR 02 0013  E$ILLPNM 02 0040  E$ILLPRF 02 0011
+  E$ILLRET 02 0017  E$ILLRFN 02 0014  E$ILLSFX 02 0018  E$ILLSTC 02 000c
+  E$IOCONV 02 003c  E$IOFRPT 02 003e  E$IOFSYN 02 003f  E$IOMISM 02 003a
+   E$IONUM 02 003b  E$IPRCID 02 00e0    E$ISWI 02 00e3   E$IWDEF 02 00c3
+   E$IWTYP 02 00b7  E$KWNMOD 02 00e7  E$LINLRG 02 001a  E$LNCOMP 02 0033
+    E$LOCK 02 00fc  E$MEMFUL 02 00cf   E$MFULL 02 0020  E$MLTLIN 02 004b
+  E$MLTVAR 02 004c     E$MNF 02 00dd  E$MODBSY 02 00d1  E$MULPRC 02 002c
+   E$NEMOD 02 00ea     E$NES 02 00d5   E$NFONT 02 00b9  E$NOASSG 02 001b
+  E$NOCHLD 02 00e2  E$NOCOMA 02 001d  E$NODATA 02 004f   E$NODIM 02 001e
+    E$NODO 02 001f  E$NOGOTO 02 0021  E$NOLPAR 02 0022  E$NOLREF 02 0023
+  E$NONRCO 02 0042  E$NOOPRD 02 0024  E$NOPATH 02 001c   E$NORAM 02 00ed
+  E$NOROUT 02 0030  E$NORPAR 02 0025  E$NOTASK 02 00ef  E$NOTHEN 02 0026
+    E$NOTO 02 0027  E$NOTRDY 02 00f6  E$NOVREF 02 0028  E$PARMER 02 0038
+    E$PNNF 02 00d8    E$POLL 02 00ca  E$PRCABT 02 00e4  E$PRCFUL 02 00e5
+  E$PTHFUL 02 00c8    E$READ 02 00f4    E$SECT 02 00f1    E$SEEK 02 00f7
+  E$SEEKRG 02 004e   E$SHARE 02 00fd     E$SLF 02 00d9  E$STKOVF 02 00ba
+  E$STROVF 02 002f  E$SUBLRG 02 002a  E$SUBOVF 02 0035  E$SUBRNG 02 0037
+  E$SUBUND 02 0036  E$SYSOVF 02 0039  E$TBLFUL 02 00c1  E$TYPMIS 02 002e
+  E$UNDLIN 02 004a  E$UNDVAR 02 0031    E$UNIT 02 00f0  E$UNKPRC 02 002b
+  E$UNKSVC 02 00d0  E$UNKSYM 02 000a  E$UNMCNT 02 0045      E$UP 02 00c5
+   E$USIGP 02 00e9  E$VALRNG 02 0034   E$WADEF 02 00b8      E$WP 02 00f2
+   E$WRITE 02 00f5   E$WRSUB 02 0041  E$WUNDEF 02 00c4   EDITION 01 0001
+    ENTIRE 00 0080       EOM 02 00c5     ERROR 02 0077     EXEC. 00 0004
+   F$ALL64 02 0030  F$ALLBIT 02 0013   F$APROC 02 002c   F$CHAIN 02 0005
+  F$CMPNAM 02 0011     F$CRC 02 0017   F$DEBUG 02 0023  F$DELBIT 02 0014
+    F$EXIT 02 0006  F$FIND64 02 002f    F$FORK 02 0003    F$ICPT 02 0009
+      F$ID 02 000c   F$IODEL 02 0033    F$IOQU 02 002b     F$IRQ 02 002a
+    F$LINK 02 0000    F$LOAD 02 0001     F$MEM 02 0007   F$NPROC 02 002d
+    F$PERR 02 000f  F$PRSNAM 02 0010   F$RET64 02 0031  F$SCHBIT 02 0012
+    F$SEND 02 0008   F$SLEEP 02 000a  F$SPRIOR 02 000d  F$SRQMEM 02 0028
+  F$SRTMEM 02 0029    F$SSPD 02 000b    F$SSVC 02 0032    F$SSWI 02 000e
+   F$STIME 02 0016    F$TIME 02 0015  F$UNLINK 02 0002    F$VIRQ 02 0027
+  F$VMODUL 02 002e    F$WAIT 02 0004     FALSE 00 0000    FD.ATT 02 0000
+  FD.CREAT 02 000d    FD.DAT 02 0003    FD.LNK 02 0008    FD.LS1 00 00fb
+    FD.LS2 00 00fa    FD.OWN 02 0001    FD.SEG 02 0010    FD.SIZ 02 0009
+     FDBUF 00 0004    FDSL.A 02 0000    FDSL.B 02 0003    FDSL.S 02 0005
+  FEATURE1 02 001b  FEATURE2 02 001c  FIRQMASK 00 0040     FLMGR 00 00d0
+    FLOPPY 00 0000    FMCDIR 02 0009    FMCLOS 02 0024    FMCREA 02 0000
+    FMDLET 02 000c    FMGSTA 02 001e    FMMDIR 02 0006    FMOPEN 02 0003
+    FMRDLN 02 0018    FMREAD 02 0012    FMSEEK 02 000f    FMSSTA 02 0021
+   FMT.DNS 00 0002  FMT.SIDE 00 0001  FMT.T0DN 00 0020  FMT.TDNS 00 0004
+    FMWRIT 02 0015    FMWRLN 02 001b  FRAGBOOT 02 007a  FRTNCODE 00 0006
+GRABBOOTMEM 02 008a     H6309 06 0000  HALFCRRY 00 0020   HW.PAGE 01 00ff
+    HWINIT 02 0012    HWREAD 02 0016    HWRERR 02 0032    HWTERM 02 0014
+      HZ50 00 0001      HZ60 00 0002  I$ATTACH 02 0080  I$CHGDIR 02 0086
+   I$CLOSE 02 008f  I$CREATE 02 0083  I$DELETE 02 0087  I$DELETX 02 0090
+  I$DETACH 02 0081     I$DUP 02 0082  I$GETSTT 02 008d  I$MAKDIR 02 0085
+    I$OPEN 02 0084    I$READ 02 0089  I$READLN 02 008b    I$SEEK 02 0088
+  I$SETSTT 02 008e   I$WRITE 02 008a  I$WRITLN 02 008c     ICODE 00 0002
+    IMGCHG 00 0010  INDRIVER 00 0020   INITSTR 02 000eINSTALLNAME 02 001f
+  INTMASKS 00 0050   IRQMASK 00 0010     ISIZ. 00 0020    IT.ALF 02 0017
+    IT.BAU 02 0027    IT.BSE 02 0024    IT.BSO 02 0014    IT.BSP 02 001b
+    IT.COL 02 002c    IT.CYL 02 0017    IT.D2P 02 0028    IT.DEL 02 001c
+    IT.DLO 02 0015    IT.DNS 02 0016    IT.DRV 02 0013    IT.DTP 02 0012
+    IT.DUP 02 0020    IT.DVC 02 0012    IT.EKO 02 0016    IT.EOF 02 001e
+    IT.EOR 02 001d  IT.EXTEN 02 0022    IT.ILV 02 001f    IT.INT 02 0022
+  IT.LLDRV 02 0028    IT.MPI 02 002a    IT.NUL 02 0018    IT.OFS 02 0026
+    IT.OVF 02 0025    IT.PAG 02 001a    IT.PAR 02 0026    IT.PAU 02 0019
+    IT.PSC 02 0021    IT.QUT 02 0023    IT.ROW 02 002d    IT.RPR 02 001f
+    IT.RWC 02 0028    IT.SAS 02 0020    IT.SCT 02 001b    IT.SID 02 0019
+  IT.SOFF1 02 0025  IT.SOFF2 02 0026  IT.SOFF3 02 0027  IT.STOFF 02 0024
+    IT.STP 02 0014    IT.T0S 02 001d    IT.TFM 02 0021    IT.TYP 02 0015
+    IT.UPC 02 0013    IT.VFY 02 001a    IT.WPC 02 0025   IT.XOFF 02 002b
+    IT.XON 02 002a   IT.XTYP 02 002e  LANGMASK 00 000f   LEFTBIT 00 0020
+     LEVEL 00 0001   LSN0PTR 02 0008  LSN24BIT 00 0001    M$DTYP 02 0012
+    M$EXEC 02 0009    M$FMGR 02 0009      M$ID 02 0000     M$ID1 00 0087
+    M$ID12 00 87cd     M$ID2 00 00cd  M$IDSIZE 02 0009     M$MEM 02 000b
+    M$MODE 02 000d    M$NAME 02 0004     M$OPT 02 0011  M$PARITY 02 0008
+    M$PDEV 02 000b    M$PORT 02 000e    M$REVS 02 0007    M$SIZE 02 0002
+    M$TYPE 02 0006    MAXMEM 02 0009  MD$ESIZE 02 0004   MD$LINK 02 0002
+   MD$MPTR 02 0000    MINSEC 01 0010    MODNAT 00 0020   MODPROT 00 0040
+  MPI.SLCT 01 ff7f  MPI.SLOT 01 0003     MULTI 00 0030      NAME 02 000d
+  NEGATIVE 00 0008   NEXTSEG 02 00bc   NOS9MAJ 00 0000   NOS9MIN 00 0001
+   NOS9VER 00 0001  NUMPATHS 00 0010   OBJ6309 00 0007     OBJCT 00 0001
+    ONEMHZ 00 0001    OPTCNT 00 001a     OS9.D 01 0001  OS9MAJOR 00 0000
+  OS9MINOR 00 0001   OS9VRSN 00 0001   OSLEVEL 02 0017   OSMAJOR 02 0019
+   OSMINOR 02 001a    OSNAME 02 001d     OSVER 02 0018    P$ADDR 02 0007
+     P$AGE 02 000c    P$CHAP 02 0006     P$CID 02 0003     P$DIO 02 001a
+      P$ID 02 0000    P$IOQN 02 0011    P$IOQP 02 0010     P$NIO 02 003b
+  P$PAGCNT 02 0008    P$PATH 02 0026     P$PID 02 0001  P$PMODUL 02 0012
+   P$PRIOR 02 000b   P$QUEUE 02 000e     P$SID 02 0002  P$SIGDAT 02 0039
+  P$SIGNAL 02 0036  P$SIGVEC 02 0037    P$SIZE 02 0040      P$SP 02 0004
+   P$STATE 02 000d     P$SWI 02 0014    P$SWI2 02 0016    P$SWI3 02 0018
+    P$USER 02 0009   PAREVEN 00 0060   PARMARK 00 00a0   PARMASK 00 00e0
+   PARNONE 00 0000    PARODD 00 0020  PARSPACE 00 00e0     PCODE 00 0003
+    PD.ALF 02 0025    PD.ATT 02 0033    PD.BAU 02 0035    PD.BSE 02 0032
+    PD.BSO 02 0022    PD.BSP 02 0029    PD.BUF 02 0008    PD.CNT 02 0002
+     PD.CP 02 000b    PD.CPR 02 0005    PD.CYL 02 0025    PD.D2P 02 0036
+    PD.DCP 02 003a    PD.DEL 02 002a    PD.DEV 02 0003    PD.DFD 02 0037
+    PD.DLO 02 0023    PD.DNS 02 0024    PD.DRV 02 0021    PD.DSK 02 001c
+    PD.DTB 02 001e    PD.DTP 02 0020    PD.DUP 02 002e    PD.DV2 02 000a
+    PD.DVT 02 003e    PD.EKO 02 0024    PD.EOF 02 002c    PD.EOR 02 002b
+    PD.ERR 02 003a  PD.EXTEN 02 0030     PD.FD 02 0034    PD.FST 02 000a
+    PD.ILV 02 002d    PD.INT 02 0030    PD.MAX 02 000d    PD.MIN 02 000f
+    PD.MOD 02 0001    PD.NUL 02 0026    PD.OPT 02 0020    PD.OVF 02 0033
+    PD.PAG 02 0028    PD.PAR 02 0034    PD.PAU 02 0027     PD.PD 02 0000
+    PD.PLP 02 003d    PD.PSC 02 002f    PD.PST 02 003f    PD.QUT 02 0031
+    PD.RAW 02 000c    PD.RGS 02 0006    PD.RPR 02 002d    PD.SAS 02 002e
+    PD.SBL 02 0013    PD.SBP 02 0016    PD.SCT 02 0029    PD.SID 02 0027
+    PD.SIZ 02 000f    PD.SMF 02 000a    PD.SSZ 02 0019    PD.STM 02 0012
+  PD.STOFF 02 0032    PD.STP 02 0022    PD.STS 02 0010    PD.T0S 02 002b
+    PD.TBL 02 003b    PD.TFM 02 002f    PD.TYP 02 0023    PD.UPC 02 0021
+    PD.VFY 02 0028   PD.XOFF 02 0039    PD.XON 02 0038    PDELIM 00 002f
+      PDIR 00 002e    PDSIZE 02 0040    PENTIR 00 0040    PEXEC. 00 0020
+  PIA0BASE 00 ff00  PIA1BASE 00 ff20   POLLCNT 02 000c    POLSIZ 02 0009
+    PREAD. 00 0008     PRGRM 00 0010  PROC6309 00 0002  PROC6809 00 0000
+  PROTFLAG 02 0016   PST.DCD 00 0001    PWRIT. 00 0010  PWRLNFRQ 01 0002
+    Q$FLIP 02 0002    Q$MASK 02 0003    Q$POLL 02 0000    Q$PRTY 02 0008
+    Q$SERV 02 0004    Q$STAT 02 0006       R$A 00 0001       R$B 00 0002
+      R$CC 00 0000       R$D 00 0001      R$DP 00 0003      R$PC 00 000a
+    R$SIZE 00 000c       R$U 00 0008       R$X 00 0004       R$Y 00 0006
+     RBF.D 01 0001     READ. 00 0001     REENT 00 0080       REV 01 0000
+  REVSMASK 00 000f  RIGHTBIT 00 0040   S$ABORT 02 0002   S$ALARM 02 0005
+     S$HUP 02 0004  S$INTRPT 02 0003    S$KILL 02 0000    S$WAKE 02 0001
+  S$WINDOW 02 0004     SBRTN 00 0020     SCF.D 01 0001   SEGLIST 02 0000
+    SHARE. 00 0040  SHELLSUB 00 0050  SHIFTBIT 00 0001      SIGN 00 0080
+    SINBUF 00 0002      SIZE 02 000a  SPACEBIT 00 0080  SS.AAGBF 02 0080
+  SS.ALFAS 02 001c  SS.ANPAL 02 009a  SS.ASCRN 02 008b   SS.ATTR 02 001c
+  SS.BLKRD 02 0014  SS.BLKWR 02 0015  SS.BREAK 02 001d  SS.CDREL 02 009b
+  SS.CDSIG 02 009a  SS.CDSTA 02 0099  SS.CLOSE 02 002a  SS.COMST 02 0028
+  SS.CURSR 02 0025   SS.DCMD 02 000d  SS.DEVNM 02 000e  SS.DFPAL 02 0097
+ SS.DIRENT 02 0020  SS.DSCRN 02 008c  SS.DSIZE 02 0026  SS.DSTAT 02 0012
+    SS.ECC 02 00b0   SS.ELOG 02 0019    SS.EOF 02 0006  SS.FBRGS 02 0096
+     SS.FD 02 000f  SS.FDINF 00 0020   SS.FEED 02 0009   SS.FILL 02 00a0
+  SS.FNDBF 02 009b    SS.FRZ 02 000a  SS.FSCRN 02 008d   SS.FSIG 02 002c
+    SS.GIP 02 0094   SS.GIP2 02 0099   SS.HIST 02 00a1  SS.HNGUP 02 002b
+    SS.JOY 02 0013  SS.KYSNS 02 0027   SS.LINK 02 0007   SS.LOCK 02 0011
+  SS.MNSEL 02 0087  SS.MONTR 02 0092  SS.MOUNT 02 0082  SS.MOUSE 02 0089
+  SS.MPGPB 02 0084  SS.MSSIG 02 008a   SS.OPEN 02 0029    SS.OPT 02 0000
+  SS.PALET 02 0091    SS.POS 02 0005  SS.PSCRN 02 008e  SS.RDNET 02 0083
+  SS.READY 02 0001  SS.RELEA 02 001b  SS.RESET 02 0003  SS.RETEN 02 0016
+    SS.RFM 02 0018  SS.RSBIT 02 001e   SS.SBAR 02 0088  SS.SCINF 02 008f
+  SS.SCSIZ 02 0026  SS.SCTYP 02 0093  SS.SETMF 02 0024   SS.SIZE 02 0002
+  SS.SLGBF 02 0081  SS.SLOTS 02 0085    SS.SPT 02 000b    SS.SQD 02 000c
+   SS.SSIG 02 001a  SS.TICKS 02 0010   SS.TONE 02 0098  SS.ULINK 02 0008
+  SS.UMBAR 02 0095SS.VARSECT 02 0012    SS.WFM 02 0017  SS.WNSET 02 0086
+   SS.WTRK 02 0004     START 02 0035    STDSTR 02 0012     STOP1 00 0000
+     STOP2 00 0010  STP.12MS 00 0002  STP.20MS 00 0001  STP.30MS 00 0000
+   STP.6MS 00 0003    SVCTNM 00 0002    SVCTSZ 00 006e  SYSSTATE 00 0080
+    SYSSTR 02 0010     SYSTM 00 00c0    TIMOUT 00 0020  TIMSLEEP 00 0040
+  TKPERSEC 01 003c      TRUE 00 0001    TWOMHZ 00 0002  TWOSOVFL 00 0002
+      TYLG 01 00c1   TYP.256 00 0000     TYP.3 00 0001     TYP.5 00 0000
+   TYP.512 00 0004   TYP.CCF 00 0020   TYP.FLP 00 0000  TYP.HARD 00 0080
+  TYP.NCCF 00 0000   TYP.NSF 00 0040   TYP.SBO 00 0002   TYP.SOF 00 0000
+  TYPEMASK 00 00f0 TYPH.1024 00 0002 TYPH.2048 00 0003  TYPH.256 00 0000
+  TYPH.512 00 0001 TYPH.DRSV 00 000c  TYPH.DSQ 00 0010  TYPH.SSM 00 0003
+     UPBIT 00 0008    UPDAT. 00 0003    V$DESC 02 0004    V$DRIV 02 0000
+    V$FMGR 02 0006    V$STAT 02 0002    V$USRS 02 0008  V.BMAPSZ 02 001c
+     V.BMB 02 0017    V.BUSY 02 0004    V.DEV2 02 0009  V.DISKID 02 001a
+     V.ERR 02 000e  V.FILEHD 02 0018    V.INTR 02 000b   V.KANJI 02 0011
+    V.KBUF 02 0012    V.LINE 02 0007    V.LPRC 02 0003  V.MAPSCT 02 001d
+  V.MODADR 02 0014    V.NDRV 02 0006    V.PAGE 02 0000    V.PAUS 02 0008
+    V.PCHR 02 000d   V.PDLHD 02 0016    V.PORT 02 0001    V.QUIT 02 000c
+  V.RESBIT 02 001e     V.RSV 02 0018     V.SCF 02 001d  V.SCOFST 02 0020
+  V.SCTKOF 02 001f  V.TKOFST 02 0021    V.TRAK 02 0015    V.TYPE 02 0006
+    V.USER 02 0006    V.WAKE 02 0005    V.XOFF 02 0010     V.XON 02 000f
+    VD.OFS 02 0061    VD.STP 02 0060    VI.CNT 02 0000  VI.IFLAG 00 0001
+   VI.PKSZ 02 0005    VI.RST 02 0002   VI.STAT 02 0004     WORD7 00 0020
+     WORD8 00 0000    WRITE. 00 0002      ZERO 00 0004

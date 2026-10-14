@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MIT
+# Verilator simulation of the HDMI text screen alone:  make -f Makefile.hdmi   (CHARSET=0 raw, 1 UTF-8, 2 EUC-JP, 3 Shift_JIS)
+CHARSET ?= 0
+SRC = ../rtl/hdmi_text.v ../rtl/hdmi_decode.v ../rtl/hdmi_glyph.v ../rtl/hdmi_term.v ../rtl/hdmi_video.v ../rtl/tmds_enc.v \
+      ../rtl/psram_arb.v ../rtl/psram_xfer.v psram_model.v hdmi_top.v
+B   = build/hdmi$(CHARSET)
+$(B)/obj/Vhdmi_top: $(SRC) tb_hdmi.cpp ../rtl/font8x16.hex $(B)/kanji16.hex
+	mkdir -p $(B)
+	verilator --cc --exe --build -O2 -j 8 -I../rtl --top-module hdmi_top -Mdir $(B)/obj \
+	  -Wno-fatal -Wno-lint -Wno-style -Wno-TIMESCALEMOD \
+	  -GFONT_FILE='"$(abspath ../rtl/font8x16.hex)"' -GKANJI_FILE='"$(abspath $(B)/kanji16.hex)"' -GCHARSET=$(CHARSET) \
+	  -CFLAGS "-O2" $(SRC) $(abspath tb_hdmi.cpp) -o Vhdmi_top >/dev/null
+$(B)/kanji16.hex: ../scripts/mkkanji.py ../vendor/shinonome/kanji-16.bit
+	mkdir -p $(B)
+	python3 ../scripts/mkkanji.py -o $(B)/kanji.bin --hex16 $@ >/dev/null
+clean:
+	rm -rf build/hdmi0 build/hdmi1 build/hdmi2 build/hdmi3

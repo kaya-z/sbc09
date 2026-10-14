@@ -1,0 +1,1076 @@
+0000:                   * DIR Edition #8 - Released Mar. 12/2000
+0000:                   * Added the '-c' option, which stands for case insensitive. This means that
+0000:                   *  wildcard filename matches do not care as to whether the filenames are
+0000:                   * upper or lowercase, when compared to the wildcard filename search you
+0000:                   * specified. There still are some quirks to using the '*' wildcard in some
+0000:                   * cases... I am still tracking down why that is happening.
+0000:                   *
+0000:                   * DIR Edition #7 - Released Jan. 16/2000
+0000:                   *
+0000:                   * This is a new version of the DIR command, based on the version Alan Dekok
+0000:                   *  did with wildcarding. It fixes the year to work with modern clock drivers,
+0000:                   *  allowing from 1900-2155. It also fixes the help message, and changes the
+0000:                   * edition # to 7. It should work with all version of OS9/NitrOS9/PowerBoost.
+0000:                   *
+0000:                   * -Curtis-
+0000:                   *
+0000:                   * Edition #7: (L. Curtis Boyle)
+0000:                   * 2000/01/15: Fixed help message bug.
+0000:                   * 2000/01/16: Fixed year output to handle 1900-2155
+0000:                   *
+0000:                   * Edition #8 (Curtis)
+0000:                   * 2000/03/11  Fixed Bad Filename error
+0000:                   * 2000/03/12  Added -c option (case insensitive filematching)
+0000:                   
+0000:                   * Need to do 1 things:
+0000:                   *   Fix '*' wildcards (ex. DIR *.lzh returns completely different than
+0000:                   *      DIR *lzh - 1st only does files with ONE '.' char, 2nd does mix of ONE
+0000:                   *      and >1, but not all the same as first example???)
+0000:                   
+0000:                            nam   dir
+0000:                            ttl   program module       
+0000:                   
+0000:                   * Disassembled 94/11/18 12:51:39 by Alan DeKok
+0000:                   
+0000:                            ifp1
+0000:                            use   defsfile
+0000:                            endc
+0000:                   
+0011:                   tylg     set   Prgrm+Objct   
+0081:                   atrv     set   ReEnt+rev
+0001:                   rev      set   $01
+0000: 87CD06CF000D1181           mod   eom,name,tylg,atrv,start,size
+0009: 0011017B
+0000:                   
+0000:                   u0000    rmb   1    Path to current Directory
+0001:                   u0001    rmb   1    Path to RAW drive (current data or exec dir's drive)
+0002:                   u0002    rmb   2    Pointer to directory we are DIRing
+0004:                   u0004    rmb   2    Ptr to end of current sub-parm (if more than 1)
+0006:                   u0006    rmb   2    Pointer to filename match string we are DIRing
+0008:                   u0008    rmb   1    Case insensitive flag (0=NO)
+0009:                   u0009    rmb   1    Wildcard matched flag (0=NO)
+000A:                   u000A    rmb   1    0=Filename not written yet, <>0 means is written out
+000B:                   u000B    rmb   1    Merge of directories/non-directories/ext. info flags
+000C:                   u000C    rmb   1    Wildcards in effect flag
+000D:                   u000D    rmb   1    Extended info flag (0=No)
+000E:                   u000E    rmb   1    Directories ONLY (0=No)
+000F:                   u000F    rmb   1    Non-directories ONLY (0=NO)
+0010:                   u0010    rmb   1    One entry/line flag (0=Yes, else no)
+0011:                   u0011    rmb   1    Screen width
+0012:                   u0012    rmb   1    # chars left on current output line
+0013:                   u0013    rmb   2    Length of current filename
+0015:                   u0015    rmb   1    char from current directory entry
+0016:                   u0016    rmb   1    char from wild card string
+0017:                   u0017    rmb   1    Attributes for DIR open (Ex. EXEC)
+0018:                   * File descriptor info - 1st 13 bytes - only used if certain options and/or
+0018:                   *   extended directory listings are requested.
+0018:                   u0018    rmb   1    File attributes
+0019:                   u0019    rmb   2    File owner ID
+001B:                   u001B    rmb   5    Date last modified
+0020:                   u0020    rmb   1    DIR path # (link count on FD read, but not used)
+0021:                   u0021    rmb   4    File size (in bytes)
+0025:                   * Start of WritLn buffer for each directory entry starts here
+0025:                   u0025    rmb   1
+0026:                   * Information to be printed out goes here
+0026:                   * user-number, 4 bytes of hex, space space
+0026:                   u0026    rmb   6
+002C:                   * YY/MM/DD HHMM
+002C:                   u002C    rmb   17
+003D:                   * file attributes
+003D:                   u003B    rmb   10
+0047:                   * starting sector number
+0047:                   u0045    rmb   8
+004F:                   * file size
+004F:                   u004D    rmb   8
+0057:                   * a space
+0057:                   u0055    rmb   1
+0058:                   * file name
+0058:                   u0056    rmb   25
+0071:                   u006F    rmb   1
+0072:                   u0070    rmb   4
+0076:                   * starting sector of the file (3 bytes)
+0076:                   u0074    rmb   2
+0078:                   u0076    rmb   1
+0079:                   u0077    rmb   1          always 0
+007A:                   AllFlag  rmb   1          $2E=don't print out .foo, $00=print out .foo
+007B:                            rmb   256        leave room for the stack
+017B:                   size     equ   .
+017B:                   
+000D: 6469F2            name     fcs   /dir/
+0010: 08                         fcb   $08
+0011:                   
+0011: CC0150            start    ldd   #$0150    Default to multiple entries/line, 80 column width
+0014: DD10                       std   <u0010
+0016: 862E                       lda   #'.       default to NOT printing files with this first char
+0018: 977A                       sta   <AllFlag
+001A: 4F                         clra
+001B: 5F                         clrb
+001C: DD0E                       std   <u000E     directories only/non-directories only flags
+001E: DD0C                       std   <u000C     Clear wildcard & extended info flags
+0020: 9708                       sta   <u0008     Set case sensitivity to ON
+0022: 318D0451                   leay  >L0449,pc  point to '.'
+0026: 109F02                     sty   <u0002     Default to current data directory as DIR path
+0029: C601                       ldb   #READ.     directory attribute=READ.
+002B: 0F79                       clr   <u0077     Always 0
+002D:                   * Process parameter line
+002D: A684              L003F    lda   ,x         get character
+002F: 810D                       cmpa  #$0D       End of parms?
+0031: 272C                       beq   L0071      yup, time to dir!
+0033: 8120                       cmpa  #$20       space?
+0035: 2724                       beq   L006D      yup, skip it
+0037: 3410                       pshs  x          save ptr to start of current sub-parm
+0039: A680              L004B    lda   ,x+        get char, bump up ptr
+003B: 8120                       cmpa  #$20       if a space, skip it
+003D: 2706                       beq   L0057
+003F: 810D                       cmpa  #$0D       if not a CR, skip
+0041: 26F6                       bne   L004B
+0043: 301F                       leax  -1,x       save address of the CR
+0045: 9F04              L0057    stx   <u0004     Save ptr to end of current sub-parm
+0047: 3510                       puls  x          Restore start of current sub-parm
+0049: A684                       lda   ,x         Get 1st char of sub-parm
+004B: 812D                       cmpa  #'-        option flag?
+004D: 2605                       bne   L0066      no, must be dir/filename, go process
+004F: 1701D2                     lbsr  L023A      Update flags based on hyphen options
+0052: 2003                       bra   L0069      Continue from end of current sub-parm block
+0054:                   
+0054: 17022D            L0066    lbsr  L0286      Process dir and/or filenames
+0057: 9E04              L0069    ldx   <u0004     Continue from end of current sub-parm block
+0059: 20D2                       bra   L003F      Start working on next sub-parm
+005B:                   
+005B: 3001              L006D    leax  1,x        skip this character
+005D: 20CE                       bra   L003F      and get another one
+005F:                   
+005F:                   * Done processing parameter line - start doing actual DIR
+005F:                   * Entry: A=13 (which looks to be width if SS.ScSiz fails).
+005F: D717              L0071    stb   <u0017     Save directory attributes byte
+0061: D60D                       ldb   <u000D     Get extended info flag
+0063: DA0E                       orb   <u000E     Merge setting with Directories flag
+0065: DA0F                       orb   <u000F     Merge with non-directories flag
+0067: D70B                       stb   <u000B     Save merged flag
+0069: 0D10                       tst   <u0010     one line/entry?
+006B: 2734                       beq   L00B3      if so, continue
+006D: 3412                       pshs  x,a
+006F:                   * Calculate dir table width
+006F: 8601                       lda   #1
+0071: C626                       ldb   #SS.ScSiz  return screen size
+0073: 103F8D                     os9   I$GetStt
+0076: 251C                       bcs   L00A6      Check for unknown service error
+0078: 1F10                       tfr   x,d        Move screen width to D
+007A: C150                       cmpb  #80        >=80 characters/line?
+007C: 241F                       bhs   L00AF      Yes, continue
+007E: 863C                       lda   #60        go to 64
+0080: C13C                       cmpb  #60        64 to 79 chars?
+0082: 2417                       bhs   L00AD      Yes, set width to 64
+0084: 8630                       lda   #48        48 to 63 chars?
+0086: C130                       cmpb  #48        Yes, set width to 48
+0088: 2411                       bhs   L00AD
+008A: 8620                       lda   #32        32 to 47 chars?
+008C: C120                       cmpb  #32        Yes, set to 32 chars
+008E: 240B                       bhs   L00AD
+0090: 0F10                       clr   <u0010     if <32, do 1 file/line
+0092: 2007                       bra   L00AD
+0094:                   
+0094: C1D0              L00A6    cmpb  #E$UnkSvc  Unknown service code?
+0096: 2705                       beq   L00AF      Yes, skip ahead
+0098: 1603C3                     lbra  L0430      Check for EOF, or exit with error
+009B:                   
+009B: 9711              L00AD    sta   <u0011     Save screen width we will use
+009D: 1CFE              L00AF    andcc #$FE       Clear error flag
+009F: 3512                       puls  x,a        Restore regs
+00A1: 9617              L00B3    lda   <u0017     Get current attributes flag
+00A3: 8A80                       ora   #$80       Add DIR attribute
+00A5: 9E02                       ldx   <u0002     Get ptr to DIR directory path
+00A7: 103F84                     os9   I$Open     Open directory
+00AA: 102503B0                   lbcs  L0430      Error, exit with it
+00AE: 9700                       sta   <u0000     Save DIR path
+00B0: 9E02                       ldx   <u0002     Get ptr to DIR pathname
+00B2: 9617                       lda   <u0017     Get DIR attributes we used to OPEN
+00B4: 103F86                     os9   I$ChgDir   Change directory to DIR path
+00B7: 0D0B                       tst   <u000B     Get dir vs. nondir, extended info flags
+00B9: 270F                       beq   L00ED      None set, skip ahead
+00BB: 9617                       lda   <u0017     Get DIR attributes
+00BD: 308D03B8                   leax  >L044B,pc  point to '@'
+00C1: 103F84                     os9   I$Open     Open current drive RAW (to get file descriptors)
+00C4: 10250396                   lbcs  L0430      Error, check for EOF, or exit with it
+00C8: 9701                       sta   <u0001     Save path to raw drive
+00CA: 9611              L00ED    lda   <u0011     Get screen width
+00CC: 9712                       sta   <u0012     Save it as # chars left on current output line
+00CE: 960D                       lda   <u000D     Get extended info requested flag
+00D0: 9A10                       ora   <u0010     Merge with 1 line/entry flag
+00D2: 2753                       beq   L0145      All clear, skip 'Directory of'
+00D4: 308D03A3                   leax  >L044D,pc  Print ' Directory of ' to screen
+00D8: 108E000F                   ldy   #$000F
+00DC: 8601                       lda   #$01
+00DE: 103F8A                     os9   I$Write
+00E1: 10250379                   lbcs  L0430
+00E5: 31C825                     leay  <u0025,u   Point to directory entries buffer area
+00E8: 9E02                       ldx   <u0002     Get pathname to directory
+00EA: A680              L010D    lda   ,x+        Copy pathname up until CR
+00EC: A7A0                       sta   ,y+
+00EE: 810D                       cmpa  #$0D
+00F0: 26F8                       bne   L010D
+00F2: 0D0C                       tst   <u000C     Separate filename?
+00F4: 2713                       beq   L0127      No, skip ahead
+00F6: 862F                       lda   #'/        Yes, Add slash to end of buffer
+00F8: A73F                       sta   -1,y
+00FA: 9E06                       ldx   <u0006     Get pointer to user filename request
+00FC:                   * Copy User filename to end of 'dir of' line
+00FC: A680              L011F    lda   ,x+        Copy it over until CR
+00FE:                   * Force to uppercase if case insensitive flag set AND char is lowercase
+00FE:                   * Will make for faster compares later.
+00FE: 17026A                     lbsr  ForcUppr   Do uppercase change if needed
+0101: A71F                       sta   -1,x       Save over original char (in case changed)
+0103: A7A0                       sta   ,y+
+0105: 810D                       cmpa  #$0D
+0107: 26F3                       bne   L011F
+0109: 30C825            L0127    leax  <u0025,u   Point to full directory path/file requested
+010C: 108E00FF                   ldy   #$00FF     Max of 255 chars to print
+0110: 8601                       lda   #$01       Print directory name out (with 'directory of')
+0112: 103F8C                     os9   I$WritLn
+0115: 0D0D                       tst   <u000D     Extended info requested?
+0117: 270E                       beq   L0145      No, skip extended info header
+0119: CC0102                     ldd   #$0102     std out for output, 2 lines to print
+011C: 308D036A                   leax  >L045C,pc  Write out extended info header lines
+0120: 170591                     lbsr  L0627
+0123: 10250337                   lbcs  L0430
+0127:                   
+0127:                   * Main dir entry reading loop
+0127: 9600              L0145    lda   <u0000     get path number to current directory
+0129: 108E001D                   ldy   #$001D     get the filename
+012D: 30C858                     leax  <u0056,u   where to put it
+0130: 103F89                     os9   I$Read     read it
+0133: 10250327                   lbcs  L0430
+0137: 108E0003                   ldy   #$0003     and the starting sector
+013B: 30C876                     leax  <u0074,u
+013E: 103F89                     os9   I$Read
+0141: 10250319                   lbcs  L0430
+0145: 9658                       lda   <u0056     get the first character of filename
+0147: 27DE                       beq   L0145      if zero (deleted), skip it
+0149: 8180                       cmpa  #$80       hi bit (deleted), ignore it
+014B: 2706                       beq   AllCont    continue
+014D:                   * Now A<>0, and AllFlag may be zero (=print out all files)
+014D: 847F                       anda  #$7F
+014F: 917A                       cmpa  <AllFlag   do all files?
+0151: 27D4                       beq   L0145      if the first character is '.', don't print it
+0153:                   * Non '.' leading char filenames go here
+0153: 5F                AllCont  clrb             Filename size set to 0
+0154: 30C858                     leax  <u0056,u   Point to filename
+0157: A680              L016D    lda   ,x+        Check char
+0159: 5C                         incb             Bump up filename size
+015A: 8180                       cmpa  #$80       End of filename marker?
+015C: 25F9                       blo   L016D      No, keep getting size
+015E: 847F                       anda  #$7F       make it a real character
+0160: A71F                       sta   -1,x       save it back
+0162: 860D                       lda   #$0D       Add carriage return to filename
+0164: A784                       sta   ,x
+0166: D713                       stb   <u0013     Save filename size
+0168: 0D0C                       tst   <u000C     filename to match specified?
+016A: 270D                       beq   L0191      No, skip ahead
+016C: 30C858                     leax  <u0056,u   Point to filename part of write buffer
+016F: 109E06                     ldy   <u0006     Get ptr to filename match string
+0172: 1701AE                     lbsr  L0324      Do wildcard compare
+0175: 0D09                       tst   <u0009     Did we have a match?
+0177: 27AE                       beq   L0145      No, skip to next filename
+0179: 0D0B              L0191    tst   <u000B     Any files we have to weed out?
+017B: 2737                       beq   L01CA      No, just print
+017D:                   * we only want certain types of files - check
+017D: 9E76                       ldx   <u0074     Get FD sector # - hi word
+017F: 3440                       pshs  u          Preserve U
+0181: DE78                       ldu   <u0076     Get FD sector # - low word
+0183: 9601                       lda   <u0001     Get path to raw drive
+0185: 103F88                     os9   I$Seek     seek to the file descriptor
+0188: 102502D2                   lbcs  L0430
+018C: 3540                       puls  u          Restore U
+018E: 30C818                     leax  <u0018,u   Point to place to store FD info
+0191: 108E000D                   ldy   #13        We only need 1st 13 bytes
+0195: 103F89                     os9   I$Read     Read it in
+0198: 102502C2                   lbcs  L0430
+019C: 9618                       lda   <u0018     Get file attributes
+019E: 8480                       anda  #$80       Ignore all but DIR attribute
+01A0: 0D0E                       tst   <u000E     Directories ONLY?
+01A2: 2707                       beq   L01C1      No, skip ahead
+01A4: 4D                         tsta             This file a directory?
+01A5: 1027FF7E                   lbeq   L0145     No, skip to next filename
+01A9: 2009                       bra   L01CA      Yes, print dir name out
+01AB:                   
+01AB: 0D0F              L01C1    tst   <u000F     Non-directories ONLY?
+01AD: 2705                       beq   L01CA      No, print filename out
+01AF: 4D                         tsta             This file a non-directory?
+01B0: 1026FF73                   lbne  L0145      It is a DIR, skip to next filename
+01B4:                   * Print current dir entry out
+01B4: 0D10              L01CA    tst   <u0010     do one entry/line?
+01B6: 2753                       beq   L0221      yes, print it out
+01B8: 0F0A                       clr   <u000A     Flag we have NOT printed filename yet.
+01BA: D613                       ldb   <u0013     Get filename size
+01BC: D112                       cmpb  <u0012     enough chars left in current output line to fit?
+01BE: 2C2F                       bge   L0205      No, Print CR
+01C0: 0C0A                       inc   <u000A     Flag that we will have printed filename
+01C2: 4F                L01D8    clra             D=Current filename size
+01C3: 1F02                       tfr   d,y        Y=size of filename
+01C5: 4C                         inca             Std Out
+01C6: 30C858                     leax  <u0056,u   Point to filename in output buffer
+01C9: 103F8A                     os9   I$Write    Write out filename
+01CC: 1025028E                   lbcs  L0430
+01D0: 9612                       lda   <u0012     Get # chars left on current output line
+01D2:                   * Add spaces between filenames - they are 'tabbed' at 16 or 32 chars,
+01D2:                   *   depending on filename size
+01D2: 8010              L01E8    suba  #16        Subtract 16 from # chars left on output line
+01D4: 2F19                       ble   L0205      Done line, print CR
+01D6: C010                       subb  #16        Not done, subtract 16 chars from filename size
+01D8: 2CF8                       bge   L01E8      filename was >16 chars, bump to next 'tab' stop
+01DA: 50                         negb             # spaces we have to print to pad to next 'tab'
+01DB: 9712                       sta   <u0012     Save # chars left on output line
+01DD: 4F                         clra             Y=# spaces to print to finish current tab field
+01DE: 1F02                       tfr   d,y
+01E0: 4C                         inca             Std out
+01E1: 308D0341                   leax  >L04F2,pc  Write spaces out
+01E5: 103F8A                     os9   I$Write  
+01E8: 10250272                   lbcs  L0430
+01EC: 16FF38                     lbra  L0145      On to next filename entry
+01EF:                   
+01EF:                   * Flush out current output line to screen, reset # chars left on output line
+01EF:                   *   to screen width.
+01EF: 8601              L0205    lda   #$01       Print CR by itself
+01F1: 108E0001                   ldy   #$0001
+01F5: 308D027F                   leax  >L044A,pc
+01F9: 103F8C                     os9   I$WritLn 
+01FC: 1025025E                   lbcs  L0430
+0200: 9611                       lda   <u0011     Get screen width
+0202: 9712                       sta   <u0012     Save as size available on current line
+0204: 0D0A                       tst   <u000A     Did we print filename out yet?
+0206: 27BA                       beq   L01D8      No, do it now
+0208: 16FF1C                     lbra  L0145      Already printed, skip to next filename
+020B:                   
+020B: 0D0D              L0221    tst   <u000D
+020D: 10260169                   lbne  L036A      if not zero, print out all the information
+0211: 8601                       lda   #$01
+0213: 30C858                     leax  <u0056,u
+0216: 108E001E                   ldy   #$001E     length of the filename
+021A: 103F8C                     os9   I$WritLn   dump out the filename
+021D: 1025023D                   lbcs  L0430
+0221: 16FF03                     lbra  L0145
+0224:                   
+0224:                   * parse the path options
+0224:                   * Entry: X=ptr to current char being checked in parameter line
+0224: 3001              L023A    leax  1,x        Point to next char
+0226: A684                       lda   ,x         Get it
+0228: 8120                       cmpa  #$20       Space?
+022A: 2728                       beq   L025E      Yes, done current parm, return
+022C: 810D                       cmpa  #$0D       CR?
+022E: 2724                       beq   L025E      Yes, done parm line, return
+0230: 84DF                       anda  #$DF       make it uppercase
+0232: 8145                       cmpa  #'E        extended directory?
+0234: 2738                       beq   L0274
+0236: 8153                       cmpa  #'S        Single entry/line
+0238: 2730                       beq   L0270
+023A: 8144                       cmpa  #'D        Directories only
+023C: 2736                       beq   L027A
+023E: 8146                       cmpa  #'F        Non-Dirs only
+0240: 2738                       beq   L0280
+0242: 8158                       cmpa  #'X        Execution directory
+0244: 2720                       beq   L026C
+0246:                   * Curt's additions here
+0246: 8143                       cmpa  #'C        Case insensitve?
+0248: 270B                       beq   CaseIns
+024A:                   *--- my additions here
+024A: 814C                       cmpa  #'L        Extended dir
+024C: 2720                       beq   L0274
+024E: 8141                       cmpa  #'A        do _all_ files (includes '.' and '..')
+0250: 272E                       beq   DoAll
+0252: 2005                       bra   L025F
+0254:                   
+0254: 39                L025E    rts   
+0255:                   
+0255: 0C08              CaseIns  inc   <u0008     Set case insensitivity ON
+0257: 20CB                       bra   L023A
+0259:                   
+0259: CC010C            L025F    ldd   #$010c     12 lines of text in help
+025C: 308D02D9                   leax  >L0505,pc  Point to help message
+0260: 170451                     lbsr  L0627      Print it out
+0263: 1601F8                     lbra  L0430
+0266:                   
+0266: CB04              L026C    addb  #EXEC.     add in exec attribute
+0268: 20BA                       bra   L023A      and get another character
+026A:                   
+026A: 0F10              L0270    clr   <u0010     one line/entry
+026C: 20B6                       bra   L023A
+026E:                   
+026E: 0C0D              L0274    inc   <u000D     print out all info
+0270: 0F10                       clr   <u0010     one line/entry
+0272: 20B0                       bra   L023A
+0274:                   
+0274: 0C0E              L027A    inc   <u000E     Set directories only flag
+0276: 0F0F                       clr   <u000F     Clear non-directories only flag
+0278: 20AA                       bra   L023A
+027A:                   
+027A: 0C0F              L0280    inc   <u000F     Set non-directories only flag
+027C: 0F0E                       clr   <u000E     Clear directories only flag
+027E: 20A4                       bra   L023A
+0280:                   
+0280: 0F7A              DoAll    clr   <AllFlag   do all files
+0282: 20A0                       bra   L023A      and get another character
+0284:                   
+0284:                   * Process requested dir/file name from user
+0284:                   * Entry: X=ptr to start of wildcard matching filename
+0284:                   * Exit: u0002=ptr to start of dir name
+0284:                   *       u0006=ptr to start of filename to match (if any)
+0284:                   *       
+0284: 9F02              L0286    stx   <u0002     save ptr to start of file/dir name
+0286: A680              L0288    lda   ,x+        Get char from file/dir name
+0288: 815F                       cmpa  #'_        underscore?
+028A: 27FA                       beq   L0288      skip it
+028C: 812E                       cmpa  #'.        period or under?
+028E: 2514                       blo   L02A6      special checks, skip ahead
+0290: 8139                       cmpa  #'9        9?
+0292: 23F2                       bls   L0288      Below, skip to next char
+0294: 8141                       cmpa  #'A        Between ':' and '@', skip ahead
+0296: 250C                       blo   L02A6
+0298: 815A                       cmpa  #'Z        Uppercase letter, skip to next char
+029A: 23EA                       bls   L0288
+029C: 8161                       cmpa  #'a        Between '[' and "'", skip ahead
+029E: 2504                       blo   L02A6
+02A0: 817A                       cmpa  #'z        lowercase, skip to next char
+02A2: 23E2                       bls   L0288
+02A4: 810D              L02A6    cmpa  #$0D       cr?
+02A6: 2708                       beq   L02B2      exit if so
+02A8: 8120                       cmpa  #$20       space?
+02AA: 2605                       bne   L02B3      no, go do more checks
+02AC: 860D                       lda   #$0D       replace space with CR (only 1 file/dirname allowed)
+02AE: A782                       sta   ,-x        save in the parameter area
+02B0: 39                L02B2    rts
+02B1:                   
+02B1:                   * Special char check
+02B1: 812A              L02B3    cmpa  #'*        any sequence match wildcard?
+02B3: 270B                       beq   L02C1      yes, process it
+02B5: 813F                       cmpa  #'?        one-character wildcard?
+02B7: 2707                       beq   L02C1      yes, process it
+02B9: C6EB                       ldb   #E$BNam    Exit with Bad filename error
+02BB: 1A01                       orcc  #1
+02BD: 16019E                     lbra  L0430
+02C0:                   
+02C0: 9F06              L02C1    stx   <u0006     Save pointer to filename match string
+02C2: A680              L02C3    lda   ,x+        grab another byte
+02C4: 810D                       cmpa  #$0D       CR?
+02C6: 2708                       beq   L02D1      yup, exit
+02C8: 8120                       cmpa  #$20       space?
+02CA: 26F6                       bne   L02C3      no, skip it
+02CC: 860D                       lda   #$0D       dump a CR at the end of the filename
+02CE: A782                       sta   ,-x
+02D0: 9E06              L02D1    ldx   <u0006     Get ptr to start of filename again
+02D2: A682              L02D3    lda   ,-x        get the previous character to filename
+02D4: 9C02                       cmpx  <u0002     was dirname ptr?
+02D6: 260A                       bne   L02E3      no, check for user specified dir separator
+02D8: 9F06                       stx   <u0006     save start of filename
+02DA: 308D0199                   leax  >L0449,pc  point to a '.' (current dir)
+02DE: 9F02                       stx   <u0002     save dir pathname
+02E0: 200A                       bra   L02ED
+02E2:                   
+02E2: 812F              L02E3    cmpa  #'/        slash (wildcard is start of filename after dir)?
+02E4: 26EC                       bne   L02D3      no, keep searching back until '/' or start of entry
+02E6: 860D                       lda   #$0D       Found '/', Put CR over slash
+02E8: A780                       sta   ,x+          (separate dir name from filename)
+02EA: 9F06                       stx   <u0006     Save new wildcard start
+02EC: 0C0C              L02ED    inc   <u000C     Set wildcards used flag
+02EE: 9E06                       ldx   <u0006     Get wildcard start
+02F0: 860D              L02F1    lda   #$0D       Is current char of wildcard CR?
+02F2: A184                       cmpa  ,x
+02F4: 272C                       beq   L0323      Yes, skip ahead
+02F6: 862A                       lda   #'*        wildcard?
+02F8: A184                       cmpa  ,x
+02FA: 2704                       beq   L0301      yes, do it
+02FC: 3001                       leax  1,x        otherwise skip the character
+02FE: 20F0                       bra   L02F1
+0300:                   
+0300: 3101              L0301    leay  1,x
+0302: A1A4                       cmpa  ,y
+0304: 270A                       beq   L0311
+0306: 863F                       lda   #'?        one-character wildcard?
+0308: A1A4                       cmpa  ,y
+030A: 270E                       beq   L031B
+030C: 3001                       leax  $01,x
+030E: 20E0                       bra   L02F1
+0310:                   
+0310: A6A0              L0311    lda   ,y+
+0312: A73E                       sta   -$02,y
+0314: 810D                       cmpa  #$0D
+0316: 26F8                       bne   L0311
+0318: 20D6                       bra   L02F1
+031A:                   
+031A: A780              L031B    sta   ,x+
+031C: 862A                       lda   #'*        save a wildcard
+031E: A784                       sta   ,x
+0320: 20CE                       bra   L02F1
+0322:                   
+0322: 39                L0323    rts   
+0323:                   
+0323:                   * Compare current dir entry filename to user specified match filename
+0323:                   * Entry: X=ptr to current filename from dir
+0323:                   *        Y=ptr to wildcard match filename
+0323:                   * Exit: <u0009=0, no match
+0323:                   *            <>1, match
+0323: A684              L0324    lda   ,x         Get char from current dir entry filename
+0325:                   
+0325: 8D44                       bsr   ForcUppr   Change case if needed
+0327:                   
+0327: E6A4                       ldb   ,y         Get char from user match filename
+0329: DD15                       std   <u0015     Save both 1st chars
+032B: C10D                       cmpb  #$0D       CR of wildcard?
+032D: 2606                       bne   L0334      No, skip ahead
+032F: 810D                       cmpa  #$0D       CR of current DIR entry filename?
+0331: 2730                       beq   L0362      Yes, matched
+0333: 2033                       bra   L0367      No match
+0335:                   
+0335: C12A              L0334    cmpb  #'*        any char match wildcard?
+0337: 2712                       beq   L034A      yes, do it
+0339: 810D                       cmpa  #$0D       End of filename from current dir entry?
+033B: 272B                       beq   L0367      Yes, flag that filename did NOT match
+033D: C13F                       cmpb  #'?        one-character wildcard?
+033F: 2704                       beq   L0344      yes, simply skip over 1 char in both strings
+0341: D115                       cmpb  <u0015     non-wildcard char from user match dir entry?
+0343: 2623                       bne   L0367      No, flag no match & return
+0345: 3001              L0344    leax  1,x        next up in current dir entry
+0347: 3121                       leay  1,y        next up in wildcard
+0349: 20D8                       bra   L0324      Continue comparing
+034B:                   
+034B: 3121              L034A    leay  1,y        Bump up user filename char ptr
+034D: E6A4                       ldb   ,y         Get that char from user filename string
+034F: C10D                       cmpb  #$0D       End of wildcard match string?
+0351: 2710                       beq   L0362      Yes, set flag & return
+0353: D115              L0352    cmpb  <u0015     Same as current char from current filename?
+0355: 27EE                       beq   L0344      Yes, bump both string pointers up and do next chars
+0357: 3001                       leax  1,x        Bump up dir entry char ptr
+0359: A684                       lda   ,x         Get char
+035B: 810D                       cmpa  #$0D       End of filename?
+035D: 2709                       beq   L0367      Yes, clear flag and return
+035F: 9715                       sta   <u0015     Save char from current dir entry
+0361: 20F0                       bra   L0352      Try next
+0363:                   
+0363:                   * Flag that wildcard compare has a match (so far)
+0363: 8601              L0362    lda   #$01
+0365: 9709                       sta   <u0009
+0367: 39                         rts
+0368:                   
+0368:                   * Flag that wildcard compare did NOT match
+0368: 0F09              L0367    clr   <u0009
+036A: 39                         rts
+036B:                   
+036B:                   * Change current char in A to uppercase, if <u0008 <>0
+036B: 0D08              ForcUppr tst   <u0008     Case insensitive?
+036D: 270A                       beq   NoChange   No, check char as is
+036F: 8161                       cmpa  #'a
+0371: 2506                       blo   NoChange   Non-lowercase, check as is
+0373: 817A                       cmpa  #'z        Lowercase?
+0375: 2202                       bhi   NoChange   No, check as is
+0377: 84DF                       anda  #$DF       Force uppercase
+0379: 39                NoChange rts
+037A:                   
+037A:                   * Copy default output line information to output line buffer
+037A: 308D0188          L036A    leax  >L04D4,pc   Point to default date/attributes string
+037E: 31C825                     leay  <u0025,u    Point to output line buffer
+0381: A680              L0371    lda   ,x+         Copy until we hit LF
+0383: 810A                       cmpa  #$0A
+0385: 2704                       beq   L037B
+0387: A7A0                       sta   ,y+
+0389: 20F6                       bra   L0371
+038B:                   
+038B: 31C826            L037B    leay  <u0026,u   Point to start of output line buffer
+038E: 30C819                     leax  <u0019,u   Point to file creator's user #
+0391: C602                       ldb   #$02       print out user number, in hex (2 bytes)
+0393: A680              L0383    lda   ,x+
+0395: 17009F                     lbsr  L0409      dump hex ASCII number into 2 bytes @ y
+0398: 5A                         decb             Do 2nd byte
+0399: 26F8                       bne   L0383
+039B: 30C826                     leax  <u0026,u   Point to start of user # in output buffer
+039E: 1700AD                     lbsr  L0420      replace leading zeros with spaces
+03A1: 31C82C                     leay  <u002C,u   Where ASCII date/time info goes in write buffer
+03A4: 30C81B                     leax  <u001B,u   Point to date/time last modified binary data
+03A7:                   * Y2k - Treat century as separate #
+03A7: E684                       ldb   ,x         Get year
+03A9: 4F                         clra             Century offset starts @ 0
+03AA: C164              LoopCent cmpb  #100       Calculate century offset (0-2) into A
+03AC: 2505                       blo   DoCent
+03AE: 4C                         inca
+03AF: C064                       subb  #100
+03B1: 20F7                       bra   LoopCent
+03B3:                   
+03B3: 1F89              DoCent   tfr   a,b        Save century offset
+03B5: 8B13                       adda  #19        actual century offset
+03B7: 8D6D                       bsr   L03F8      Convert A to 2 digit century
+03B9: 8664                       lda   #100
+03BB: 3D                         mul              Calculate # of years already accounted for
+03BC: 3404                       pshs  b          Save it
+03BE: A680                       lda   ,x+        Get original year back
+03C0: A0E0                       suba  ,s+        Calculate years left
+03C2: 8D62                       bsr   L03F8      Dump rest of year out
+03C4: 3121                       leay  1,y        Skip slash
+03C6: C602                       ldb   #2         We are converting 3 #'s into 2 digit ASCII
+03C8: A680              L0399    lda   ,x+        Get binary value
+03CA: 8D5A                       bsr   L03F8      dump it out in ASCII
+03CC: 3121                       leay  1,y        Skip over when '/'
+03CE: 5A                         decb  
+03CF: 26F7                       bne   L0399
+03D1: A680                       lda   ,x+
+03D3: 8D51                       bsr   L03F8      HH
+03D5: A684                       lda   ,x
+03D7: 8D4D                       bsr   L03F8      MM
+03D9:                   * Attributes
+03D9: 31C83D                     leay  <u003B,u
+03DC: 30C818                     leax  <u0018,u
+03DF: CC2D08                     ldd   #$2D08     hyphen, 8-times
+03E2: 6884              L03B3    lsl   ,x
+03E4: 2502                       bcs   L03B9
+03E6: A7A4                       sta   ,y         save hyphen if bit is not set
+03E8: 3121              L03B9    leay  $01,y      go to the next byte
+03EA: 5A                         decb
+03EB: 26F5                       bne   L03B3      Do all 8 attribute bits
+03ED: 31C847                     leay  <u0045,u   Point to part of output buffer for start sector #
+03F0: 30C876                     leax  <u0074,u   Point to start sector # data
+03F3: C603                       ldb   #$03       3 bytes of data to do
+03F5: A680              L03C6    lda   ,x+        Convert to hex
+03F7: 8D3E                       bsr   L0409
+03F9: 5A                         decb  
+03FA: 26F9                       bne   L03C6
+03FC: 30C847                     leax  <u0045,u
+03FF: 8D4D                       bsr   L0420      replace leading 0's with spaces
+0401: 31C84F                     leay  <u004D,u   Point to file size in output buffer
+0404: 30C821                     leax  <u0021,u   Point to file size data
+0407: C604                       ldb   #$04       4 bytes of data to do
+0409: A680              L03DB    lda   ,x+        Convert to hex
+040B: 8D2A                       bsr   L0409
+040D: 5A                         decb  
+040E: 26F9                       bne   L03DB
+0410: 30C84F                     leax  <u004D,u
+0413: 8D39                       bsr   L0420      replace leading 0's with spaces
+0415: 30C825                     leax  <u0025,u   Point to output buffer
+0418: 108E0050                   ldy   #$0050     Print line (filename done earlier)
+041C: 8601                       lda   #$01
+041E: 103F8C                     os9   I$WritLn
+0421: 253B                       bcs   L0430
+0423: 16FD01                     lbra  L0145      Onto next dir entry
+0426:                   
+0426:                   * Dump decimal ASCII out for contents of A (2 digit max)
+0426:                   * ,y must contain a '0' for this to work.
+0426: 810A              L03F8    cmpa  #10        <10?
+0428: 2506                       blo   L0402      Yes, just do one digit
+042A: 6CA4                       inc   ,y         Bump up 10's counter
+042C: 800A                       suba  #10        Subtract 10 from byte
+042E: 20F6                       bra   L03F8      Do until 10's digit is done.
+0430:                   
+0430: 3121              L0402    leay  1,y        Skip to 2nd byte
+0432: 8B30                       adda  #'0        add in a zero (for bin to ASCII)
+0434: A7A0                       sta   ,y+        Save it & return
+0436: 39                         rts   
+0437:                   
+0437:                   * Convert binary to hex
+0437:                   * Entry: A=byte to convert to 2 digit hex
+0437:                   *        Y=ptr to 2 byte buffer to hold ASCII HEX chars
+0437: 3402              L0409    pshs  a          Save byte
+0439: 44                         lsra             A=high nibble (shifted down)
+043A: 44                         lsra
+043B: 44                         lsra
+043C: 44                         lsra
+043D: 8D04                       bsr   L0415      Make digit
+043F: 3502                       puls  a          Restore original
+0441: 840F                       anda  #$0F       Mask out high nibble
+0443: 8B30              L0415    adda  #'0        Convert to ASCII char
+0445: 8139                       cmpa  #'9
+0447: 2302                       bls   L041D
+0449: 8B07                       adda  #$07
+044B: A7A0              L041D    sta   ,y+
+044D: 39                         rts   
+044E:                   
+044E:                   * replace leading zeros with spaces from ASCII sequence, stopping at non-zero
+044E:                   * Entry: X=ptr to string
+044E: CC3020            L0420    ldd   #$3020     Zero & space chars
+0451: A184              L0423    cmpa  ,x         is the first character a zero?
+0453: 2608                       bne   L042F      if not, return
+0455: E101                       cmpb  1,x        is the 2nd character a space?
+0457: 2704                       beq   L042F      if '0 ', return without any changes
+0459: E780                       stb   ,x+        otherwise save space over '0', go onto next char
+045B: 20F4                       bra   L0423
+045D:                   
+045D: 39                L042F    rts   
+045E:                   
+045E: C1D3              L0430    cmpb  #E$EOF
+0460: 2601                       bne   L0435
+0462: 5F                         clrb             ignore EOF errors
+0463: 0D10              L0435    tst   <u0010     one file/line?
+0465: 270D                       beq   L0446      if so, exit
+0467: 308D000D                   leax  >L044A,pcr output a CR
+046B: 8601                       lda   #$01
+046D: 108E0001                   ldy   #$0001
+0471: 103F8C                     os9   I$WritLn   and then exit
+0474: 103F06            L0446    os9   F$Exit   
+0477:                   
+0477: 2E                L0449    fcc   /./
+0478: 0D                L044A    fcb   $0d
+0479: 40                L044B    fcc   /@/
+047A: 0D                         fcb   $0d
+047B: 0A                L044D    fcb   $0a
+047C: 204469726563746F           fcc   / Directory of /
+0485: 79206F6620
+048A: 0A                L045C    fcb   $0a
+048B: 557365722023204C           fcc   /User # Last Modified   Attributes Sector File Size File Name/
+0494: 7374204D6F646966
+049C: 6965642020204174
+04A4: 7472696275746573
+04AC: 20536563746F7220
+04B4: 46696C652053697A
+04BC: 652046696C65204E
+04C4: 616D65
+04C7: 0D                         fcb   $0d
+04C8: 2D2D2D2D2D2D202D           fcc   /------ --------------- ---------- ------ --------- ----------/
+04D1: 2D2D2D2D2D2D2D2D
+04D9: 2D2D2D2D2D202D2D
+04E1: 2D2D2D2D2D2D2D2D
+04E9: 202D2D2D2D2D2D20
+04F1: 2D2D2D2D2D2D2D2D
+04F9: 2D202D2D2D2D2D2D
+0501: 2D2D2D2D
+0505: 0D                         fcb   $0d
+0506: 2020202020202030  L04D4    fcc   '       0000/00/00 0000  dsewrewr'
+050F: 30302F30302F3030
+0517: 2030303030202064
+051F: 73657772657772
+0526: 2020202020202020  L04F2    fcc   /                   /
+052F: 2020202020202020
+0537: 2020
+0539: 0A                L0505    fcb   $0a
+053A: 646972205B2D6F70           fcc   'dir [-opts] [path/patt] [-opts]'
+0543: 735D205B70617468
+054B: 2F706174745D205B
+0553: 2D6F7074735D
+0559: 0D                         fcb   $0d
+055A: 6F7074733A207820           fcc   /opts: x - use current exec dir/
+0563: 2075736520637572
+056B: 72656E7420657865
+0573: 6320646972
+0578: 0D                         fcb   $0d
+0579: 2020202020207320           fcc   '      s - one entry/line'
+0582: 206F6E6520656E74
+058A: 72792F6C696E65
+0591: 0D                         fcb   $0d
+0592: 20202020652F6C20           fcc   '    e/l - extended directory'
+059B: 20657874656E6465
+05A3: 6420646972656374
+05AB: 6F7279
+05AE: 0D                         fcb   $0d
+05AF: 2020202020206120           fcc   /      a - show '.files', too/
+05B8: 2073686F7720272E
+05C0: 66696C6573272C20
+05C8: 746F6F
+05CB: 0D                         fcb   $0d
+05CC: 2020202020206420           fcc   /      d - only directory files/
+05D5: 206F6E6C79206469
+05DD: 726563746F727920
+05E5: 66696C6573
+05EA: 0D                         fcb   $0d
+05EB: 2020202020206620           fcc   /      f - only non-dir files/
+05F4: 206F6E6C79206E6F
+05FC: 6E2D646972206669
+0604: 6C6573
+0607: 0D                         fcb   $0d
+0608: 2020202020206320           fcc   /      c - case insensitive filename match (BUT NOT DIR NAME)/
+0611: 206361736520696E
+0619: 73656E7369746976
+0621: 652066696C656E61
+0629: 6D65206D61746368
+0631: 2028425554204E4F
+0639: 5420444952204E41
+0641: 4D4529
+0644: 0D                         fcb   $0d
+0645: 2020202020203F20           fcc   /      ? - help message/
+064E: 2068656C70206D65
+0656: 7373616765
+065B: 0D                         fcb   $0d
+065C: 7061747465726E3A           fcc   /pattern: may include wild cards/
+0665: 6D617920696E636C
+066D: 7564652077696C64
+0675: 206361726473
+067B: 0D                         fcb   $0d
+067C: 2020202020202A20           fcc   /      * - multiple character/
+0685: 206D756C7469706C
+068D: 6520636861726163
+0695: 746572
+0698: 0D                         fcb   $0d
+0699: 2020202020203F20           fcc   /      ? - single character/
+06A2: 2073696E676C6520
+06AA: 6368617261637465
+06B2: 72
+06B3: 0D                         fcb   $0d
+06B4:                   
+06B4:                   * Print several lines of text up to 80 chars each
+06B4:                   * Entry: X=Ptr to multi-line text string (CR terminates lines)
+06B4:                   *        B=# of lines to write.
+06B4: 5A                L0627    decb            Dec line counter
+06B5: 108E0050                   ldy   #80
+06B9: 103F8C                     os9   I$WritLn 
+06BC: 250D                       bcs   L0642     Error writing, return with it
+06BE: 3406                       pshs  d         preserve path/line count
+06C0: 1F20                       tfr   y,d       Move size actually written to D
+06C2: 308B                       leax  d,x       Bump source buffer ptr to next line
+06C4: 3506                       puls  d         Restore path/line count
+06C6: 5D                         tstb            Any lines left to print?
+06C7: 2702                       beq   L0642     No, exit
+06C9: 20E9                       bra   L0627     Yes, print next line
+06CB:                   
+06CB: 39                L0642    rts   
+06CC:                   
+06CC: C6245E                     emod
+06CF:                   eom      equ   *
+0 Pass 2 errors.
+
+SYMBOL TABLE
+   A.ACIAP 01 ff68    A.MODP 01 ff6c   A.TERMV 01 ffc0      A.V1 01 ffc1
+      A.V2 01 ffc2      A.V3 01 ffc3      A.V4 01 ffc4      A.V5 01 ffc5
+      A.V6 01 ffc6      A.V7 01 ffc7  ACIA2661 02 0003  ACIA6551 02 0002
+  ACIA6850 02 0001  ACIATYPE 03 0002   ALLCONT 02 0153   ALLFLAG 02 007a
+  ALTERBIT 00 0004      ATRV 01 0081  ATTRMASK 00 00f0      B110 00 0000
+   B115200 00 000a     B1200 00 0003    B19200 00 0007     B2400 00 0004
+      B300 00 0001    B38400 00 0008     B4800 00 0005    B57600 00 0009
+      B600 00 0002     B9600 00 0006  BADINSTR 00 0040    BMAPSZ 00 0020
+   BOOTSTR 02 0014    BT.SEC 00 0000   BT.SIZE 00 1080  BT.START 00 ee00
+  BT.TRACK 00 0022   BUFBUSY 00 0040    BUFMOD 00 0001    C$BELL 01 0007
+     C$BSP 01 0008  C$CLSALL 01 0016   C$CLSGR 01 0015    C$COMA 01 002c
+      C$CR 01 000d     C$DEL 01 0018  C$DELETE 01 0010     C$DWN 01 001f
+      C$EL 01 0005     C$EOF 01 001b    C$FORM 01 000c    C$HOME 01 000b
+  C$INSERT 01 0011    C$INTR 01 0003      C$LF 01 000a     C$LFT 01 001d
+    C$NULL 01 0000    C$PAUS 01 0017    C$PERD 01 002e   C$PLINE 01 0013
+    C$QUIT 01 0005    C$RARR 01 0009     C$RGT 01 001c    C$RPET 01 0001
+    C$RPRT 01 0004  C$SHRARR 01 0019      C$SI 01 000f      C$SO 01 000e
+    C$SPAC 01 0020      C$UP 01 001e    C$XOFF 01 0013     C$XON 01 0011
+     CARRY 00 0001   CASEINS 02 0255   CBLCODE 00 0005     CCODE 00 0004
+CHECK_FOR_VALID_ 00 0001  CNTRLBIT 00 0002    COCO.D 01 0001     COLOR 01 0001
+    COLOR3 01 0002    CONDEM 00 0002  CPUSPEED 01 0001   CPUTYPE 01 0001
+   CRCCON1 00 0080  CRCCON23 00 0fe3    CRCOFF 00 0000     CRCON 00 0001
+    D$GSTA 02 0009    D$INIT 02 0000    D$PSTA 02 000c    D$READ 02 0003
+    D$TERM 02 000f    D$WRIT 02 0006  D.ALTIRQ 02 006b  D.APROCQ 02 004d
+    D.BOOT 02 0083    D.BTHI 02 0068    D.BTLO 02 0066  D.CBSTRT 02 0071
+   D.CLOCK 02 0081  D.CLOCK2 02 008a    D.CLTB 02 0086  D.COCOXT 02 0009
+     D.CRC 02 0089     D.DAY 02 0055  D.DBGMEM 02 000a  D.DEVTBL 02 0060
+  D.DMAREQ 02 006a  D.DSKTMR 02 006f D.DWSRVID 02 0010  D.DWSTAT 02 000e
+D.DWSUBADDR 02 000c    D.FIRQ 02 0030    D.FMBM 02 0020    D.HOUR 02 0056
+    D.INIT 02 002a    D.IOMH 02 005e    D.IOML 02 005c     D.IRQ 02 0032
+  D.KBDSTA 02 006d   D.MDREG 02 0088     D.MIN 02 0057    D.MLIM 02 0024
+  D.MODDIR 02 0026   D.MONTH 02 0054     D.NMI 02 0036    D.POLL 02 003a
+  D.POLTBL 02 0062  D.PRCDBT 02 0049    D.PROC 02 004b  D.PTHDBT 02 0064
+     D.SEC 02 0058   D.SLICE 02 0048  D.SPROCQ 02 0051  D.SVCIRQ 02 0038
+     D.SWI 02 0034    D.SWI2 02 002e    D.SWI3 02 002c  D.SWPAGE 02 0003
+  D.SYSDIS 02 0046  D.SYSIRQ 02 003e  D.SYSSVC 02 0042    D.TICK 02 0059
+    D.TIME 02 0053    D.TSEC 02 005a  D.TSLICE 02 005b  D.URTOSS 02 0084
+  D.USRDIS 02 0044  D.USRIRQ 02 003c  D.USRSVC 02 0040  D.WDADDR 02 0000
+  D.WDBTDR 02 0002  D.WPROCQ 02 004f   D.XFIRQ 02 010f    D.XIRQ 02 010c
+    D.XNMI 02 0109    D.XSWI 02 0106   D.XSWI2 02 0103   D.XSWI3 02 0100
+    D.YEAR 02 0053      DATA 00 0040    DD.ATT 02 000d    DD.BIT 02 0006
+    DD.BSZ 02 0018     DD.BT 02 0015    DD.DAT 02 001a    DD.DIR 02 0008
+    DD.DSK 02 000e    DD.FMT 02 0010    DD.MAP 02 0004    DD.NAM 02 001f
+    DD.OPT 02 003f    DD.OWN 02 000b    DD.RES 02 0013    DD.SIZ 02 0015
+    DD.SPT 02 0011    DD.TKS 02 0003    DD.TOT 02 0000      DEAD 00 0001
+  DEFIOSIZ 00 000c    DEVCNT 02 000d     DEVIC 00 00f0    DEVSIZ 02 0009
+      DIR. 00 0080    DIR.FD 02 001d    DIR.NM 02 0000    DIR.SZ 02 0020
+      DIV0 00 0080   DNS.DTD 00 0002    DNS.FM 00 0000   DNS.FM0 00 0000
+   DNS.MFM 00 0001  DNS.MFM0 00 0004   DNS.STD 00 0000     DOALL 02 0280
+    DOCENT 02 03b3   DOWNBIT 00 0010     DPORT 01 ff40     DRIVR 00 00e0
+    DRVBEG 02 000f    DRVMEM 02 0026   DT.CDFM 00 0005    DT.NFM 00 0004
+   DT.PIPE 00 0002    DT.RBF 00 0001    DT.RFM 00 0006    DT.SBF 00 0003
+    DT.SCF 00 0000   E$ALIAS 02 00c7  E$ARROVF 02 0049  E$BADBUF 02 00c2
+   E$BMCRC 02 00e8    E$BMHP 02 00ec    E$BMID 02 00cd   E$BMODE 02 00cb
+    E$BNAM 02 00eb  E$BPADDR 02 00d2   E$BPNAM 02 00d7   E$BPNUM 02 00c9
+  E$BPRCID 02 00e0    E$BTYP 02 00f9  E$BUFSIZ 02 00bf     E$BUG 02 00be
+     E$CEF 02 00da     E$CRC 02 00f3  E$DEADLK 02 00fe   E$DELSP 02 00df
+  E$DEVBSY 02 00fa  E$DEVOVF 02 00cc    E$DIDC 02 00fb  E$DIMLRG 02 0019
+  E$DIRFUL 02 00ce  E$DIVZER 02 002d      E$DN 02 00c6     E$DNE 02 00ee
+  E$ENDQOU 02 0029     E$EOF 02 00d3  E$EXCVRB 02 000b  E$FLTOVF 02 0032
+     E$FNA 02 00d6    E$FULL 02 00f8  E$HANGUP 02 00dc     E$IBA 02 00db
+  E$ICHREF 02 000e  E$ICOORD 02 00bd   E$ICOVF 02 000d  E$IFORKP 02 00e6
+    E$ILLA 02 0043  E$ILLARG 02 00bb  E$ILLCMD 02 00c0  E$ILLCNT 02 0044
+  E$ILLDEC 02 0048  E$ILLDIM 02 0015  E$ILLEXP 02 0047  E$ILLFOR 02 0046
+  E$ILLINP 02 003d  E$ILLIVR 02 004d  E$ILLLIT 02 0016  E$ILLMOD 02 000f
+  E$ILLNUM 02 0010  E$ILLOPD 02 0012  E$ILLOPR 02 0013  E$ILLPNM 02 0040
+  E$ILLPRF 02 0011  E$ILLRET 02 0017  E$ILLRFN 02 0014  E$ILLSFX 02 0018
+  E$ILLSTC 02 000c  E$IOCONV 02 003c  E$IOFRPT 02 003e  E$IOFSYN 02 003f
+  E$IOMISM 02 003a   E$IONUM 02 003b  E$IPRCID 02 00e0    E$ISWI 02 00e3
+   E$IWDEF 02 00c3   E$IWTYP 02 00b7  E$KWNMOD 02 00e7  E$LINLRG 02 001a
+  E$LNCOMP 02 0033    E$LOCK 02 00fc  E$MEMFUL 02 00cf   E$MFULL 02 0020
+  E$MLTLIN 02 004b  E$MLTVAR 02 004c     E$MNF 02 00dd  E$MODBSY 02 00d1
+  E$MULPRC 02 002c   E$NEMOD 02 00ea     E$NES 02 00d5   E$NFONT 02 00b9
+  E$NOASSG 02 001b  E$NOCHLD 02 00e2  E$NOCOMA 02 001d  E$NODATA 02 004f
+   E$NODIM 02 001e    E$NODO 02 001f  E$NOGOTO 02 0021  E$NOLPAR 02 0022
+  E$NOLREF 02 0023  E$NONRCO 02 0042  E$NOOPRD 02 0024  E$NOPATH 02 001c
+   E$NORAM 02 00ed  E$NOROUT 02 0030  E$NORPAR 02 0025  E$NOTASK 02 00ef
+  E$NOTHEN 02 0026    E$NOTO 02 0027  E$NOTRDY 02 00f6  E$NOVREF 02 0028
+  E$PARMER 02 0038    E$PNNF 02 00d8    E$POLL 02 00ca  E$PRCABT 02 00e4
+  E$PRCFUL 02 00e5  E$PTHFUL 02 00c8    E$READ 02 00f4    E$SECT 02 00f1
+    E$SEEK 02 00f7  E$SEEKRG 02 004e   E$SHARE 02 00fd     E$SLF 02 00d9
+  E$STKOVF 02 00ba  E$STROVF 02 002f  E$SUBLRG 02 002a  E$SUBOVF 02 0035
+  E$SUBRNG 02 0037  E$SUBUND 02 0036  E$SYSOVF 02 0039  E$TBLFUL 02 00c1
+  E$TYPMIS 02 002e  E$UNDLIN 02 004a  E$UNDVAR 02 0031    E$UNIT 02 00f0
+  E$UNKPRC 02 002b  E$UNKSVC 02 00d0  E$UNKSYM 02 000a  E$UNMCNT 02 0045
+      E$UP 02 00c5   E$USIGP 02 00e9  E$VALRNG 02 0034   E$WADEF 02 00b8
+      E$WP 02 00f2   E$WRITE 02 00f5   E$WRSUB 02 0041  E$WUNDEF 02 00c4
+    ENTIRE 00 0080       EOM 02 06cf     EXEC. 00 0004   F$ALL64 02 0030
+  F$ALLBIT 02 0013   F$APROC 02 002c   F$CHAIN 02 0005  F$CMPNAM 02 0011
+     F$CRC 02 0017   F$DEBUG 02 0023  F$DELBIT 02 0014    F$EXIT 02 0006
+  F$FIND64 02 002f    F$FORK 02 0003    F$ICPT 02 0009      F$ID 02 000c
+   F$IODEL 02 0033    F$IOQU 02 002b     F$IRQ 02 002a    F$LINK 02 0000
+    F$LOAD 02 0001     F$MEM 02 0007   F$NPROC 02 002d    F$PERR 02 000f
+  F$PRSNAM 02 0010   F$RET64 02 0031  F$SCHBIT 02 0012    F$SEND 02 0008
+   F$SLEEP 02 000a  F$SPRIOR 02 000d  F$SRQMEM 02 0028  F$SRTMEM 02 0029
+    F$SSPD 02 000b    F$SSVC 02 0032    F$SSWI 02 000e   F$STIME 02 0016
+    F$TIME 02 0015  F$UNLINK 02 0002    F$VIRQ 02 0027  F$VMODUL 02 002e
+    F$WAIT 02 0004     FALSE 00 0000    FD.ATT 02 0000  FD.CREAT 02 000d
+    FD.DAT 02 0003    FD.LNK 02 0008    FD.LS1 00 00fb    FD.LS2 00 00fa
+    FD.OWN 02 0001    FD.SEG 02 0010    FD.SIZ 02 0009     FDBUF 00 0004
+    FDSL.A 02 0000    FDSL.B 02 0003    FDSL.S 02 0005  FEATURE1 02 001b
+  FEATURE2 02 001c  FIRQMASK 00 0040     FLMGR 00 00d0    FMCDIR 02 0009
+    FMCLOS 02 0024    FMCREA 02 0000    FMDLET 02 000c    FMGSTA 02 001e
+    FMMDIR 02 0006    FMOPEN 02 0003    FMRDLN 02 0018    FMREAD 02 0012
+    FMSEEK 02 000f    FMSSTA 02 0021   FMT.DNS 00 0002  FMT.SIDE 00 0001
+  FMT.T0DN 00 0020  FMT.TDNS 00 0004    FMWRIT 02 0015    FMWRLN 02 001b
+  FORCUPPR 02 036b  FRTNCODE 00 0006     H6309 06 0000  HALFCRRY 00 0020
+   HW.PAGE 01 00ff      HZ50 00 0001      HZ60 00 0002  I$ATTACH 02 0080
+  I$CHGDIR 02 0086   I$CLOSE 02 008f  I$CREATE 02 0083  I$DELETE 02 0087
+  I$DELETX 02 0090  I$DETACH 02 0081     I$DUP 02 0082  I$GETSTT 02 008d
+  I$MAKDIR 02 0085    I$OPEN 02 0084    I$READ 02 0089  I$READLN 02 008b
+    I$SEEK 02 0088  I$SETSTT 02 008e   I$WRITE 02 008a  I$WRITLN 02 008c
+     ICODE 00 0002    IMGCHG 00 0010  INDRIVER 00 0020   INITSTR 02 000e
+INSTALLNAME 02 001f  INTMASKS 00 0050   IRQMASK 00 0010     ISIZ. 00 0020
+    IT.ALF 02 0017    IT.BAU 02 0027    IT.BSE 02 0024    IT.BSO 02 0014
+    IT.BSP 02 001b    IT.COL 02 002c    IT.CYL 02 0017    IT.D2P 02 0028
+    IT.DEL 02 001c    IT.DLO 02 0015    IT.DNS 02 0016    IT.DRV 02 0013
+    IT.DTP 02 0012    IT.DUP 02 0020    IT.DVC 02 0012    IT.EKO 02 0016
+    IT.EOF 02 001e    IT.EOR 02 001d  IT.EXTEN 02 0022    IT.ILV 02 001f
+    IT.INT 02 0022  IT.LLDRV 02 0028    IT.MPI 02 002a    IT.NUL 02 0018
+    IT.OFS 02 0026    IT.OVF 02 0025    IT.PAG 02 001a    IT.PAR 02 0026
+    IT.PAU 02 0019    IT.PSC 02 0021    IT.QUT 02 0023    IT.ROW 02 002d
+    IT.RPR 02 001f    IT.RWC 02 0028    IT.SAS 02 0020    IT.SCT 02 001b
+    IT.SID 02 0019  IT.SOFF1 02 0025  IT.SOFF2 02 0026  IT.SOFF3 02 0027
+  IT.STOFF 02 0024    IT.STP 02 0014    IT.T0S 02 001d    IT.TFM 02 0021
+    IT.TYP 02 0015    IT.UPC 02 0013    IT.VFY 02 001a    IT.WPC 02 0025
+   IT.XOFF 02 002b    IT.XON 02 002a   IT.XTYP 02 002e     L003F 02 002d
+     L004B 02 0039     L0057 02 0045     L0066 02 0054     L0069 02 0057
+     L006D 02 005b     L0071 02 005f     L00A6 02 0094     L00AD 02 009b
+     L00AF 02 009d     L00B3 02 00a1     L00ED 02 00ca     L010D 02 00ea
+     L011F 02 00fc     L0127 02 0109     L0145 02 0127     L016D 02 0157
+     L0191 02 0179     L01C1 02 01ab     L01CA 02 01b4     L01D8 02 01c2
+     L01E8 02 01d2     L0205 02 01ef     L0221 02 020b     L023A 02 0224
+     L025E 02 0254     L025F 02 0259     L026C 02 0266     L0270 02 026a
+     L0274 02 026e     L027A 02 0274     L0280 02 027a     L0286 02 0284
+     L0288 02 0286     L02A6 02 02a4     L02B2 02 02b0     L02B3 02 02b1
+     L02C1 02 02c0     L02C3 02 02c2     L02D1 02 02d0     L02D3 02 02d2
+     L02E3 02 02e2     L02ED 02 02ec     L02F1 02 02f0     L0301 02 0300
+     L0311 02 0310     L031B 02 031a     L0323 02 0322     L0324 02 0323
+     L0334 02 0335     L0344 02 0345     L034A 02 034b     L0352 02 0353
+     L0362 02 0363     L0367 02 0368     L036A 02 037a     L0371 02 0381
+     L037B 02 038b     L0383 02 0393     L0399 02 03c8     L03B3 02 03e2
+     L03B9 02 03e8     L03C6 02 03f5     L03DB 02 0409     L03F8 02 0426
+     L0402 02 0430     L0409 02 0437     L0415 02 0443     L041D 02 044b
+     L0420 02 044e     L0423 02 0451     L042F 02 045d     L0430 02 045e
+     L0435 02 0463     L0446 02 0474     L0449 02 0477     L044A 02 0478
+     L044B 02 0479     L044D 02 047b     L045C 02 048a     L04D4 02 0506
+     L04F2 02 0526     L0505 02 0539     L0627 02 06b4     L0642 02 06cb
+  LANGMASK 00 000f   LEFTBIT 00 0020     LEVEL 00 0001  LOOPCENT 02 03aa
+    M$DTYP 02 0012    M$EXEC 02 0009    M$FMGR 02 0009      M$ID 02 0000
+     M$ID1 00 0087    M$ID12 00 87cd     M$ID2 00 00cd  M$IDSIZE 02 0009
+     M$MEM 02 000b    M$MODE 02 000d    M$NAME 02 0004     M$OPT 02 0011
+  M$PARITY 02 0008    M$PDEV 02 000b    M$PORT 02 000e    M$REVS 02 0007
+    M$SIZE 02 0002    M$TYPE 02 0006    MAXMEM 02 0009  MD$ESIZE 02 0004
+   MD$LINK 02 0002   MD$MPTR 02 0000    MINSEC 01 0010    MODNAT 00 0020
+   MODPROT 00 0040  MPI.SLCT 01 ff7f  MPI.SLOT 01 0003     MULTI 00 0030
+      NAME 02 000d  NEGATIVE 00 0008  NOCHANGE 02 0379   NOS9MAJ 00 0000
+   NOS9MIN 00 0001   NOS9VER 00 0001  NUMPATHS 00 0010   OBJ6309 00 0007
+     OBJCT 00 0001    ONEMHZ 00 0001    OPTCNT 00 001a     OS9.D 01 0001
+  OS9MAJOR 00 0000  OS9MINOR 00 0001   OS9VRSN 00 0001   OSLEVEL 02 0017
+   OSMAJOR 02 0019   OSMINOR 02 001a    OSNAME 02 001d     OSVER 02 0018
+    P$ADDR 02 0007     P$AGE 02 000c    P$CHAP 02 0006     P$CID 02 0003
+     P$DIO 02 001a      P$ID 02 0000    P$IOQN 02 0011    P$IOQP 02 0010
+     P$NIO 02 003b  P$PAGCNT 02 0008    P$PATH 02 0026     P$PID 02 0001
+  P$PMODUL 02 0012   P$PRIOR 02 000b   P$QUEUE 02 000e     P$SID 02 0002
+  P$SIGDAT 02 0039  P$SIGNAL 02 0036  P$SIGVEC 02 0037    P$SIZE 02 0040
+      P$SP 02 0004   P$STATE 02 000d     P$SWI 02 0014    P$SWI2 02 0016
+    P$SWI3 02 0018    P$USER 02 0009   PAREVEN 00 0060   PARMARK 00 00a0
+   PARMASK 00 00e0   PARNONE 00 0000    PARODD 00 0020  PARSPACE 00 00e0
+     PCODE 00 0003    PD.ALF 02 0025    PD.ATT 02 0033    PD.BAU 02 0035
+    PD.BSE 02 0032    PD.BSO 02 0022    PD.BSP 02 0029    PD.BUF 02 0008
+    PD.CNT 02 0002     PD.CP 02 000b    PD.CPR 02 0005    PD.CYL 02 0025
+    PD.D2P 02 0036    PD.DCP 02 003a    PD.DEL 02 002a    PD.DEV 02 0003
+    PD.DFD 02 0037    PD.DLO 02 0023    PD.DNS 02 0024    PD.DRV 02 0021
+    PD.DSK 02 001c    PD.DTB 02 001e    PD.DTP 02 0020    PD.DUP 02 002e
+    PD.DV2 02 000a    PD.DVT 02 003e    PD.EKO 02 0024    PD.EOF 02 002c
+    PD.EOR 02 002b    PD.ERR 02 003a  PD.EXTEN 02 0030     PD.FD 02 0034
+    PD.FST 02 000a    PD.ILV 02 002d    PD.INT 02 0030    PD.MAX 02 000d
+    PD.MIN 02 000f    PD.MOD 02 0001    PD.NUL 02 0026    PD.OPT 02 0020
+    PD.OVF 02 0033    PD.PAG 02 0028    PD.PAR 02 0034    PD.PAU 02 0027
+     PD.PD 02 0000    PD.PLP 02 003d    PD.PSC 02 002f    PD.PST 02 003f
+    PD.QUT 02 0031    PD.RAW 02 000c    PD.RGS 02 0006    PD.RPR 02 002d
+    PD.SAS 02 002e    PD.SBL 02 0013    PD.SBP 02 0016    PD.SCT 02 0029
+    PD.SID 02 0027    PD.SIZ 02 000f    PD.SMF 02 000a    PD.SSZ 02 0019
+    PD.STM 02 0012  PD.STOFF 02 0032    PD.STP 02 0022    PD.STS 02 0010
+    PD.T0S 02 002b    PD.TBL 02 003b    PD.TFM 02 002f    PD.TYP 02 0023
+    PD.UPC 02 0021    PD.VFY 02 0028   PD.XOFF 02 0039    PD.XON 02 0038
+    PDELIM 00 002f      PDIR 00 002e    PDSIZE 02 0040    PENTIR 00 0040
+    PEXEC. 00 0020  PIA0BASE 00 ff00  PIA1BASE 00 ff20   POLLCNT 02 000c
+    POLSIZ 02 0009    PREAD. 00 0008     PRGRM 00 0010  PROC6309 00 0002
+  PROC6809 00 0000  PROTFLAG 02 0016   PST.DCD 00 0001    PWRIT. 00 0010
+  PWRLNFRQ 01 0002    Q$FLIP 02 0002    Q$MASK 02 0003    Q$POLL 02 0000
+    Q$PRTY 02 0008    Q$SERV 02 0004    Q$STAT 02 0006       R$A 00 0001
+       R$B 00 0002      R$CC 00 0000       R$D 00 0001      R$DP 00 0003
+      R$PC 00 000a    R$SIZE 00 000c       R$U 00 0008       R$X 00 0004
+       R$Y 00 0006     RBF.D 01 0001     READ. 00 0001     REENT 00 0080
+       REV 01 0001  REVSMASK 00 000f  RIGHTBIT 00 0040   S$ABORT 02 0002
+   S$ALARM 02 0005     S$HUP 02 0004  S$INTRPT 02 0003    S$KILL 02 0000
+    S$WAKE 02 0001  S$WINDOW 02 0004     SBRTN 00 0020     SCF.D 01 0001
+    SHARE. 00 0040  SHELLSUB 00 0050  SHIFTBIT 00 0001      SIGN 00 0080
+    SINBUF 00 0002      SIZE 02 017b  SPACEBIT 00 0080  SS.AAGBF 02 0080
+  SS.ALFAS 02 001c  SS.ANPAL 02 009a  SS.ASCRN 02 008b   SS.ATTR 02 001c
+  SS.BLKRD 02 0014  SS.BLKWR 02 0015  SS.BREAK 02 001d  SS.CDREL 02 009b
+  SS.CDSIG 02 009a  SS.CDSTA 02 0099  SS.CLOSE 02 002a  SS.COMST 02 0028
+  SS.CURSR 02 0025   SS.DCMD 02 000d  SS.DEVNM 02 000e  SS.DFPAL 02 0097
+ SS.DIRENT 02 0020  SS.DSCRN 02 008c  SS.DSIZE 02 0026  SS.DSTAT 02 0012
+    SS.ECC 02 00b0   SS.ELOG 02 0019    SS.EOF 02 0006  SS.FBRGS 02 0096
+     SS.FD 02 000f  SS.FDINF 00 0020   SS.FEED 02 0009   SS.FILL 02 00a0
+  SS.FNDBF 02 009b    SS.FRZ 02 000a  SS.FSCRN 02 008d   SS.FSIG 02 002c
+    SS.GIP 02 0094   SS.GIP2 02 0099   SS.HIST 02 00a1  SS.HNGUP 02 002b
+    SS.JOY 02 0013  SS.KYSNS 02 0027   SS.LINK 02 0007   SS.LOCK 02 0011
+  SS.MNSEL 02 0087  SS.MONTR 02 0092  SS.MOUNT 02 0082  SS.MOUSE 02 0089
+  SS.MPGPB 02 0084  SS.MSSIG 02 008a   SS.OPEN 02 0029    SS.OPT 02 0000
+  SS.PALET 02 0091    SS.POS 02 0005  SS.PSCRN 02 008e  SS.RDNET 02 0083
+  SS.READY 02 0001  SS.RELEA 02 001b  SS.RESET 02 0003  SS.RETEN 02 0016
+    SS.RFM 02 0018  SS.RSBIT 02 001e   SS.SBAR 02 0088  SS.SCINF 02 008f
+  SS.SCSIZ 02 0026  SS.SCTYP 02 0093  SS.SETMF 02 0024   SS.SIZE 02 0002
+  SS.SLGBF 02 0081  SS.SLOTS 02 0085    SS.SPT 02 000b    SS.SQD 02 000c
+   SS.SSIG 02 001a  SS.TICKS 02 0010   SS.TONE 02 0098  SS.ULINK 02 0008
+  SS.UMBAR 02 0095SS.VARSECT 02 0012    SS.WFM 02 0017  SS.WNSET 02 0086
+   SS.WTRK 02 0004     START 02 0011    STDSTR 02 0012     STOP1 00 0000
+     STOP2 00 0010  STP.12MS 00 0002  STP.20MS 00 0001  STP.30MS 00 0000
+   STP.6MS 00 0003    SVCTNM 00 0002    SVCTSZ 00 006e  SYSSTATE 00 0080
+    SYSSTR 02 0010     SYSTM 00 00c0    TIMOUT 00 0020  TIMSLEEP 00 0040
+  TKPERSEC 01 003c      TRUE 00 0001    TWOMHZ 00 0002  TWOSOVFL 00 0002
+      TYLG 01 0011   TYP.256 00 0000     TYP.3 00 0001     TYP.5 00 0000
+   TYP.512 00 0004   TYP.CCF 00 0020   TYP.FLP 00 0000  TYP.HARD 00 0080
+  TYP.NCCF 00 0000   TYP.NSF 00 0040   TYP.SBO 00 0002   TYP.SOF 00 0000
+  TYPEMASK 00 00f0 TYPH.1024 00 0002 TYPH.2048 00 0003  TYPH.256 00 0000
+  TYPH.512 00 0001 TYPH.DRSV 00 000c  TYPH.DSQ 00 0010  TYPH.SSM 00 0003
+     U0000 02 0000     U0001 02 0001     U0002 02 0002     U0004 02 0004
+     U0006 02 0006     U0008 02 0008     U0009 02 0009     U000A 02 000a
+     U000B 02 000b     U000C 02 000c     U000D 02 000d     U000E 02 000e
+     U000F 02 000f     U0010 02 0010     U0011 02 0011     U0012 02 0012
+     U0013 02 0013     U0015 02 0015     U0016 02 0016     U0017 02 0017
+     U0018 02 0018     U0019 02 0019     U001B 02 001b     U0020 02 0020
+     U0021 02 0021     U0025 02 0025     U0026 02 0026     U002C 02 002c
+     U003B 02 003d     U0045 02 0047     U004D 02 004f     U0055 02 0057
+     U0056 02 0058     U006F 02 0071     U0070 02 0072     U0074 02 0076
+     U0076 02 0078     U0077 02 0079     UPBIT 00 0008    UPDAT. 00 0003
+    V$DESC 02 0004    V$DRIV 02 0000    V$FMGR 02 0006    V$STAT 02 0002
+    V$USRS 02 0008  V.BMAPSZ 02 001c     V.BMB 02 0017    V.BUSY 02 0004
+    V.DEV2 02 0009  V.DISKID 02 001a     V.ERR 02 000e  V.FILEHD 02 0018
+    V.INTR 02 000b   V.KANJI 02 0011    V.KBUF 02 0012    V.LINE 02 0007
+    V.LPRC 02 0003  V.MAPSCT 02 001d  V.MODADR 02 0014    V.NDRV 02 0006
+    V.PAGE 02 0000    V.PAUS 02 0008    V.PCHR 02 000d   V.PDLHD 02 0016
+    V.PORT 02 0001    V.QUIT 02 000c  V.RESBIT 02 001e     V.RSV 02 0018
+     V.SCF 02 001d  V.SCOFST 02 0020  V.SCTKOF 02 001f  V.TKOFST 02 0021
+    V.TRAK 02 0015    V.TYPE 02 0006    V.USER 02 0006    V.WAKE 02 0005
+    V.XOFF 02 0010     V.XON 02 000f    VD.OFS 02 0061    VD.STP 02 0060
+    VI.CNT 02 0000  VI.IFLAG 00 0001   VI.PKSZ 02 0005    VI.RST 02 0002
+   VI.STAT 02 0004     WORD7 00 0020     WORD8 00 0000    WRITE. 00 0002
+      ZERO 00 0004
