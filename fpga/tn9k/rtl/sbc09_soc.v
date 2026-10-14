@@ -75,6 +75,7 @@ module sbc09_soc #(
     output wire [15:0] dbg_addr,
     output wire        dbg_acc,
     output wire [15:0] dbg_status,
+    output wire [15:0] dbg_kanji,
     output wire [7:0]  dbg_din,
     output wire        dbg_rnw,
     output wire        dbg_vma
@@ -195,7 +196,7 @@ module sbc09_soc #(
     kanji_loader loader (
         .clk(clk), .rst(rst), .start(ld_start), .done(ld_done), .ok(kanji_ok),
         .fl_cs(fl_cs), .fl_clk(fl_clk), .fl_mosi(fl_mosi), .fl_miso(fl_miso),
-        .wr(ld_wr), .wr_addr(ld_addr), .wr_data(ld_data), .busy(ps_busy_m)
+        .wr(ld_wr), .wr_addr(ld_addr), .wr_data(ld_data), .busy(ps_busy_m), .dbg(dbg_kanji)
     );
 
     // ---------------------------------------------------------------- the access of a cycle

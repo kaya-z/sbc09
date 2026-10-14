@@ -66,6 +66,9 @@ cat > "$B/tn9k_cfg.vh" <<EOF
 EOF
 if [ "$HDMI" != 0 ]; then echo '`define HDMI 1' >> "$B/tn9k_cfg.vh"; fi
 if [ "${DEBUG:-0}" != 0 ]; then echo '`define DEBUG_TX 1' >> "$B/tn9k_cfg.vh"; fi
+if [ "${DEBUG:-0}" = 3 ]; then echo '`define DEBUG_FLASH0 1' >> "$B/tn9k_cfg.vh"; fi    # DEBUG=3: DEBUG=2, and the loader reads the flash at offset 0x16
+if [ "${DEBUG:-0}" = 4 ]; then echo '`define DEBUG_X1 1' >> "$B/tn9k_cfg.vh"; fi    # DEBUG=4: the status field shows the last word of a kanji lookup
+if [ "${DEBUG:-0}" = 2 ] || [ "${DEBUG:-0}" = 3 ]; then echo '`define DEBUG_KANJI 1' >> "$B/tn9k_cfg.vh"; fi   # DEBUG=2: the status field shows the kanji loader (ok, done, failed attempts, first byte read)
 
 # the pin constraints and the timing constraints of all parts go into one file each (the tool reads only the last file of a kind)
 cat "$HERE/constraints/tn9k.cst" > "$B/pins.cst"
@@ -105,4 +108,6 @@ EOF
 cd "$B"
 # the ROM image is read by \$readmemh from the working directory
 env -u DISPLAY QT_QPA_PLATFORM=offscreen "$IDE/bin/gw_sh" build.tcl 2>&1 | tee build.log | grep -v "^qt\." 
+# a net used before its declaration, or without a driver, passes the Verilator simulation but not the Gowin tool (the log says so)
+if grep -E "Undeclared symbol|does not have a driver" build.log | grep -v "O_psram_ck_n\|psram_controller" ; then echo "WARNING: see the lines above (build.log)"; fi
 ls -l "$B/impl/pnr/"*.fs

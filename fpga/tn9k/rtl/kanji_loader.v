@@ -21,7 +21,8 @@ module kanji_loader (
     output reg         wr,                  // a one clock pulse: write wr_data to the PSRAM at wr_addr
     output reg  [21:0] wr_addr,
     output reg  [7:0]  wr_data,
-    input  wire        busy                 // the PSRAM request is under way (it also covers the pulse's own clock)
+    input  wire        busy,                // the PSRAM request is under way (it also covers the pulse's own clock)
+    output wire [15:0] dbg                  // for DEBUG builds: ok, done, the state, the first byte read from the flash
 );
     // the SPI byte engine (mode 0)
     reg        sgo, sbusy, sdone;
@@ -49,13 +50,19 @@ module kanji_loader (
     end
 
     localparam [3:0] L_IDLE = 4'd0, L_CS = 4'd1, L_CMD = 4'd2, L_CMDW = 4'd3, L_RD = 4'd4, L_RDW = 4'd5,
-                     L_CHK = 4'd6, L_WR = 4'd7, L_WRW = 4'd8, L_WRW2 = 4'd9, L_END = 4'd10;
+                     L_CHK = 4'd6, L_WR = 4'd7, L_WRW = 4'd8, L_WRW2 = 4'd9, L_END = 4'd10,
+                     L_PRE = 4'd11, L_PREW = 4'd12, L_PWT = 4'd13;
     reg [3:0]  st;
+    reg [7:0]  b0 = 8'h00;
+    reg [3:0]  tries = 4'd0;                            // failed attempts so far (the magic was wrong: the flash was not ready)
+    assign dbg = {ok, done, 2'b00, tries, b0};
     reg [2:0]  ci;
     reg [17:0] n;
     reg        n_lt4, n_last;
     reg [7:0]  magic;
     reg [31:0] cmd;
+    reg [3:0]  pi;                                      // step of the flash wake-up sequence
+    reg [13:0] pw;                                      // its waiting time
 
     // registers that follow the byte counter (it changes once per byte, which takes 40 clocks)
     always @(posedge clk) begin
@@ -71,7 +78,30 @@ module kanji_loader (
         if (rst) begin
             st <= L_IDLE; done <= 1'b0; ok <= 1'b0; fl_cs <= 1'b1;
         end else case (st)
-        L_IDLE: if (start) begin done <= 1'b0; ok <= 1'b0; fl_cs <= 1'b0; ci <= 3'd0; n <= 18'd0; cmd <= {8'h03, `KJ_FLASH}; st <= L_CMD; end
+        L_IDLE: if (start) begin done <= 1'b0; ok <= 1'b0; tries <= 4'd0; pi <= 4'd0; st <= L_PRE; end
+        // The flash may be in the state the configuration left it in (continuous read mode, power down ...): leave it
+        // (FFh FFh), release it from power down (ABh), reset it (66h 99h), then read.
+        L_PRE: case (pi)
+            4'd0:  begin fl_cs <= 1'b0; stx <= 8'hff; sgo <= 1'b1; st <= L_PREW; end
+            4'd1:  begin stx <= 8'hff; sgo <= 1'b1; st <= L_PREW; end
+            4'd2:  begin fl_cs <= 1'b1; pw <= 14'd4000; st <= L_PWT; end
+            4'd3:  begin fl_cs <= 1'b0; stx <= 8'hab; sgo <= 1'b1; st <= L_PREW; end
+            4'd4:  begin fl_cs <= 1'b1; pw <= 14'd4000; st <= L_PWT; end
+            4'd5:  begin fl_cs <= 1'b0; stx <= 8'h66; sgo <= 1'b1; st <= L_PREW; end
+            4'd6:  begin fl_cs <= 1'b1; pw <= 14'd200; st <= L_PWT; end
+            4'd7:  begin fl_cs <= 1'b0; stx <= 8'h99; sgo <= 1'b1; st <= L_PREW; end
+            4'd8:  begin fl_cs <= 1'b1; pw <= 14'd12000; st <= L_PWT; end
+            default: begin
+`ifdef DEBUG_FLASH0
+                cmd <= {8'h03, 24'h000016};              // DEBUG=3: read the bitstream's own first bytes (offset 0x16 is 0xA5), to see if the flash can be read at all
+`else
+                cmd <= {8'h03, `KJ_FLASH};
+`endif
+                fl_cs <= 1'b0; ci <= 3'd0; n <= 18'd0; st <= L_CMD;
+            end
+        endcase
+        L_PREW: if (sdone) begin pi <= pi + 1'b1; st <= L_PRE; end
+        L_PWT: if (pw == 14'd0) begin pi <= pi + 1'b1; st <= L_PRE; end else pw <= pw - 1'b1;
         L_CMD: begin                                    // 03h and the 24 bit address
             if (ci == 3'd4) st <= L_RD;
             else begin stx <= cmd[31:24]; cmd <= {cmd[23:0], 8'h00}; sgo <= 1'b1; ci <= ci + 1'b1; st <= L_CMDW; end
@@ -80,8 +110,12 @@ module kanji_loader (
         L_RD: begin stx <= 8'hff; sgo <= 1'b1; st <= L_RDW; end
         L_RDW: if (sdone) st <= L_CHK;
         L_CHK: begin
+            if (n[17:0] == 18'd0) b0 <= srx;
             // the magic of the image: K J F 1
-            if (n_lt4 && srx != magic) st <= L_END;
+            if (n_lt4 && srx != magic) begin
+                if (tries == 4'd7) st <= L_END;         // give up: the kanji show as a box
+                else begin tries <= tries + 1'b1; fl_cs <= 1'b1; pw <= 14'd1000; pi <= 4'd15; st <= L_PWT; end   // try again from the start
+            end
             else begin wr_data <= srx; wr <= 1'b1; st <= L_WR; end
         end
         L_WR: st <= L_WRW;                              // the pulse is on its way

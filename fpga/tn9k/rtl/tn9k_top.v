@@ -63,7 +63,14 @@ module tn9k_top (
     assign O_psram_reset_n = {2{resetn}};
 
     wire [111:0] dbg_regs;
-    wire [15:0]  dbg_status;
+    wire [15:0]  dbg_status, dbg_kanji;
+`ifdef DEBUG_X1
+    wire [15:0]  dbg_x1;
+    reg  [13:0]  x1_last = 14'h0000;                 // DEBUG=4: kanji_ok, a lookup was answered, and the low 14 bits of the last word of a lookup
+    reg          x1_seen = 1'b0;
+    always @(posedge clk) if (x1_ack) begin x1_last <= x1_rdata[13:0]; x1_seen <= 1'b1; end
+    assign dbg_x1 = {kanji_ok, x1_seen, x1_last};
+`endif
     wire        uart_tx_soc;
     wire        term_stb, term_busy;
     wire        x1_ack, x2_ack, kanji_ok;
@@ -85,7 +92,7 @@ module tn9k_top (
 
 `ifdef DEBUG_TX
     wire dbg_tx;
-    dbg_uart #(.BAUD_DIV(`CLK_HZ / 115200)) dbg (.clk(clk), .regs(dbg_regs), .status(dbg_status), .txd(dbg_tx));
+    dbg_uart #(.BAUD_DIV(`CLK_HZ / 115200)) dbg (.clk(clk), .regs(dbg_regs), .status(`ifdef DEBUG_X1 dbg_x1 `elsif DEBUG_KANJI dbg_kanji `else dbg_status `endif), .txd(dbg_tx));
     assign uart_tx = dbg_tx;
 `else
     assign uart_tx = uart_tx_soc;
@@ -105,7 +112,7 @@ module tn9k_top (
         .fl_cs(flash_csb), .fl_clk(flash_clk), .fl_mosi(flash_mosi), .fl_miso(flash_miso),
         .x1_req(x1_req), .x1_addr(x1_addr), .x1_ack(x1_ack), .x1_rdata(x1_rdata),
         .x2_req(x2_req), .x2_addr(x2_addr), .x2_ack(x2_ack), .x2_rdata(x2_rdata), .kanji_ok(kanji_ok),
-        .term_stb(term_stb), .term_byte(term_byte), .dbg_regs(dbg_regs), .dbg_status(dbg_status), .dbg_lic(), .dbg_addr(), .dbg_acc(), .dbg_din(), .dbg_rnw(), .dbg_vma()
+        .term_stb(term_stb), .term_byte(term_byte), .dbg_regs(dbg_regs), .dbg_status(dbg_status), .dbg_kanji(dbg_kanji), .dbg_lic(), .dbg_addr(), .dbg_acc(), .dbg_din(), .dbg_rnw(), .dbg_vma()
     );
 
 `ifndef HDMI

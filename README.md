@@ -24,7 +24,7 @@ C 言語で書かれた MC6809 シミュレータです。Debian 12 (gcc 12) で
 * **FUZIX** (UNIX 風 OS): **64KB のフラットメモリ (MMU なし)** で起動してシェルまで動く。プロセスはスワップで切り替える (29KiB / プロセス)。
   `./sim09 -rom fuzix/images/bootrom.bin -0 fuzix.dsk` → [docs/FUZIX.md](docs/FUZIX.md)
 * **FPGA (Tang Nano 9K)**: 同じマシン (64KB、ACIA、タイマ、ディスク) を **Sipeed Tang Nano 9K** の上に作る Verilog 設計 (サイクル精度の 6809 コア、
-  RAM は内蔵 PSRAM、ディスクは microSD、コンソールは USB シリアルと **HDMI の文字画面** (80x25、ANSI 16 色、**漢字** (JIS 第 1 水準、UTF-8 / EUC-JP / Shift_JIS)))。FUZIX と NitrOS-9 Level 1 が動く (Verilator で検証。実機の Tang Nano 9K で FUZIX と NitrOS-9 の起動を確認、HDMI の映像は未確認: 試したモニタでは Sipeed のサンプルも映らなかった) → [docs/FPGA.md](docs/FPGA.md)
+  RAM は内蔵 PSRAM、ディスクは microSD、コンソールは USB シリアルと **HDMI の文字画面** (80x25、ANSI 16 色、**漢字** (JIS 第 1 水準、UTF-8 / EUC-JP / Shift_JIS)))。FUZIX と NitrOS-9 Level 1 が動く (Verilator で検証。実機の Tang Nano 9K で FUZIX と NitrOS-9 の起動、HDMI の画面と漢字の表示を確認) → [docs/FPGA.md](docs/FPGA.md)
 * **OS-9 Net**: ACIA のシリアルポート 1〜3 をホストの TCP ソケットにつなぐ仕組み。OS-9 からは普通のシリアルデバイス `/n1` `/n2` `/n3` に
   見えるので、シェルやリダイレクト、`tsmon` などがそのまま使えます。telnet サーバ (`-net 1=listen:6809`) として外から OS-9 にログインでき、
   Hayes モデム風の `ATDT` ダイヤルや `nc` コマンドで OS-9 からネットワークに出ることもできます

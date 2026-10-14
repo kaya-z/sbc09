@@ -56,6 +56,11 @@ module hdmi_text #(
     wire        xp_req, xp_ack;
     wire [21:0] xp_addr;
     wire [15:0] xp_rdata;
+    // (declared before its use: a net used in a port connection before its declaration is an implicit net, and the Gowin
+    // tool then leaves the later declaration without a driver: kanji_ok_p stayed 0 on the board)
+    reg [1:0] kq;
+    always @(posedge clk_pix) kq <= {kq[0], kanji_ok};
+    wire kanji_ok_p = kq[1];
     hdmi_decode #(.CHARSET(CHARSET)) decode (
         .clk(clk_pix), .rst(rst_pix), .kanji_ok(kanji_ok_p), .stb(stb_p), .din(din_p), .busy(dec_busy),
         .sym_stb(sym_stb), .sym_wide(sym_wide), .sym(sym),
@@ -65,9 +70,6 @@ module hdmi_text #(
         .clk_a(clk_pix), .req_a(xp_req), .addr_a(xp_addr), .ack_a(xp_ack), .rdata_a(xp_rdata),
         .clk_b(clk), .req_b(x1_req), .addr_b(x1_addr), .ack_b(x1_ack), .rdata_b(x1_rdata)
     );
-    reg [1:0] kq;
-    always @(posedge clk_pix) kq <= {kq[0], kanji_ok};
-    wire kanji_ok_p = kq[1];
 
     // the screen cannot take more characters: the decoder or the terminal queue is busy (back to the system clock domain)
     wire busy_p;
