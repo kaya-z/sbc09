@@ -2,6 +2,16 @@
 
 C 言語で書かれた MC6809 シミュレータです。Debian 12 (gcc 12) でそのままビルド・実行できます。
 
+> このリポジトリのソースとドキュメントは **Claude Code** (Anthropic の AI コーディングツール) を使って生成しました
+> (マイクロカーネル MK09 とそのドキュメントなど)。
+> 動作はテスト (`make test`) と、Verilator による FPGA の RTL 検証で確認していますが、**生成物なので、使う前に内容を確認してください**。
+> 実機の Tang Nano 9K で確認できたのは README 本文に書いた範囲だけです。
+
+## sim09 の特徴
+
+* CPU コアは sbc09 `v09s.c` を命令仕様、MAME `m6809.cpp` をクロック／サイクル／CPU 状態の考え方の参考にした独自実装で、
+  サイクル精度の命令タイミング、NMI/FIRQ/IRQ/RESET/HALT、CWAI/SYNC の待ち状態を持ちます
+  → [docs/CPU.md](docs/CPU.md)
 * **OS-9 (NitrOS-9) Level 1 / Level 2** が動作します（参考実装
   <https://github.com/shinji-kono/sbc09> の ROM / ディスク構成と I/O 互換）
 * **日本語処理**: UTF-8 / EUC-JP / Shift_JIS のコンソール、複数バイト文字を理解する行編集、日本語ファイル名
@@ -14,12 +24,32 @@ C 言語で書かれた MC6809 シミュレータです。Debian 12 (gcc 12) で
   `./sim09 -rom fuzix/images/bootrom.bin -0 fuzix.dsk` → [docs/FUZIX.md](docs/FUZIX.md)
 * **FPGA (Tang Nano 9K)**: 同じマシン (64KB、ACIA、タイマ、ディスク) を **Sipeed Tang Nano 9K** の上に作る Verilog 設計 (サイクル精度の 6809 コア、
   RAM は内蔵 PSRAM、ディスクは microSD、コンソールは USB シリアルと **HDMI の文字画面** (80x25、ANSI 16 色、**漢字** (JIS 第 1 水準、UTF-8 / EUC-JP / Shift_JIS)))。FUZIX と NitrOS-9 Level 1 が動く (Verilator で検証。実機の Tang Nano 9K で FUZIX と NitrOS-9 の起動を確認、HDMI の映像は未確認: 試したモニタでは Sipeed のサンプルも映らなかった) → [docs/FPGA.md](docs/FPGA.md)
-* **OS-9 Net**: シリアルポートを TCP ソケットに接続（telnet でログイン、Hayes モデム風の `ATDT` ダイヤル、`nc` コマンド）
+* **OS-9 Net**: ACIA のシリアルポート 1〜3 をホストの TCP ソケットにつなぐ仕組み。OS-9 からは普通のシリアルデバイス `/n1` `/n2` `/n3` に
+  見えるので、シェルやリダイレクト、`tsmon` などがそのまま使えます。telnet サーバ (`-net 1=listen:6809`) として外から OS-9 にログインでき、
+  Hayes モデム風の `ATDT` ダイヤルや `nc` コマンドで OS-9 からネットワークに出ることもできます
   → [docs/OS9NET.md](docs/OS9NET.md)
-* CPU コアは sbc09 `v09s.c` を命令仕様、MAME `m6809.cpp` をクロック／サイクル／CPU 状態の考え方の参考にした独自実装で、
-  サイクル精度の命令タイミング、NMI/FIRQ/IRQ/RESET/HALT、CWAI/SYNC の待ち状態を持ちます
-  → [docs/CPU.md](docs/CPU.md)
+* **MK09**: MC6809 用のマイクロカーネルと、その上で動く小さな OS (下の「MK09」の節) → [mk09/README.md](mk09/README.md)
 * 参考にしたソースのクレジットは各ソースの冒頭と [CREDITS.md](CREDITS.md) にあります。
+
+## MK09 (マイクロカーネル)
+
+`mk09/` は、64KB のフラットメモリ (MMU なし) で動く MC6809 用のマイクロカーネル **MK09** です。sim09 と、Tang Nano 9K の FPGA 版の
+どちらでも、SD カードから起動します (ブート ROM は FUZIX と同じなので、FPGA のビットストリームはそのままです)。
+
+* **カーネル**: Minix 型の同期メッセージ通信 (send / recv / call / reply / notify とメモリ領域の許可)、優先度つきラウンドロビンのスケジューラ。
+  アセンブラ版 (約 2KB) と、他の CPU への移植用の C 版があります。
+* **サーバ**: TTY、DISK、FS (FAT16、8.3 名)、PM (プロセス管理) が、それぞれ独立したタスクとして動きます。
+* **アプリ**: シェル、`ls` `cat` `cp` `mv` `rm` `mkdir` `date` `df` `ps` `hd` `wc` `stty` など、**日本語ワープロ `jwp`** (SKK 変換、辞書はディスク上)、
+  Dhrystone (`dhry`、約 234 Dhrystones/s)。
+* **ドキュメント**: 設計書・仕様書・マニュアル → [mk09/docs/](mk09/docs/)
+
+```sh
+make -C mk09           # build/mk09.img を作る
+make -C mk09 run       # sim09 で起動
+make -C mk09 test      # 自動テスト
+```
+
+実機の Tang Nano 9K では、まだ試していません (Verilator の RTL 上では起動を確認しています)。
 
 ## ビルドと実行
 
