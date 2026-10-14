@@ -210,7 +210,7 @@ static int execute(char *s)
         shutdown();
         return 0;
     case 9:
-        puts("MK09 microkernel 1.0 (MC6809)");
+        puts("MK09 microkernel 1.0 (MC6809)\n(c) 2026 YUKARI Semiconductor Devices");
         return 0;
     case 10:
         puts("cd [dir]  pwd  source file  sync  shutdown  exit  ver\n"
@@ -235,7 +235,8 @@ int main(int argc, char **argv)
              "|_|  |_|_|\\_\\ \\___/   /_/\n"
              "\n"
              " MC6809 microkernel 1.0  --  64KB flat, no MMU\n"
-             " TTY + DISK + FS(FAT16) + PM  /  type help\n");
+             " TTY + DISK + FS(FAT16) + PM  /  type help\n"
+             " (c) 2026 YUKARI Semiconductor Devices\n");
         do_source("/ETC/RC.SH");
     }
     for (;;) {

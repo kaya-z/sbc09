@@ -35,6 +35,7 @@ make test      # 自動テスト一式 (EUC-JP / Shift_JIS 版も作ります。
 
 ## ライセンス
 
+MK09 の著作者は **YUKARI Semiconductor Devices** です (Copyright (c) 2026 YUKARI Semiconductor Devices)。
 このディレクトリのソース (`mk09/` のうち、このプロジェクトで書いたもの) は MIT ライセンスです (ファイルの先頭の `SPDX-License-Identifier`)。
 
 * ビルドしたプログラム (`*.mx`、ブートイメージ) には、CMOC の実行時ライブラリ (GPL v3、Pierre Sarrazin) が入ります。配布するときは GPL v3 の条件に従ってください。

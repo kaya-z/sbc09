@@ -1,5 +1,7 @@
 # MK09 仕様書
 
+Copyright (c) 2026 YUKARI Semiconductor Devices
+
 MK09 の外から見える決まり (システムコール、メッセージ、サーバの要求、ファイルの形式、ハードウェアの前提) を書きます。
 どうしてそうなっているかは [DESIGN.md](DESIGN.md)、使い方は [MANUAL.md](MANUAL.md) にあります。
 値の定義は `include/mk09.h` `include/proto.h` `include/sysnum.h` にあり、この文書はそれと同じです。
