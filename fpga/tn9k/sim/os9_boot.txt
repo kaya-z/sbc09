@@ -1,0 +1,8 @@
+wait 2000
+send chx /d0/cmds\r
+wait 500
+send dir /d0\r
+wait 4000
+send mdir\r
+wait 3000
+quit

@@ -1,0 +1,10 @@
+expect login:
+send root\r
+expect # 
+send ls -l /bin\r
+expect # 
+send date\r
+expect # 
+snap /tmp/fz_screen.ppm
+send shutdown\r
+expect Halted.

@@ -1,0 +1,2233 @@
+0000:                   ********************************************************************
+0000:                   * SCF - NitrOS-9 Sequential Character File Manager
+0000:                   *
+0000:                   * $Id$
+0000:                   *
+0000:                   * This contains an added SetStat call to allow placing prearranged data
+0000:                   * into the keyboard buffer of ANY SCF related device.
+0000:                   *
+0000:                   * Usage:
+0000:                   *
+0000:                   * Entry: X = Pointer to the string
+0000:                   *        Y = Length of the string
+0000:                   *        A = Path number
+0000:                   *        B = SS.Fill ($A0) (syscall SETSTAT function call number)
+0000:                   * NOTE: If high bit of Y is set, no carriage return will be appended to
+0000:                   *       the read buffer (used in Shellplus V2.2 history)
+0000:                   *
+0000:                   * This also includes Kevin Darlings SCF Editor patches.
+0000:                   *
+0000:                   * Edt/Rev  YYYY/MM/DD  Modified by
+0000:                   * Comment
+0000:                   * ------------------------------------------------------------------
+0000:                   *          1993/04/20  ???
+0000:                   * V1.09:
+0000:                   * - Speeded up L05CC (write char to device) routine by a few cycles
+0000:                   * - Slightly optimized Insert char.
+0000:                   * - Move branch table so Read & ReadLn are 1 cycle faster each; fixed
+0000:                   *   SS.Fill so size is truncated @ 256 bytes.
+0000:                   * - Added NO CR option to SS.Fill (for use with modified Shellplus V2.2
+0000:                   *   command history).
+0000:                   *
+0000:                   *          1993/04/21  ???
+0000:                   * Slight speedup to some of ReadLn parsing, TFM's in Open/Close.
+0000:                   * - More optimization to read/write driver calls
+0000:                   * - Got rid of branch table @ L05E3 for speed
+0000:                   *
+0000:                   *          1993/05/21  ???
+0000:                   * V1.10:
+0000:                   * Added Boisy Pitre's patch for non-sharable devices.
+0000:                   * - Saved 4 cycles in routine @ L042B
+0000:                   * - Modified Boisy's routine to not pshs/puls B (saves 2 cycles).
+0000:                   * - Changed buffer prefill of CR's to save 1 byte.
+0000:                   *
+0000:                   *          1993/07/27  ???
+0000:                   * V1.11:
+0000:                   * Changed a BRA to a LBRA to a straight LBRA in L0322.
+0000:                   * - Optimized path option character routine @ L032C
+0000:                   *
+0000:                   *          1993/08/03  ???
+0000:                   * Modified vector table @ L033F to save 1 cycle on PD.PSC
+0000:                   * - Sped up uppercase conversion checks for ReadLn & WritLn
+0000:                   * - Changed 2 BRA's to L02F9 to do an LBRA straight to L05F8 (ReadLn loop)
+0000:                   * - Moved L0565 routine so Reprint line, Insert & Delete char (on ReadLn)
+0000:                   *   are 1 cycle faster / char printed
+0000:                   * - Changed 2 references to L0420 to go straight to L0565
+0000:                   * - Sped up ReadLn loop by 2 or 3 cycles per char read
+0000:                   *
+0000:                   *          1993/09/21  ???
+0000:                   * V1.12:
+0000:                   * Sped up L0435 by 1 or 2 cycles (depending on branch)
+0000:                   * - Changed LDD ,S to TFR X,D (saves 1 cycle) @ L04F1 (Write & WritLn)
+0000:                   * - Modified L04F1 to use W without TFR (+1 byte, -3 cycles) (Write)
+0000:                   *
+0000:                   *          1993/11/09  ???
+0000:                   * Took LDX #0/LDU PD.BUF,y from L03B5 & merged in @ L028A, L02EF & L0381.
+0000:                   * Also changed BEQ @ L03A5 to skip re-loading X with 0.
+0000:                   *
+0000:                   *          1993/11/10  ???
+0000:                   * Moved L04B2 routine to allow a couple of BSR's instead of LBSR's In READ.
+0000:                   * - Moved driver call right into READ loop (should save 25 cycles/char read)
+0000:                   * - Moved driver call right into L0565 (should save 12 cycles/char written on echo,
+0000:                   *   line editing, etc.)
+0000:                   *
+0000:                   *          1993/11/26  ???
+0000:                   * Moved L02FE (ReadLn parsing) to end where ReadLn routine is moved L03E2
+0000:                   * so Read loop would be optimized for it (read char from driver) instead of
+0000:                   * L042B (write filled buffer to caller).
+0000:                   * Changed LDA #C$NULL to CLRA.
+0000:                   *
+0000:                   *          1993/12/01  ???
+0000:                   * Modified device write call (L056F) to preserve Y as well, to cut down on
+0000:                   * PSHS/PULS.
+0000:                   * - Changed L03E2 & L03DA to exit immediately if PD.DEV or PD.DV2 (depending
+0000:                   * on which routine) is empty (eliminated redundant LEAX ,X).
+0000:                   *
+0000:                   *          1994/05/31  ???
+0000:                   * Attempted mode to L03F1 to eliminate LDW #D$READ, changed:
+0000:                   *      LDX V$DRIV,x
+0000:                   *      ADDW M$Exec,x
+0000:                   *      JSR w,x
+0000:                   * to:
+0000:                   *      LDW V$DRIV,x
+0000:                   *      ADDW M$Exec,w
+0000:                   *      JSR D$READ,w
+0000:                   * Did same to L05C9 & L056F (should speed up each by 1 cycle)
+0000:                   *
+0000:                   *          1994/06/07  ???
+0000:                   * Attempted to modify all M$Exec calls to use new V$DRIVEX (REQUIRES NEW IOMAN)
+0000:                   * - L01FA (Get/SetStat), L03F1 (Read), L05C9 (Write), L056F (Write)
+0000:                   * - Changed L046A to use LDB V.BUSY,x...CMPB ,s...TFR B,A
+0000:                   *
+0000:                   *          1994/06/08  ???
+0000:                   * Changed TST <PD.EKO,y in read loop (L02BC) to LDB PD.EKO,y
+0000:                   * - Changed LEAX 1,X to LDB #1/ABX @ L02C4
+0000:                   * - Changed LEAX >L033F,pc @ L032C to use < (8 bit) version
+0000:                   * - Modified L02E5 to use D instead of X, allowing TSTA, and faster exit on 0 byte
+0000:                   *   just BRAnching to L0453
+0000:                   *
+0000:                   *          1994/06/09  ???
+0000:                   * Changed LEAX 1,X to LDB #1/ABX @ L053D, L05F8, L0312, L0351, L03B8
+0000:                   * - Changed to L0573: All TST's changed to LDB's
+0000:                   * - Changed Open/Create init to use LEAX,PC instead of BSR/PULS X
+0000:                   * - Changed TST PD.CNT,y to LDA PD.CNT,y @ close
+0000:                   * - Eliminated L010D, changed references to it to go to L0129
+0000:                   * - Eliminated useless LEAX ,X @ L0182, and changed BEQ @ L0182 to go to L012A
+0000:                   *   instead of L0129 (speeds CLOSE by 5 or 10 cycles)
+0000:                   * - Moved L06B9 into L012B, eliminate BSR/RTS, plus
+0000:                   * - Changed TST V.TYPE,x to LDB V.TYPE,x
+0000:                   * - Moved L0624 to just before L05F8 to eliminate BRA L05F8 (ReadLn)
+0000:                   * - Changed TST PD.EKO,y @ L0413 to LDB PD.EKO,y
+0000:                   * - Moved L0413-L0423 routines to later in code to allow short branches
+0000:                   * - As result of above, changed 6 LBxx to Bxx
+0000:                   * - Changed TST PD.MIN,y @ L04BB to LDA PD.MIN,y
+0000:                   * - Changed TST PD.RAW,y/TST PD.UPC,y @ L0523 to LDB's
+0000:                   * - Changed TST PD.ALF,y @ L052A to LDB
+0000:                   * - L053D: Moved TST PD.RAW,y to before LDA -1,u to speed up WRITE, changed it to LDB
+0000:                   *
+0000:                   *          1994/06/10  ???
+0000:                   * Changed TST PD.ALF,y to LDB @ L052A
+0000:                   * - Changed CLR V.WAKE,u to CLRA/STA V.WAKE,u @ L03F1 (Read)
+0000:                   * - Changed CLR V.BUSY,u to CLRA/STA V.BUSY,u @ L045D
+0000:                   * - Changed CLR PD.MIN,y to CLRA/STA PD.MIN,y, moved before LDA P$ID,x @ L04A7
+0000:                   * - Changed CLR PD.RAW,y @ L04BB to STA PD.RAW, since A already 0 to get there
+0000:                   * - Changed CLR V.PAUS,u to CLRA/STA V.PAUS,u @ L05A2
+0000:                   * - Changed TST PD.RAW,y to LDA PD.RAW,y @ L05A2
+0000:                   * - Changed TST PD.ALF,y to LDA PD.ALF,y @ L05A2
+0000:                   * - Changed CLR V.WAKE,u to CLRB/STB V.WAKE,u @ L05C9
+0000:                   * - Changed CLR V.WAKE,u to CLRB/STB V.WAKE,u @ L056F
+0000:                   * - Changed TST PD.UPC,y to LDB PD.UPC,y @ L0322
+0000:                   * - Changed TST PD.DLO,y/TST PD.EKO,y to LDB's @ L03A5
+0000:                   *
+0000:                   *          1994/06/16  ???
+0000:                   * Changed TST PD.UPC,y to LDB PD.UPC,y @ L0322
+0000:                   * - Changed TST PD.BSO,y to LDB PD.BSO,y @ L03BF
+0000:                   * - Changed TST PD.EKO,y to LDB PD.EKO,y @ L03BF
+0000:                   *
+0000:                   *          2002/10/11  Boisy G. Pitre
+0000:                   * Merged NitrOS-9 and TuneUp versions for single-source maintenance.  Note that
+0000:                   * the 6809 version of TuneUp never seemed to call GrfDrv directly to do fast screen
+0000:                   * writes (see note around g.done label).
+0000:                   *
+0000:                   *  16r2    2002/05/16  Boisy G. Pitre
+0000:                   * Removed pshs/puls of b from sharable code segment for non-NitrOS-9 because it was
+0000:                   * not needed.
+0000:                   *
+0000:                   *  16r3    2002/08/16  Boisy G. Pitre
+0000:                   * Now uses V$DRIVEX.
+0000:                   *
+0000:                   *  16r4    2004/07/12  Boisy G. Pitre
+0000:                   * 6809 version now calls the FAST TEXT entry point of GrfDrv.
+0000:                   *
+0000:                   *  17      2010/01/15  Boisy G. Pitre
+0000:                   * Fix for bug described in Artifact 2932883 on SF
+0000:                   * Also added Level 1 conditionals for eventual backporting
+0000:                   
+0000:                   *
+0000:                   *  17      2010/01/15  Boisy G. Pitre
+0000:                   * Handling of device exclusivity using the SHARE. bit has been rearchitected.
+0000:                   * The '93 patch looked at the mode bytes in the descriptor and driver and
+0000:                   * determined that if both were set, then only one path would be allowed to
+0000:                   * be opened on the device at a time.
+0000:                   * I now believe this is wrong.
+0000:                   * The mode bytes in the device driver and descriptor are capability bytes.
+0000:                   * They advertise what the device is capable of doing (READ, WRITE, etc) so
+0000:                   * the mode bytes alone do not convey action, but merely what is possible.
+0000:                   * When the user calls I$Open on a device, he passes the desired mode byte
+0000:                   * in RegA and IOMan checks to make sure that all bits in that register are
+0000:                   * set in the mode bytes of the driver and descriptor.  So once we get into
+0000:                   * the Open call of this file manager, we know that all set bits in RegA are
+0000:                   * also set in the mode bytes of the driver and descriptor.
+0000:                   *
+0000:                   * For SHARE., what we SHOULD be doing is checking the number of open paths
+0000:                   * on the device.  If the SHARE. bit is set in RegA, then we check if a path
+0000:                   * is already open and if so, return the E$DevBsy error.
+0000:                   * Likewise, if SHARE. is not set in RegA, we check the path at the head of
+0000:                   * the open path list, and if ITS mode byte has the SHARE. bit set, we exit
+0000:                   * with E$DevBsy too.  The idea is that if the SHARE. bit is set on the newly
+0000:                   * opened path or an existing path, then there can "be only one."
+0000:                   *
+0000:                   *  18      2010/01/23  Boisy G. Pitre
+0000:                   * SCF has successfully been backported to NitrOS-9 Level 1.
+0000:                   * SCF now returns on carry set after calling SS.Open.  Prior to this
+0000:                   * change, SS.ComSt would be called right after SS.Open even if SS.Open
+0000:                   * failed. This caused misery with the scdwn driver wildcard feature.
+0000:                   *
+0000:                   
+0000:                            nam   SCF
+0000:                            ttl   NitrOS-9 Sequential Character File Manager
+0000:                   
+0000:                            IFP1
+0000:                            use   defsfile
+0000:                   ;         use   scfdefs
+0000:                            IFGT  Level-1
+0000:                            use   cocovtio.d
+0000:                            ENDC
+0000:                            ENDC
+0000:                   
+00D1:                   tylg     set   FlMgr+Objct
+0080:                   atrv     set   ReEnt+rev
+0000:                   rev      set   0
+0012:                   edition  equ   18
+0000:                   
+0000: 87CD0882000DD180           mod   eom,SCFName,tylg,atrv,SCFEnt,0
+0009: 02AC0000
+0000:                   
+000D: 5343C6            SCFName  fcs   /SCF/
+0010: 12                         fcb   edition
+0011:                   
+0011:                   
+0011:                   * Default input buffer setting for SCF devices when Opened/Created
+0011:                   *               123456789!123456789!1234567890
+0011:                   *msg      fcc   'by B.Nobel,C.Boyle,W.Gale-1993'
+0011: 7777772E6E697472  msg      fcc   'www.nitros9.org'
+001A: 73392E6F7267
+000F:                   msgsize  equ   *-msg        Size of default input buffer message
+0020: 0D                         fcb   C$CR         2nd CR for buffer pad fill
+00F1:                   blksize  equ   256-msgsize  Size of blank space after it
+0021:                   
+0021:                   * Return bad pathname error
+0021: 3520              opbpnam  puls  y
+0023: 53                bpnam    comb               Set carry for error
+0024: C6D7                       ldb   #E$BPNam     Get error code
+0026: 39                oerr     rts                Return to caller
+0027:                   
+0027:                   * I$Create/I$Open entry point
+0027:                   * Entry: Y= Path dsc. ptr
+0027: AE23              open     ldx   PD.DEV,y     Get device table pointer
+0029: AFA9003B                   stx   PD.TBL,y     Save it
+002D: EE26                       ldu   PD.RGS,y     Get callers register stack pointer
+002F: 3420                       pshs  y            Save path descriptor pointer
+0031: AE44                       ldx   R$X,u        Get pointer to device pathname
+0033: 103F10                     os9   F$PrsNam     Parse it
+0036: 25E9                       bcs   opbpnam      Error, exit
+0038: 4D                         tsta               End of pathname?
+0039: 2B07                       bmi   open1        Yes, go on
+003B: 30A4                       leax  ,y           Point to actual device name
+003D: 103F10                     os9   F$PrsNam     Parse it again
+0040: 24DF                       bcc   opbpnam      Return to caller with bad path name if more
+0042: 10AF44            open1    sty   R$X,u        Save updated name pointer to caller
+0045: 3520                       puls  y            Restore path descriptor pointer
+0047: CC0100                     ldd   #256         Get size of input buffer in bytes
+004A: 103F28                     os9   F$SRqMem     Allocate it
+004D: 25D7                       bcs   oerr         Can't allocate it return with error
+004F: EF28                       stu   PD.BUF,y     Save buffer address to path descriptor
+0051: 308CBD                     leax  <msg,pc      Get ptr to init string
+0054:                   
+0054:                            IFNE  H6309
+0054:                   
+0054:                            ldw   #msgsize     get size of default message
+0054:                            tfm   x+,u+        Copy it into buffer (leaves X pointing to 2nd CR)
+0054:                            ldw   #blksize     Size of rest of buffer
+0054:                            tfm   x,u+         Fill rest of buffer with CR's
+0054:                   
+0054:                            ELSE
+0054:                   
+0054: A680              CopyMsg  lda   ,x+
+0056: A7C0                       sta   ,u+
+0058: 5A                         decb
+0059: 810D                       cmpa  #C$CR
+005B: 26F7                       bne   CopyMsg
+005D: A7C0              CopyCR   sta   ,u+
+005F: 5A                         decb
+0060: 26FB                       bne   CopyCR
+0062:                   
+0062:                            ENDC
+0062:                   
+0062: EE23                       ldu   PD.DEV,y     Get device table entry address
+0064: 27BD                       beq   bpnam        Doesn't exist, exit with bad pathname error
+0066: AE42                       ldx   V$STAT,u     Get devices' static storage address
+0068: A6A828                     lda   PD.PAG,y     Get devices page length
+006B: A707                       sta   V.LINE,x     Save it to devices static storage
+006D: AE44                       ldx   V$DESC,u     Get descriptor address
+006F: ECA836                     ldd   PD.D2P,y     Get offset to device name (duplicate from dev dsc)
+0072: 2720                       beq   L00CF        None, skip ahead
+0074:                   
+0074:                            IFNE  H6309
+0074:                   
+0074:                            addr  d,x          Point to device name in descriptor
+0074:                            lda   PD.MOD,y     Get device mode (Read/Write/Update)
+0074:                            lsrd               ??? (swap Read/Write bits around in A?)
+0074:                   
+0074:                            ELSE
+0074:                   
+0074: 308B                       leax  d,x
+0076: A621                       lda   PD.MOD,y     Get device mode (Read/Write/Update)
+0078: 44                         lsra
+0079: 56                         rorb
+007A:                   
+007A:                            ENDC
+007A:                   
+007A: 44                         lsra
+007B: 59                         rolb
+007C: 49                         rola
+007D: 56                         rorb
+007E: 49                         rola
+007F:                            IFGT  Level-1
+007F: 3420                       pshs  y            Save path descriptor pointer temporarily
+0081: 109E50                     ldy   <D.Proc      Get current process pointer
+0084: DE4A                       ldu   <D.SysPrc    Get system process descriptor pointer
+0086: DF50                       stu   <D.Proc      Make system current process
+0088:                            ENDC
+0088: 103F80                     os9   I$Attach     Attempt to attach to device name in device desc.
+008B:                            IFGT  Level-1
+008B: 109F50                     sty   <D.Proc      Restore old current process pointer
+008E: 3520                       puls  y            Restore path descriptor pointer
+0090:                            ENDC
+0090: 2557                       bcs   OpenErr     Couldn't attach to device, detach & exit with error
+0092: EF2A                       stu   PD.DV2,y     Save new output (echo) device table pointer
+0094:                   *         ldu   PD.DEV,y     Get device table pointer
+0094: EE42              L00CF    ldu   V$STAT,u     Point to it's static storage
+0096:                   
+0096:                            IFNE  H6309
+0096:                   
+0096:                            clrd
+0096:                   
+0096:                            ELSE
+0096:                   
+0096: 4F                         clra
+0097: 5F                         clrb
+0098:                   
+0098:                            ENDC
+0098:                   
+0098: EDA83D                     std   PD.PLP,y     Clear out path descriptor list pointer
+009B: A7A83F                     sta   PD.PST,y     Clear path status: Carrier not lost
+009E: 3406                       pshs  d            Save 0 on stack
+00A0: AEC816                     ldx   V.PDLHd,u    Get path descriptor list header pointer
+00A3:                   * 05/25/93 mod - Boisy Pitre's non-sharable device patches
+00A3:                   * 01/15/10 mod - Boisy Pitre redoes his non-sharable device patch
+00A3: 2713                       beq   Yespath      No paths open, so we know we can open it
+00A5:                   * IOMan has already vetted the mode byte of the driver and the descriptor
+00A5:                   * and compared it to REGA of I$Open (now in PD.MOD of this current path).
+00A5:                   * here we know there is at least one path open for this device.
+00A5:                   * in order to properly support SHARE. (device exclusivity), we get the
+00A5:                   * mode byte for the path we are opening and see if the SHARE. bit is set.
+00A5:                   * if so, then we return error since we cannot have exclusivity to the device.
+00A5:                            IFNE  H6309
+00A5:                            tim   #SHARE.,PD.MOD,y
+00A5:                            ELSE
+00A5: A621                       lda   PD.MOD,y 
+00A7: 8540                       bita  #SHARE.
+00A9:                            ENDC
+00A9: 2606                       bne   NoShare      
+00AB:                   * we now know that the path's mode doesn't have the SHARE. bit set, so 
+00AB:                   * we need to look at the mode of the path in the list header pointer to
+00AB:                   * see if ITS SHARE. bit is set (meaning it wants exclusive access to the
+00AB:                   * port).  If so we bail out
+00AB:                            IFNE  H6309
+00AB:                            tim   #SHARE.,PD.MOD,x
+00AB:                            ELSE
+00AB: A601                       lda   PD.MOD,x 
+00AD: 8540                       bita  #SHARE.
+00AF:                            ENDC
+00AF: 270F                       beq   CkCar        Check carrier status
+00B1: 3262              NoShare  leas  2,s          Eat extra stack (including good path count)
+00B3: 53                         comb
+00B4: C6FA                       ldb   #E$DevBsy    Non-sharable device busy error
+00B6: 2031                       bra   OpenErr       Go detach device & exit with error
+00B8:                            
+00B8: 10AFC816          Yespath  sty   V.PDLHd,u    Save path descriptor ptr
+00BC: 2012                       bra   L00F8        Go open the path
+00BE:                   
+00BE: 1F01              L00E6    tfr   d,x          Change to PD.PLP path descriptor
+00C0: E6883F            CkCar    ldb   PD.PST,x     Get Carrier status
+00C3: 2602                       bne   L00EF        Carrier was lost, don't update count
+00C5: 6C61                       inc   1,s          Carrier not lost, bump up count of good paths
+00C7: EC883D            L00EF    ldd   PD.PLP,x     Get path descriptor list pointer
+00CA: 26F2                       bne   L00E6        There is one, go make it the current one
+00CC: 10AF883D                   sty   PD.PLP,x     Save path descriptor ptr as path dsc. list ptr
+00D0: 8629              L00F8    lda   #SS.Open     Internal open call
+00D2: 3402                       pshs  a            Save it on the stack
+00D4: 6C62                       inc   2,s          Bump counter of good paths up by 1
+00D6: 170181                     lbsr  L025B        Do the SS.Open call to the driver
+00D9: A662                       lda   2,s          Get counter of good paths
+00DB: 3263                       leas  3,s          Eat stack
+00DD:                   * NEW: return with error if SS.Open return error
+00DD: 2508                       bcs   L010F        +++BGP+++
+00DF: 4A                         deca               Bump down good path count
+00E0: 261F                       bne   L0129        If more still open, exit without error
+00E2: 2503                       blo   L010F        If negative, something went wrong
+00E4: 160168                     lbra  L0250        Set parity/baud & return
+00E7:                   
+00E7:                   * we come here if there was an error in Open (after I$Attach and F$SRqMem!)
+00E7: 8D40              L010F    bsr   RemoveFromPDList        Error, go clear stuff out
+00E9: 3405              OpenErr  pshs  b,cc         Preserve error status
+00EB: 8D29                       bsr   L0136        Detach device
+00ED: 3585                       puls  pc,b,cc      Restore error status & return
+00EF:                   
+00EF:                   * I$Close entry point
+00EF: 3401              close    pshs  cc           Preserve interrupt status
+00F1: 1A50                       orcc  #IntMasks    Disable interrupts
+00F3: AE23                       ldx   PD.DEV,y     Get device table pointer
+00F5: 8D6B                       bsr   L0182        Check it
+00F7: AE2A                       ldx   PD.DV2,y     Get output device table pointer
+00F9: 8D67                       bsr   L0182        Check it
+00FB: 3501                       puls  cc           Restore interrupts
+00FD: A622                       lda   PD.CNT,y     Any open images?
+00FF: 2702                       beq   L012B        No, go on
+0101: 4F                L0129    clra               Clear carry
+0102: 39                L012A    rts                Return
+0103:                   
+0103:                   * Detach device & return buffer memory
+0103: 8D24              L012B    bsr   RemoveFromPDList
+0105: 862A                       lda   #SS.Close    Get setstat code for close
+0107: AE23                       ldx   PD.DEV,y     get pointer to device table
+0109: AE02                       ldx   V$STAT,x     get static mem ptr
+010B: E606                       ldb   V.TYPE,x     Get device type    \ WON'T THIS SCREW UP WITH
+010D: 2B07                       bmi   L0136        Window, skip ahead / MARK OR SPACE PARITY???
+010F: 3412                       pshs  x,a          Save close code & X for SS.Close calling routine
+0111: 170146                     lbsr  L025B        Not window, go call driver's SS.Close routine
+0114: 3263                       leas  3,s          Purge stack
+0116: EE2A              L0136    ldu   PD.DV2,y     Get output device pointer
+0118: 2703                       beq   L013D        Nothing there, go on
+011A: 103F81                     os9   I$Detach     Detach it
+011D: EE28              L013D    ldu   PD.BUF,y     Get buffer pointer
+011F: 2706                       beq   L0147        None defined go on
+0121: CC0100                     ldd   #256         Get buffer size
+0124: 103F29                     os9   F$SRtMem     Return buffer memory to system
+0127: 4F                L0147    clra               Clear carry
+0128: 39                         rts                Return
+0129:                   
+0129:                   * Remove path descriptor from device path descriptor linked list
+0129:                   * Entry: Y = path descriptor
+0129:                   RemoveFromPDList
+0129: 8E0001                     ldx   #1
+012C: 3477                       pshs  cc,d,x,y,u
+012E: EE23                       ldu   PD.DEV,y     Get device table pointer
+0130: 2729                       beq   L017B        None, skip ahead
+0132: EE42                       ldu   V$STAT,u     Get static storage pointer
+0134: 2725                       beq   L017B        None, skip ahead
+0136: AEC816                     ldx   V.PDLHd,u    Get path descriptor list header
+0139: 2720                       beq   L017B        None, skip ahead
+013B: ECA83D                     ldd   PD.PLP,y     Get path descriptor list pointer
+013E: 10ACC816                   cmpy  V.PDLHd,u    is the passed path descriptor the same?
+0142: 260E                       bne   L0172        branch if not
+0144: EDC816                     std   V.PDLHd,u
+0147: 2612                       bne   L017B
+0149: 6F64                       clr   4,s          Clear LSB of X on stack
+014B: 200E                       bra   L017B        Return
+014D:                   
+014D:                   * D = path descriptor to store
+014D: AE883D            L016D    ldx   PD.PLP,x     advance to next path descriptor in list
+0150: 270E                       beq   L0180        branch if at end of linked list
+0152: 10AC883D          L0172    cmpy  PD.PLP,x     is the passed path descriptor the same?
+0156: 26F5                       bne   L016D        branch if not
+0158: ED883D                     std   PD.PLP,x     store
+015B:                            IFNE  H6309
+015B:                   L017B    clrd
+015B:                            ELSE
+015B: 4F                L017B    clra
+015C: 5F                         clrb
+015D:                            ENDC
+015D: EDA83D                     std   PD.PLP,y
+0160: 35F7              L0180    puls  cc,d,x,y,u,pc
+0162:                   
+0162:                   
+0162:                   * Check path number?
+0162:                   * Entry: X=Ptr to device table (just LDX'd)
+0162:                   *        Y=Path dsc. ptr
+0162: 279E              L0182    beq   L012A        No device table, return to caller
+0164: AE02                       ldx   V$STAT,x     Get static storage pointer
+0166: E620                       ldb   PD.PD,y      Get system path number from path dsc.
+0168: A625                       lda   PD.CPR,y     Get ID # of process currently using path
+016A: 3436                       pshs  d,x,y        Save everything
+016C: A103                       cmpa  V.LPRC,x     Current process same as last process using path?
+016E: 2638                       bne   L01CA        No, return
+0170:                            IFGT  Level-1
+0170: 9E50                       ldx   <D.Proc      Get current process pointer
+0172:                            ELSE
+0172:                            ldx   >D.Proc      Get current process pointer
+0172:                            ENDC
+0172: 308830                     leax  P$Path,x     Point to local path table
+0175: 4F                         clra               Start path # = 0 (Std In)
+0176: E186              L0198    cmpb  a,x          Same path as one is process' local path list?
+0178: 272E                       beq   L01CA        Yes, return
+017A: 4C                         inca               Move to next path
+017B: 8110                       cmpa  #NumPaths    Done all paths?
+017D: 25F7                       blo   L0198        No, keep going
+017F: 3420                       pshs  y            Preserve path descriptor pointer
+0181:                   
+0181:                            IFNE  H6309
+0181:                   
+0181:                            lda   #SS.Relea    Release signals SetStat
+0181:                            ldf   #D$PSTA      Get Setstat offset
+0181:                   
+0181:                            ELSE
+0181:                   
+0181: CC1B0C                     ldd   #SS.Relea*256+D$PSTA
+0184:                   
+0184:                            ENDC
+0184:                   
+0184: 8D50                       bsr   L01FA        Execute driver setstat routine
+0186: 3520                       puls  y            Restore path pointer
+0188:                            IFGT  Level-1
+0188: 9E50                       ldx   <D.Proc      Get current process pointer
+018A:                            ELSE
+018A:                            ldx   >D.Proc      Get current process pointer
+018A:                            ENDC
+018A: A601                       lda   P$PID,x      Get parent process ID
+018C: A7E4                       sta   ,s           Save it
+018E:                            IFGT  Level-1
+018E: 103F37                     os9   F$GProcP     Get pointer to parent process descriptor
+0191:                            ELSE
+0191:                            ldx   <D.PrcDBT
+0191:                            os9   F$Find64
+0191:                            ENDC
+0191: 30A830                     leax  P$Path,y     Point to local path table
+0194: E661                       ldb   1,s          Get path number
+0196: 4F                         clra               Get starting path number
+0197: E186              L01B9    cmpb  a,x          Same path?
+0199: 2707                       beq   L01C4        Yes, go on
+019B: 4C                         inca               Move to next path
+019C: 8110                       cmpa  #NumPaths    Done all paths?
+019E: 25F7                       blo   L01B9        No, keep checking
+01A0: 6FE4                       clr   ,s           Clear process ID
+01A2: A6E4              L01C4    lda   ,s           Get process ID
+01A4: AE62                       ldx   2,s          Get static storage pointer
+01A6: A703                       sta   V.LPRC,x     Store it as last process
+01A8: 35B6              L01CA    puls  d,x,y,pc     Restore & return
+01AA:                   
+01AA:                   * I$GetStt entry point
+01AA: A6A83F            getstt   lda   PD.PST,y     Path status ok?
+01AD: 10260229                   lbne  L04C6        No, terminate process
+01B1: AE26                       ldx   PD.RGS,y     Get register stack pointer
+01B3: A602                       lda   R$B,x        Get function code
+01B5: 261D                       bne   L01F8        If not SS.Opt, go on
+01B7:                   * SS.Opt Getstat
+01B7: 3432                       pshs  a,x,y        Preserve registers
+01B9: 8628                       lda   #SS.ComSt    Get code for Comstat
+01BB: A702                       sta   R$B,x        Save it in callers B
+01BD: EE06                       ldu   R$Y,x        Preserve callers Y
+01BF: 3440                       pshs  u
+01C1: 8D11                       bsr   L01F8        Send it to driver
+01C3: 3540                       puls  u            Restore callers Y
+01C5: 3532                       puls  a,x,y        Restore registers
+01C7: A702                       sta   R$B,x        Do SS.OPT
+01C9: EC06                       ldd   R$Y,x        Get com stat
+01CB: EF06                       stu   R$Y,x        Put original callers Y back
+01CD: 2503                       bcs   L01F6        Return if error
+01CF: EDA834                     std   PD.PAR,y     Update path descriptor
+01D2: 5F                L01F6    clrb               Clear carry
+01D3: 39                L01F7    rts                Return
+01D4:                   
+01D4:                   * Execute device driver Get/Set Status routine
+01D4:                   * Entry: A=GetStat/SetStat code
+01D4:                   
+01D4:                            IFNE  H6309
+01D4:                   
+01D4:                   L01F8    ldf   #D$GSTA      Get Getstat driver entry offset
+01D6:                   L01FA    ldx   PD.DEV,y     Get device table pointer
+01D4:                            ldu   V$STAT,x     Get static storage pointer
+01D4:                            IFGT  Level-1
+01D4:                            ldx   V$DRIVEX,x   get execution pointer of driver
+01D4:                            ELSE
+01D4:                            pshs  d
+01D4:                            ldx   V$DRIV,x     get driver module
+01D4:                            ldd   M$EXEC,x
+01D4:                            leax  d,x
+01D4:                            puls  d
+01D4:                            ENDC
+01D4:                            pshs  y,u          Preserve registers
+01D4:                            jsr   f,x          Execute driver
+01D4:                            puls  y,u,pc       Restore & return
+01D4:                   
+01D4:                            ELSE
+01D4:                   
+01D4: C609              L01F8    ldb   #D$GSTA
+01D6: AE23              L01FA    ldx   PD.DEV,y
+01D8: EE02                       ldu   V$STAT,x
+01DA:                            IFGT  Level-1
+01DA: AE09                       ldx   V$DRIVEX,x
+01DC:                            ELSE
+01DC:                            pshs  d
+01DC:                            ldx   V$DRIV,x     get driver module
+01DC:                            ldd   M$EXEC,x
+01DC:                            leax  d,x
+01DC:                            puls  d
+01DC:                            ENDC
+01DC: 3460                       pshs  u,y
+01DE: AD85              LC486    jsr   b,x
+01E0: 35E0                       puls  y,u,pc
+01E2:                   
+01E2:                            ENDC
+01E2:                   
+01E2:                   
+01E2:                   * I$SetStt entry point
+01E2: 1701D0            setstt   lbsr  L04A2
+01E5: 8D35              L0212    bsr   L021B        Check codes
+01E7: 3405                       pshs  cc,b         Preserve registers
+01E9: 17017C                     lbsr  L0453        Wait for device
+01EC: 3585                       puls  cc,b,pc      Restore & return
+01EE:                   
+01EE: 81A0              putkey   cmpa  #SS.Fill     Buffer preload?
+01F0: 26E4                       bne   L01FA        No, go execute driver setstat
+01F2: 3470                       pshs  u,y,x
+01F4:                            IFGT  Level-1
+01F4: 9E50                       ldx   <D.Proc      Get current process pointer
+01F6:                            ELSE
+01F6:                            ldx   >D.Proc      Get current process pointer
+01F6:                            ENDC
+01F6: A646                       lda   R$Y,u        Get flag byte for CR/NO CR
+01F8: 3402                       pshs  a            Save it
+01FA:                            IFGT  Level-1
+01FA: A606                       lda   P$Task,x     Get task number
+01FC: D6D0                       ldb   <D.SysTsk    Get system task
+01FE:                            IFNE  H6309
+01FE:                            ldx   R$X,u        Get pointer to data to move
+01FE:                            ldf   R$Y+1,u      Get number of bytes (max size of 256 bytes)
+01FE:                            ldu   PD.BUF,y     Get input buffer pointer
+01FE:                            clre               High byte of Y
+01FE:                            tfr   w,y          Move size into proper register for F$Move
+01FE:                            ELSE
+01FE: 3406                       pshs  d
+0200: 4F                         clra
+0201: E647                       ldb   R$Y+1,u
+0203: AE44                       ldx   R$X,u
+0205: EE28                       ldu   PD.BUF,y
+0207: 1F02                       tfr   d,y
+0209: 3506                       puls  d
+020B:                            ENDC
+020B:                   * X=Source ptr from caller, Y=# bytes to move, U=Input buffer ptr
+020B: 103F38                     os9   F$Move       Move it
+020E: 250A                       bcs   putkey1      Exit if error
+0210: 1F20                       tfr   y,d          Move number of bytes to D
+0212:                            ELSE
+0012:                   loop
+0212:                            lda   ,x+
+0212:                            sta   ,u+
+0212:                            leay  -1,y
+0212:                            bne   loop
+0212:                            ENDC
+0212: A6E4                       lda   ,s           Get CR flag
+0214: 2B04                       bmi   putkey1      Don't want CR appended, exit
+0216: 860D                       lda   #C$CR        Get code for carriage return
+0218: A7C5                       sta   b,u          Put it in buffer to terminate string
+021A: 35F2              putkey1  puls  a,x,y,u,pc   Eat stack & return
+021C:                            IFNE  H6309
+021C:                   L021B    ldf   #D$PSTA      Get driver entry offset for setstat
+021C:                            ELSE
+021C: C60C              L021B    ldb   #D$PSTA      Get driver entry offset for setstat
+021E:                            ENDC
+021E: A642                       lda   R$B,u        Get function code from caller
+0220: 26CC                       bne   putkey       Not SS.OPT, go check buffer load
+0222:                   * SS.OPT SETSTAT
+0222: AEA827                     ldx   PD.PAU,y     Get current pause & page
+0225:                            IFGT  Level-1
+0225: 3430                       pshs  y,x          Preserve Path pointer & pause/page
+0227: 9E50                       ldx   <D.Proc      Get current process pointer
+0229: A606                       lda   P$Task,x     Get task number
+022B: D6D0                       ldb   <D.SysTsk    Get system task number
+022D: AE44                       ldx   R$X,u        Get callers destination pointer
+022F: 33A820                     leau  PD.OPT,y     Point to path options
+0232: 108E001A                   ldy   #OPTCNT      Get option length
+0236: 103F38                     os9   F$Move       Move it to caller
+0239: 3530                       puls  y,x          Restore Path pointer & page/pause status
+023B: 2596                       bcs   L01F7        Return if error from move
+023D:                            ELSE
+023D:                            pshs  x,y
+023D:                            ldx   R$X,u
+023D:                            leay  PD.OPT,y
+023D:                            ldb   #OPTCNT
+0001:                   optloop
+023D:                            lda   ,x+
+023D:                            sta   ,y+
+023D:                            decb
+023D:                            bne   optloop
+023D:                            puls  x,y
+023D:                            ENDC
+023D:                            IFEQ  H6309
+023D: 3410                       pshs  x
+023F:                            ENDC
+023F: ECA827                     ldd   PD.PAU,y     Get new page/pause status
+0242:                            IFNE  H6309
+0242:                            cmpr  d,x          Same as old?
+0242:                            ELSE
+0242: 10A3E1                     cmpd  ,s++
+0245:                            ENDC
+0245: 2708                       beq   L0250        Yes, go on
+0247: EE23                       ldu   PD.DEV,y     Get device table pointer
+0249: EE42                       ldu   V$STAT,u     Get static storage pointer
+024B: 2702                       beq   L0250        Go on if none
+024D: E747                       stb   V.LINE,u     Update new line count
+024F: AEA834            L0250    ldx   PD.PAR,y     Get parity/baud
+0252: 8628                       lda   #SS.ComSt    Get code for ComSt
+0254: 3412                       pshs  a,x          Preserve them 
+0256: 8D02                       bsr   L025B        Update parity & baud
+0258: 3592                       puls  a,x,pc       Restore & return
+025A:                   
+025A:                   * Update path Parity & baud
+025A: 3470              L025B    pshs  x,y,u        Preserve everything
+025C: AE26                       ldx   PD.RGS,y     Get callers register pointer
+025E: EE06                       ldu   R$Y,x        Get his Y
+0260: A602                       lda   R$B,x        Get his B
+0262: 3472                       pshs  a,x,y,u      Preserve it all
+0264: ECE810                     ldd   $10,s        Get current parity/baud
+0267: ED06                       std   R$Y,x        Put it in callers Y
+0269: A66F                       lda   $0F,s        Get function code
+026B: A702                       sta   R$B,x        Put it in callers B
+026D: 17014A                     lbsr  L04A7        Wait for device to be ready
+0270: 17FF72                     lbsr  L0212        Send it to driver
+0273: 3572                       puls  a,x,y,u      Restore callers registers
+0275: EF06                       stu   R$Y,x        Put back his Y
+0277: A702                       sta   R$B,x        Put back his B
+0279: 2405                       bcc   L0282        Return if no error
+027B: C1D0                       cmpb  #E$UnkSvc    Unknown service request?
+027D: 2701                       beq   L0282        Yes, return
+027F: 43                         coma               Set carry
+0280: 35F0              L0282    puls  x,y,u,pc     Restore & return
+0282:                   
+0282:                   * I$Read entry point
+0282: 170130            read     lbsr  L04A2        Go wait for device to be ready for us
+0285: 2401                       bcc   L028A        No error, go on
+0287: 39                L0289    rts                Return with error
+0288: 6C2C              L028A    inc   PD.RAW,y     Make sure we do Raw read
+028A: AE46                       ldx   R$Y,u        Get number of characters to read
+028C: 2772                       beq   L02DC        Return if zero
+028E: 3410                       pshs  x            Save character count
+0290: 8E0000                     ldx   #0
+0293: EE28                       ldu   PD.BUF,y     Get buffer address
+0295: 8D6B                       bsr   L03E2        Read 1 character from device
+0297: 250A                       bcs   L02A4        Return if error
+0299: 4D                         tsta               Character read zero?
+029A: 274C                       beq   L02C4        Yes, go try again
+029C: A1A82C                     cmpa  PD.EOF,y     End of file character?
+029F: 263F                       bne   L02BC        No, keep checking
+02A1: C6D3              L02A2    ldb   #E$EOF       Get EOF error code
+02A3: 3262              L02A4    leas  2,s          Purge stack
+02A5: 3404                       pshs  b            Save error code
+02A7: 8D51                       bsr   L02D5        Return
+02A9: 53                         comb               Set carry
+02AA: 3584                       puls  b,pc         Restore & return
+02AC:                   
+02AC:                   ******************************
+02AC:                   *
+02AC:                   * SCF file manager entry point
+02AC:                   *
+02AC:                   * Entry: Y = Path descriptor pointer
+02AC:                   *        U = Callers register stack pointer
+02AC:                   *
+02AC:                   
+02AC: 16FD78            SCFEnt   lbra  open         Create path
+02AF: 16FD75                     lbra  open         Open path
+02B2: 16FD6E                     lbra  bpnam        Makdir
+02B5: 16FD6B                     lbra  bpnam        Chgdir
+02B8: 16FE46                     lbra  L0129        Delete (return no error)
+02BB: 16FE43                     lbra  L0129        Seek (return no error)
+02BE: 20C2                       bra   read         Read character
+02C0: 12                         nop
+02C1: 16012D                     lbra  write        Write character
+02C4: 160083                     lbra  readln       ReadLn
+02C7: 160123                     lbra  writln       WriteLn
+02CA: 16FEDD                     lbra  getstt       Get Status
+02CD: 16FF12                     lbra  setstt       Set Status
+02D0: 16FE1C                     lbra  close        Close path
+02D3:                   
+02D3:                   * MAIN READ LOOP (no editing)
+02D3: 1F10              L02AD    tfr   x,d          move character count to D
+02D5: 5D                         tstb               past buffer end?
+02D6: 2604                       bne   L02B7        no, go get character from device
+02D8:                   * Not often used: only when buffer is full
+02D8: 8D48                       bsr   L042B        move buffer to caller's buffer
+02DA: EE28                       ldu   PD.BUF,y     reset buffer pointer back to start
+02DC:                   * Main char by char read loop
+02DC: 8D24              L02B7    bsr   L03E2        get a character from device
+02DE: 25C3                       bcs   L02A4        exit if error
+02E0: E6A824            L02BC    ldb   PD.EKO,y     echo turned on?
+02E3: 2703                       beq   L02C4        no, don't write it to device
+02E5: 170266                     lbsr  L0565        send it to device write
+02E8: C601              L02C4    ldb   #1           Bump up char count
+02EA: 3A                         abx
+02EB: A7C0                       sta   ,u+          save character in local buffer
+02ED: 2705                       beq   L02CF        go try again if it was a null
+02EF: A1A82B                     cmpa  PD.EOR,y     end of record charcter?
+02F2: 2704                       beq   L02D3        yes, return
+02F4: ACE4              L02CF    cmpx  ,s           done read?
+02F6: 25DB                       blo   L02AD        no, keep going till we are
+02F8:                   
+02F8: 3262              L02D3    leas  2,s          purge stack
+02FA: 8D26              L02D5    bsr   L042B        move local buffer to caller
+02FC: EE26                       ldu   PD.RGS,y     get register stack pointer
+02FE: AF46                       stx   R$Y,u        save number of characters read
+0300: 2066              L02DC    bra   L0453        update path descriptor and return
+0302:                   
+0302:                   * Read character from device
+0302: 3470              L03E2    pshs  u,y,x        Preserve regs
+0304: AE23                       ldx   PD.DEV,y     Get device table pointer for input
+0306: 2718                       beq   L0401        None, exit
+0308: EE2A                       ldu   PD.DV2,y     Get device table pointer for echoed output
+030A: 2707                       beq   L03F1        No echoed output device, skip ahead
+030C: EE42              L03EA    ldu   V$STAT,u     Get device static storage ptr for echo device
+030E: E6A828                     ldb   PD.PAG,y     Get lines per page
+0311: E747                       stb   V.Line,u     Store it in device static
+0313: 1F30              L03F1    tfr   u,d          Yes, move echo device' static storage to D
+0315: EE02                       ldu   V$STAT,x     Get static storage ptr for input
+0317: ED49                       std   V.DEV2,u     Save echo device's static storage into input device
+0319: 4F                         clra
+031A: A745                       sta   V.WAKE,u     Flag input device to be awake
+031C:                            IFGT  Level-1
+031C: AE09                       ldx   V$DRIVEX,x   Get driver execution pointer
+031E:                            ELSE
+031E:                            pshs  d
+031E:                            ldx   V$DRIV,x     get driver module
+031E:                            ldd   M$EXEC,x
+031E:                            leax  d,x
+031E:                            puls  d
+031E:                            ENDC
+031E: AD03                       jsr   D$READ,x     Execute READ routine in driver
+0320: 35F0              L0401    puls  pc,u,y,x     Restore regs & return
+0322:                   
+0322:                   * Move buffer to caller
+0322:                   * Entry: Y=Path dsc. ptr
+0322:                   *        X=# chars to move
+0322: 3430              L042B    pshs  y,x            Preserve path dsc. ptr & char. count
+0324: ECE4                       ldd   ,s             Get # bytes to move
+0326: 2720                       beq   L0451          Exit if none
+0328: 5D                         tstb                 Uneven # bytes (not even page of 256)?
+0329: 2601                       bne   L0435          Yes, go on
+032B: 4A                         deca                 >256, so bump MSB down
+032C: 5F                L0435    clrb                 Force to even page
+032D: EE26                       ldu   PD.RGS,y       Get callers register stack pointer
+032F: EE44                       ldu   R$X,u          Get ptr to caller's buffer
+0331:                            IFNE  H6309
+0331:                            addr  d,u            Offset to even page into buffer
+0331:                            clre                 Clear MSB of count
+0331:                            ldf   1,s            LSB of count on even page?
+0331:                            bne   L0442          No, go on
+0331:                            ince                 Make it even 256 
+0339:                   L0442
+0331:                            IFGT  Level-1
+0331:                            lda   <D.SysTsk      Get source task number
+0331:                            ENDC
+0331:                            ELSE
+0331: 33CB                       leau  d,u
+0333: 4F                         clra
+0334: E661                       ldb   1,s
+0336: 2601                       bne   L0442          No, go on
+0338: 4C                         inca
+0339: 3406              L0442    pshs  d
+033B:                            IFGT  Level-1
+033B: 96D0                       lda   <D.SysTsk      Get source task number
+033D:                            ENDC
+033D:                            ENDC
+033D:                            IFGT  Level-1
+033D: 9E50                       ldx   <D.Proc        Get destination task number
+033F: E606                       ldb   P$Task,x
+0341: AE28                       ldx   PD.BUF,y       Get buffer pointer
+0343:                            IFNE  H6309
+0343:                            tfr   w,y            Put count into proper register
+0343:                            ELSE
+0343: 3520                       puls  y
+0345:                            ENDC
+0345: 103F38                     os9   F$Move         Move it to caller
+0348:                            ELSE
+0348:                            ldx   PD.BUF,y       Get buffer pointer
+0348:                            IFEQ  H6309
+0348:                            puls  y
+0348:                            ELSE
+0348:                            tfr   w,y
+0348:                            ENDC
+0348:                            pshs  u
+0000:                   L0443
+0348:                            lda   ,x+
+0348:                            sta   ,u+
+0348:                            leay  -1,y
+0348:                            bne   L0443
+0348:                            puls  u
+0348:                            ENDC
+0348: 35B0              L0451    puls  pc,y,x         Restore & return
+034A:                   
+034A:                   * I$ReadLn entry point
+034A: 8D69              readln   bsr   L04A2        Go wait for device to be ready for us
+034C: 2401                       bcc   L02E5        No error, continue
+034E: 39                         rts                Error, exit with it
+034F: EC46              L02E5    ldd   R$Y,u        Get character count
+0351: 2715                       beq   L0453        If none, mark device as un-busy
+0353: 4D                         tsta               Past 256 bytes?
+0354: 2703                       beq   L02EF        No, go on
+0356: CC0100                     ldd   #$0100       Get new character count
+0359: 3406              L02EF    pshs  d            Save character count
+035B: CCFFFF                     ldd   #$FFFF       Get maximum character count
+035E: ED2D                       std   PD.MAX,y     Store it in path descriptor
+0360: 8E0000                     ldx   #0           Set character count so far to 0
+0363: EE28                       ldu   PD.BUF,y     Get buffer ptr
+0365: 160215                     lbra  L05F8        Go process readln
+0368:                   
+0368:                   * Wait for device - Clears out V.BUSY if either Default or output devices are
+0368:                   * no longer busy
+0368:                   * Modifies X and A
+0368:                   L0453 
+0368:                            IFGT  Level-1
+0368: 9E50                       ldx   <D.Proc        Get current process
+036A:                            ELSE
+036A:                            ldx   >D.Proc        Get current process
+036A:                            ENDC
+036A: A600                       lda   P$ID,x         Get it's process ID
+036C: AE23                       ldx   PD.DEV,y       Get device table pointer from our path dsc.
+036E: 8D02                       bsr   L045D          Check if it's busy
+0370: AE2A                       ldx   PD.DV2,y       Get output device table pointer
+0372: 2709              L045D    beq   L0467          Doesn't exist, exit
+0374: AE02                       ldx   V$STAT,x       Get static storage pointer for our device
+0376: A104                       cmpa  V.BUSY,x       Same process as current process?
+0378: 2603                       bne   L0467          No, device busy return
+037A: 4F                         clra
+037B: A704                       sta   V.BUSY,x       Yes, mark device as free for use
+037D: 39                L0467    rts                  Return
+037E:                   
+037E: 3412              L0468    pshs  x,a            Preserve device table entry pointer & process ID
+0380: AE02              L046A    ldx   V$STAT,x       Get device static storage address
+0382: E604                       ldb   V.BUSY,x       Get active process ID
+0384: 2719                       beq   L048A          No active process, device not busy go reserve it
+0386: E1E4                       cmpb  ,s             Is it our own process?
+0388: 2728                       beq   L049F          Yes, return without error
+038A: 8DDC                       bsr   L0453          Go wait for device to no longer be busy
+038C: 1F98                       tfr   b,a            Get process # busy using device
+038E: 103F2B                     os9   F$IOQu         Put our process into the IO Queue
+0391: 6C2F                       inc   PD.MIN,y       Mark device as not mine
+0393:                            IFGT  Level-1
+0393: 9E50                       ldx   <D.Proc        Get current process
+0395:                            ELSE
+0395:                            ldx   >D.Proc        Get current process
+0395:                            ENDC
+0395: E68819                     ldb   P$Signal,x     Get signal code
+0398: A6E4                       lda   ,s             Get our process id # again for L046A
+039A: 27E4                       beq   L046A          No signal go try again
+039C: 43                         coma                 Set carry
+039D: 3592                       puls  x,a,pc         Restore device table ptr (eat a) & return
+039F:                   
+039F:                   * Mark device as busy;copy pause/interrupt/quit/xon/xoff chars into static mem
+039F: A704              L048A    sta   V.BUSY,x       Make it as process # busy on this device
+03A1: A703                       sta   V.LPRC,x       Save it as the last process to use device
+03A3: A6A82F                     lda   PD.PSC,y       Get pause character from path dsc.
+03A6: A70D                       sta   V.PCHR,x       Save copy in static storage (faster later)
+03A8: ECA830                     ldd   PD.INT,y       Get keyboard interrupt & quit chars
+03AB: ED0B                       std   V.INTR,x       Save copies in static mem
+03AD: ECA838                     ldd   PD.XON,y       Get XON/XOFF chars
+03B0: ED0F                       std   V.XON,x        Save them in static mem too
+03B2: 4F                L049F    clra                 No error & return
+03B3: 3592                       puls  pc,x,a         Restore A=Process #,X=Dev table entry ptr
+03B5:                   
+03B5:                   * Wait for device?
+03B5: A6A83F            L04A2    lda   PD.PST,y       Get path status (carrier)
+03B8: 261E                       bne   L04C4          If carrier was lost, hang up process
+03BA:                   L04A7
+03BA:                            IFGT  Level-1
+03BA: 9E50                       ldx   <D.Proc        Get current process ID
+03BC:                            ELSE
+03BC:                            ldx   >D.Proc        Get current process ID
+03BC:                            ENDC
+03BC: 4F                         clra
+03BD: A72F                       sta   PD.MIN,y       Flag device is mine
+03BF: A600                       lda   P$ID,x         Get process ID #
+03C1: AE23                       ldx   PD.DEV,y       Get device table pointer
+03C3: 8DB9                       bsr   L0468          Busy?
+03C5: 250E                       bcs   L04C1          No, return
+03C7: AE2A                       ldx   PD.DV2,y       Get output device table pointer
+03C9: 2704                       beq   L04BB          Go on if it doesn't exist
+03CB: 8DB1                       bsr   L0468          Busy?
+03CD: 2506                       bcs   L04C1          No, return
+03CF: A62F              L04BB    lda   PD.MIN,y       Device mine?
+03D1: 26E2                       bne   L04A2          No, go wait for it
+03D3: A72C                       sta   PD.RAW,y       Mark device with editing
+03D5: EE26              L04C1    ldu   PD.RGS,y       Get register stack pointer
+03D7: 39                         rts                  Return
+03D8:                   
+03D8:                   * Hangup process
+03D8: 3262              L04C4    leas  2,s            Purge return address
+03DA: C6DC              L04C6    ldb   #E$HangUp      Get hangup error code
+03DC: 8102                       cmpa  #S$Abort       Termination signal (or carrier lost)?
+03DE: 2507                       blo   L04D3          Yes, increment status flag & return
+03E0: A625                       lda   PD.CPR,y       Get current process ID # using path
+03E2: C600                       ldb   #S$Kill        Get kill signal
+03E4: 103F08                     os9   F$Send         Send it to process
+03E7: 6CA83F            L04D3    inc   PD.PST,y       Set path status
+03EA: 1A01                       orcc  #Carry         Set carry
+03EC: 39                         rts                  Return
+03ED:                   
+03ED:                   * I$WritLn entry point
+03ED: 8DC6              writln   bsr   L04A2          Go wait for device to be ready for us
+03EF: 2004                       bra   L04E1          Go write
+03F1:                   
+03F1:                   * I$Write entry point
+03F1: 8DC2              write    bsr   L04A2          Go wait for device to be ready for us
+03F3: 6C2C                       inc   PD.RAW,y       Mark device for raw write
+03F5: AE46              L04E1    ldx   R$Y,u          Get number of characters to write
+03F7: 102700CB                   lbeq  L055A          Zero so return
+03FB: 3410                       pshs  x              Save character count
+03FD: 8E0000                     ldx   #$0000         Get write data offset
+0400: 2005                       bra   L04F1          Go write data
+0402:                   
+0402: 1F30              L04EC    tfr   u,d            Move current position in PD.BUF to D
+0404: 5D                         tstb                 At 256 (end of PD.BUF)?
+0405: 2632                       bne   L0523          No, keep writing from current PD.BUF
+0407:                   
+0407:                   * Get new block of data to write into [PD.BUF]
+0407:                   * Only allows up to 32 bytes at a time, and puts them in the last 32 bytes of
+0407:                   * the 256 byte [PD.BUF] buffer. This way, can use TFR U,D/TSTB to see if fin-
+0407:                   * inshed
+0407: 3430              L04F1    pshs  y,x            Save write offset & path descriptor pointer
+0409: 1F10                       tfr   x,d            Move data offset to D
+040B: EE26                       ldu   PD.RGS,y       Get register stack pointer
+040D: AE44                       ldx   R$X,u          Get pointer to users's WRITE string
+040F:                            IFNE  H6309
+040F:                            addr  d,x            Point to where we are in it now
+040F:                            ldw   R$Y,u          Get # chars of original write
+040F:                            subr  d,w            Calculate # chars we have left to write
+040F:                            cmpw  #64            More than 64?
+040F:                            bls   L0508          No, go on
+040F:                            ldw   #64            Max size per chunk=64
+041E:                   L0508    ldd   PD.BUF,y       Get buffer ptr
+040F:                            inca                 Point to PD.BUF+256 (1 byte past end
+040F:                            subr  w,d            Subtract data size
+040F:                            ELSE
+040F: 308B                       leax  d,x
+0411: EC46                       ldd   R$Y,u
+0413: A3E4                       subd  ,s
+0415: 10830020                   cmpd  #$0020
+0419: 2303                       bls   L0508
+041B: CC0020                     ldd   #$0020
+041E: 3406              L0508    pshs  d
+0420: EC28                       ldd   PD.BUF,y
+0422: 4C                         inca
+0423: A3E4                       subd  ,s
+0425:                            ENDC
+0425: 1F03                       tfr   d,u            Move it to U
+0427: 860D                       lda   #C$CR          Put a carriage return 1 byte before start
+0429: A75F                       sta   -1,u           of write portion of buffer
+042B:                            IFGT  Level-1
+042B: 109E50                     ldy   <D.Proc        Get current process pointer
+042E: A626                       lda   P$Task,y       Get the task number
+0430: D6D0                       ldb   <D.SysTsk      Get system task number
+0432:                            IFNE  H6309
+0432:                            tfr   w,y            Get number of bytes to move
+0432:                            ELSE
+0432: 3520                       puls  y
+0434:                            ENDC
+0434: 103F38                     os9   F$Move         Move data to buffer
+0437:                            ELSE
+0437:                            IFNE  H6309
+0437:                            pshs  u
+0437:                            tfm   x+,u+
+0437:                            puls u
+0437:                            ELSE
+0437:                            puls  y
+0437:                            pshs  u
+0000:                   L0509    lda   ,x+
+0437:                            sta   ,u+
+0437:                            leay  -1,y
+0437:                            bne   L0509
+0437:                            puls  u
+0437:                            ENDC
+0437:                            ENDC
+0437: 3530                       puls  y,x            Restore path descriptor pointer and data offset
+0439:                   
+0439:                   * at this point, we have
+0439:                   * 0,s = end address of characters to write
+0439:                   * X = number of characters written
+0439:                   * Y = PD pointer
+0439:                   * U = pointer to data buffer to write
+0439:                   * Level 2: Use callcode $06 to call grfdrv (old DWProtSW from previous versions,
+0439:                   *   now unused by GrfDrv
+0439:                   L0523
+0439:                            IFGT  Level-1
+0439: E6A834                     ldb   PD.PAR,y     get device parity: bit 7 set = window
+043C: C180                       cmpb  #$80         is it even potentially a CoWin window?
+043E: 2644                       bne   L0524        no, skip the rest of the crap
+0440:                   
+0440: 5F                         clrb               set to no uppercase conversion
+0441: A62C                       lda   PD.RAW,y     get raw output flag
+0443: 2603                       bne   g.raw        if non-zero, we do raw writes: no conversion
+0445: E6A821                     ldb   PD.UPC,y     get uppercase conversion flag: 1 = do uppercase
+0448:                   
+0448: 3474              g.raw    pshs  b,x,y,u      save length, PD, data buffer pointers
+044A:                   
+044A: 1703C9                     lbsr  get.wptr     get window table ptr into Y
+044D: 2533                       bcs   no.wptr      do old method on error
+044F:                   
+044F:                   * now we find out the number of non-control characters to write...
+044F: A665              g.fast   lda   5,s          grab page number
+0451: 4C                         inca               go to the next page
+0452: 5F                         clrb               at the top of it
+0453: A365                       subd  5,s          take out number of bytes left to write
+0455: 3404                       pshs  b            max. number of characters
+0457:                   
+0457: 5F                         clrb               always <256 characters to write
+0458: A6C0              g.loop   lda   ,u+          get a character
+045A: 8120                       cmpa  #$20         is it a control character?
+045C: 250E                       blo   g.done       yes, we're done this stint
+045E: 6D61                       tst   1,s          get uppercase conversion flag
+0460: 2705                       beq   g.loop1      don't convert
+0462: 170064                     lbsr  L0403        do a lower-uppercase conversion, if necessary
+0465: A75F                       sta   -1,u         save again
+0467:                   
+0467: 5C                g.loop1  incb               done one more character
+0468: E1E4                       cmpb  ,s           done as many as we can?
+046A: 26EC                       bne   g.loop
+046C:                   
+046C: 3261              g.done   leas  1,s          kill max. count of characters to use
+046E: C101                       cmpb  #1           one or fewer characters?
+0470: 2310                       bls   no.wptr      yes, go use old method
+0472:                   
+0472:                   *         IFEQ  H6309
+0472:                   * Note: this was present in the TuneUp version of SCF, and seems to
+0472:                   * never allow grfdrv to be called directly, so did fast text screens
+0472:                   * ever work in TuneUp??? - BGP
+0472:                   *         bra   no.wptr      
+0472:                   *         ENDC
+0472:                   
+0472:                   * now we call grfdrv...
+0472: EE65                       ldu   5,s          get start pointer again
+0474: 3A                         abx                done B more characters...
+0475: AF61                       stx   1,s          save on-stack
+0477: 1703CF                     lbsr  call.grf     go call grfdrv: no error possible on return
+047A: 33C5                       leau  b,u          go up B characters in U, too
+047C: EF65                       stu   5,s          save old U, too
+047E: 3574                       puls  b,x,y,u      restore registers
+0480: 2027                       bra   L0544        do end-buffer checks and continue
+0482:                   
+0482: 3574              no.wptr  puls  b,x,y,u      restore all registers
+0484:                            ENDC
+0484:                   
+0484: A6C0              L0524    lda   ,u+            Get character to write
+0486: E62C                       ldb   PD.RAW,y       Raw mode?
+0488: 2618                       bne   L053D          Yes, go write it
+048A: E6A821                     ldb   PD.UPC,y       Force uppercase?
+048D: 2702                       beq   L052A          No, continue
+048F: 8D38                       bsr   L0403          Make it uppercase
+0491: 810A              L052A    cmpa  #C$LF          Is it a Line feed?
+0493: 260D                       bne   L053D          No, go print it
+0495: 860D                       lda   #C$CR          Get code for carriage return
+0497: E6A825                     ldb   PD.ALF,y       Auto Line feed?
+049A: 2606                       bne   L053D          Yes, go print carriage return first
+049C: 8D3E                       bsr   L0573          Print carriage return
+049E: 2534                       bcs   L055D          If error, go wait for device
+04A0: 860A                       lda   #C$LF          Now, print the line feed
+04A2:                   
+04A2:                   * Write character to device (call driver)
+04A2: 8D38              L053D    bsr   L0573          Go write it to device
+04A4: 252E                       bcs   L055D          If error, go wait for device
+04A6: C601                       ldb   #1             Bump up # chars we have written
+04A8: 3A                         abx
+04A9: ACE4              L0544    cmpx  ,s             Done whole WRITE call?
+04AB: 2413                       bhs   L0554          Yes, go save # chars written & exit
+04AD: E62C                       ldb   PD.RAW,y       Raw mode?
+04AF: 1026FF4F                   lbne  L04EC          Yes, keep writing
+04B3: A65F                       lda   -1,u           Get the char we wrote
+04B5: 1027FF49                   lbeq  L04EC          NUL, keep writing
+04B9: A1A82B                     cmpa  PD.EOR,y       End of record?
+04BC: 1026FF42                   lbne  L04EC          No, keep writing
+04C0: 3262              L0554    leas  2,s            Eof record, stop & Eat end of buffer ptr???
+04C2: EE26              L0556    ldu   PD.RGS,y       Get callers register pointer
+04C4: AF46                       stx   R$Y,u          Save character count to callers Y
+04C6: 16FE9F            L055A    lbra  L0453          Mark device write clear and return
+04C9:                   
+04C9:                   * Check for forced uppercase
+04C9: 8161              L0403    cmpa  #'a            Less then 'a'?
+04CB: 2506                       blo   L0412          Yes, leave it
+04CD: 817A                       cmpa  #'z            Higher than 'z'?
+04CF: 2202                       bhi   L0412          Yes, leave it
+04D1: 8020                       suba  #$20           Make it uppercase
+04D3: 39                L0412    rts                  Return
+04D4:                   
+04D4: 3262              L055D    leas  2,s            Purge stack
+04D6: 3405                       pshs  b,cc           Preserve registers
+04D8: 8DE8                       bsr   L0556          Wait for device
+04DA: 3585                       puls  pc,b,cc        Restore & return
+04DC:                   
+04DC:                   * Check for end of page (part of send char to driver)
+04DC: 3472              L0573    pshs  u,y,x,a        Preserve registers
+04DE: AE23                       ldx   PD.DEV,y       Get device table pointer
+04E0: 810D                       cmpa  #C$CR          Carriage return?
+04E2: 2674                       bne   L056F          No, go print it
+04E4: EE02                       ldu   V$STAT,x       Get pointer to device stactic storage
+04E6: E648                       ldb   V.PAUS,u       Pause request?
+04E8: 2620                       bne   L0590          Yes, go pause device
+04EA: E62C                       ldb   PD.RAW,y       Raw output mode?
+04EC: 262C                       bne   L05A2          Yes, go on
+04EE: E6A827                     ldb   PD.PAU,y       End of page pause enabled?
+04F1: 2727                       beq   L05A2          No, go on
+04F3: 6A47                       dec   V.LINE,u       Subtract a line
+04F5: 2623                       bne   L05A2          Not done, go on
+04F7: C6FF                       ldb   #$ff           do a immediate pause request
+04F9: E748                       stb   V.PAUS,u
+04FB: 2016                       bra   L059A          Go read next character
+04FD:                   
+04FD: 3470              L03DA    pshs  u,y,x        Preserve registers
+04FF: AE2A                       ldx   PD.DV2,y     Get output device table pointer
+0501: 2705                       beq   NoOut        None, exit
+0503: EE23                       ldu   PD.DEV,y     Get device table pointer
+0505: 16FE04                     lbra  L03EA        Process & return
+0508:                   
+0508: 35F0              NoOut    puls  pc,u,y,x     No output device so exit
+050A:                   
+050A:                   * Wait for pause release
+050A: 8DF1              L0590    bsr   L03DA          Read next character
+050C: 2505                       bcs   L059A          Error, try again
+050E: A1A82F                     cmpa  PD.PSC,y       Pause char?
+0511: 26F7                       bne   L0590          No, try again
+0513:                   
+0513: 8DE8              L059A    bsr   L03DA          Reset line count and read a character
+0515: A1A82F                     cmpa  PD.PSC,y       Pause character?
+0518: 27F9                       beq   L059A          Yes, go read again
+051A:                   
+051A:                   * Process Carriage return - do auto linefeed & Null's if necessary
+051A:                   * Entry: A=CHR$($0D)
+051A: EE02              L05A2    ldu   V$STAT,x       Get static storage pointer
+051C: 4F                         clra
+051D: A748                       sta   V.PAUS,u       Clear pause request
+051F: 860D                       lda   #C$CR          Carriage return (in cases from pause)
+0521: 8D1E                       bsr   L05C9          Send it to driver
+0523: A62C                       lda   PD.RAW,y       Raw mode?
+0525: 2618                       bne   L05C7          Yes, return
+0527: E6A826                     ldb   PD.NUL,y       Get end of line null count
+052A: 3404                       pshs  b              Save it
+052C: A6A825                     lda   PD.ALF,y       Auto line feed enabled?
+052F: 2706                       beq   L05BE          No, go on
+0531: 860A                       lda   #C$LF          Get line feed code
+0533: 8D0C              L05BA    bsr   L05C9          Execute driver write routine
+0535: 2506                       bcs   L05C5          Error, purge stack and return
+0537: 4F                L05BE    clra                 Get null character
+0538: 6AE4                       dec   ,s             Done null count?
+053A: 2AF7                       bpl   L05BA          No, go send it to driver
+053C: 4F                         clra                 Clear carry
+053D: 3261              L05C5    leas  1,s            Purge stack
+053F: 35F2              L05C7    puls  pc,u,y,x,a     Restore & return
+0541:                   
+0541:                   * Execute device driver write routine
+0541:                   * Entry: A=Character to write
+0541:                   * Execute device driver
+0541:                   * Entry: W=Entry offset (for type of function, ex. Write, Read)
+0541:                   *        A=Code to send to driver
+0541: EE02              L05C9    ldu   V$STAT,x       Get device static storage pointer
+0543: 3430                       pshs  y,x            Preserve registers
+0545: 5F                         clrb
+0546: E745                       stb   V.WAKE,u       Wake it up
+0548:                            IFGT  Level-1
+0548: AE09                       ldx   V$DRIVEX,x     Get driver execution pointer
+054A:                            ELSE
+054A:                            pshs  d
+054A:                            ldx   V$DRIV,x     get driver module
+054A:                            ldd   M$EXEC,x
+054A:                            leax  d,x
+054A:                            puls  d
+054A:                            ENDC
+054A: AD06                       jsr   D$WRIT,x       Execute driver
+054C: 35B0                       puls  pc,y,x         Restore & return
+054E:                   
+054E:                   * Send character to driver
+054E: 3472              L0565    pshs  u,y,x,a        Preserve registers
+0550: AE2A                       ldx   PD.DV2,y       Get output device table pointer
+0552: 270D                       beq   L0571          Return if none
+0554: 810D                       cmpa  #C$CR          Carriage return?
+0556: 27C2                       beq   L05A2          Yes, go process it
+0558: EE02              L056F    ldu   V$STAT,x       Get device static storage pointer
+055A: 5F                         clrb
+055B: E745                       stb   V.WAKE,u       Wake it up
+055D:                            IFGT  Level-1
+055D: AE09                       ldx   V$DRIVEX,x     Get driver execution pointer
+055F:                            ELSE
+055F:                            pshs  d
+055F:                            ldx   V$DRIV,x     get driver module
+055F:                            ldd   M$EXEC,x
+055F:                            leax  d,x
+055F:                            puls  d
+055F:                            ENDC
+055F: AD06                       jsr   D$WRIT,x       Execute driver
+0561: 35F2              L0571    puls  pc,u,y,x,a     Restore & return
+0563:                   
+0563:                   * Check for printable character
+0563: E6A824            L0413    ldb   PD.EKO,y       Echo turned on?
+0566: 270A                       beq   NoEcho         No, return
+0568: 8120              L0418    cmpa  #C$SPAC        CHR$(32) or higher?
+056A: 24E2                       bhs   L0565          Yes, go send to driver
+056C: 810D                       cmpa  #C$CR          Carriage return?
+056E: 2603                       bne   L0423          No, change it to a period
+0570: 20DC                       bra   L0565          Anything else output to driver
+0572:                   
+0572: 39                NoEcho   rts
+0573:                   
+0573: 3402              L0423    pshs  a              Save code
+0575: 862E                       lda   #'.            Get code for period
+0577: 8DD5                       bsr   L0565          Output it to device
+0579: 3582                       puls  pc,a           Restore & return
+057B:                   
+057B: 8DEB              L0624    bsr   L0418        check if it's printable and send it to driver
+057D:                   * Process ReadLn
+057D: 17FD82            L05F8    lbsr  L03E2        get a character from device
+0580: 10250122                   lbcs  L0370        return if error
+0584: 4D                         tsta               usable character?
+0585: 102700A2                   lbeq  L02FE        no, check path descriptor special characters
+0589: E6A82D                     ldb   PD.RPR,y     get reprint line code
+058C: C104                       cmpb  #C$RPRT      cntrl D?
+058E: 10270099                   lbeq  L02FE        yes, check path descriptor special characters
+0592: A1A82D                     cmpa  PD.RPR,y     reprint line?
+0595: 261A                       bne   L0629        no, Check line editor keys
+0597: AC2D                       cmpx  PD.MAX,y     character count at maximum?
+0599: 27E2                       beq   L05F8        yes, go read next character
+059B: C601                       ldb   #1           Bump char count up by 1
+059D: 3A                         abx
+059E: ACE4                       cmpx  ,s           done?
+05A0: 240B                       bhs   L0620        yes, exit
+05A2: A6C0                       lda   ,u+          get character read
+05A4: 27D5                       beq   L0624        null, go send it to driver
+05A6: A1A82B                     cmpa  PD.EOR,y     end of record character?
+05A9: 26D0                       bne   L0624        no, go send it to driver
+05AB: 335F                       leau  -1,u         bump buffer pointer back 1
+05AD: 301F              L0620    leax  -1,x         bump character count back 1
+05AF: 20CC                       bra   L05F8        go read next character
+05B1:                   
+05B1:                   * Process print rest of line
+05B1: 8113              L0629    cmpa  #C$PLINE       Print rest of line code?
+05B3: 261A                       bne   L0647          No, check insert
+05B5: 3440              L062D    pshs  u              Save buffer pointer
+05B7: 170107                     lbsr  L038B          Go print rest of line
+05BA: A6A832                     lda   PD.BSE,y       Get backspace echo character
+05BD: 11A3E4            L0634    cmpu  ,s             Beginning of buffer?
+05C0: 2709                       beq   L0642          Yes, exit
+05C2: 335F                       leau  -1,u           Bump buffer pointer back 1
+05C4: 301F                       leax  -1,x           Bump character count back 1
+05C6: 17FF85                     lbsr  L0565          Print it
+05C9: 20F2                       bra   L0634          Keep going
+05CB: 3262              L0642    leas  2,s            Purge buffer pointer
+05CD: 20AE                       bra   L05F8          Return
+05CF:                   
+05CF:                   * Process Insert character (NOTE:Currently destroys W)
+05CF: 8111              L0647    cmpa  #C$INSERT      Insert character code?
+05D1: 2619                       bne   L0664          No, check delete
+05D3:                            IFNE  H6309
+05D3:                            pshs  x,y            Preserve x&y a moment
+05D3:                            tfr   u,w            Dupe buffer pointer into w
+05D3:                            ldf   #$fe           End of buffer -1
+05D3:                            tfr   w,x            Source copy address
+05D3:                            incw                 Include char we are on & dest address is+1
+05D3:                            tfr   w,y            Destination copy address
+05D3:                            subr  u,w            w=w-u (Size of copy)
+05D3:                            tfm   x-,y-          Move buffer up one
+05D3:                            puls  y,x            Get back original y & x
+05D3:                            lda   #C$SPAC        Get code for space
+05D3:                            sta   ,u             Save it there
+05D3:                            ELSE
+05D3: 3440                       pshs  u
+05D5: 1F30                       tfr   u,d
+05D7: C6FF                       ldb   #$FF
+05D9: 1F03                       tfr   d,u
+05DB: A6C2              L06DE    lda   ,-u
+05DD: A741                       sta   1,u
+05DF: 11A3E4                     cmpu  ,s
+05E2: 26F7                       bne   L06DE
+05E4: 8620                       lda   #C$SPAC
+05E6: A7C4                       sta   ,u
+05E8: 3262                       leas  2,s
+05EA:                            ENDC
+05EA: 20C9                       bra   L062D          Go print rest of line
+05EC:                   
+05EC:                   * Process delete line
+05EC: 8110              L0664    cmpa  #C$DELETE      Delete character code?
+05EE: 2623                       bne   L068B          No, check end of line
+05F0: 3440                       pshs  u              Save buffer pointer
+05F2: A6C4                       lda   ,u             Get character there
+05F4: A1A82B                     cmpa  PD.EOR,y       End of record?
+05F7: 2716                       beq   L0687          Yes, don't bother to delete it
+05F9: A641              L0671    lda   1,u            Get character beside it
+05FB: A1A82B                     cmpa  PD.EOR,y       This an end of record?
+05FE: 2704                       beq   L067C          Yes, delete it
+0600: A7C0                       sta   ,u+            Bump character back
+0602: 20F5                       bra   L0671          Go do next character
+0604: 8620              L067C    lda   #C$SPAC        Get code for space
+0606: A1C4                       cmpa  ,u             Already there?
+0608: 2603                       bne   L0685          No, put it in
+060A: A6A82B                     lda   PD.EOR,y       Get end of record code
+060D: A7C4              L0685    sta   ,u             Put it there
+060F: 3540              L0687    puls  u              Restore buffer pointer
+0611: 20A2                       bra   L062D          Go print rest of line
+0613:                   
+0613:                   * Delete rest of buffer
+0613: A1A82B            L068B    cmpa  PD.EOR,y       End of record code?
+0616: 2613                       bne   L02FE          No, check for special path dsc. chars
+0618: 3440                       pshs  u              Save buffer pointer
+061A: 2009                       bra   L069F          Go erase rest of buffer
+061C:                   
+061C: 3402              L0696    pshs  a              Save code
+061E: 8620                       lda   #C$SPAC        Get code for space
+0620: 17FF2B                     lbsr  L0565          Print it
+0623: 3502                       puls  a              Restore code
+0625: A1C0              L069F    cmpa  ,u+            End of record?
+0627: 26F3                       bne   L0696          No, go print a space
+0629: 3540                       puls  u              Restore buffer pointer
+062B:                   
+062B:                   * Check character read against path descriptor
+062B: 4D                L02FE    tsta               Usable character?
+062C: 270B                       beq   L030C        No, go on
+062E: C629                       ldb   #PD.BSP      Get start point in path descriptor
+0630: A1A5              L0303    cmpa  b,y          Match code in descriptor?
+0632: 272D                       beq   L032C        Yes, go process it
+0634: 5C                         incb               Move to next one
+0635: C131                       cmpb  #PD.QUT      Done check?
+0637: 23F7                       bls   L0303        No, keep going
+0639: AC2D              L030C    cmpx  PD.MAX,y     Past maximum character count?
+063B: 2302                       bls   L0312        No, go on
+063D: AF2D                       stx   PD.MAX,y     Update maximum character count
+063F: C601              L0312    ldb   #1           Add 1 char
+0641: 3A                         abx
+0642: ACE4                       cmpx  ,s           Past requested amount?
+0644: 250B                       blo   L0322        No, go on
+0646: A6A833                     lda   PD.OVF,y     Get overflow character
+0649: 17FF02                     lbsr  L0565        Send it to driver
+064C: 301F                       leax  -1,x         Subtract a character
+064E: 16FF2C                     lbra  L05F8        Go try again
+0651:                   
+0651: E6A821            L0322    ldb   PD.UPC,y     Force uppercase?
+0654: 2703                       beq   L0328        No, put char in buffer
+0656: 17FE70                     lbsr  L0403        Make character uppercase
+0659: A7C0              L0328    sta   ,u+          Put character in buffer
+065B: 17FF05                     lbsr  L0413        Check for printable
+065E: 16FF1C                     lbra  L05F8        Go try again
+0661:                   
+0661:                   * Process path option characters
+0661: 3490              L032C    pshs  x,pc         Preserve character count & PC
+0663: 308D000D                   leax  <L033F,pc    Point to branch table
+0667: C029                       subb  #PD.BSP      Subtract off first code
+0669: 58                         lslb               Account for 2 bytes a entry
+066A: 3A                         abx                Point to entry point
+066B: AF62                       stx   2,s          Save it in PC on stack
+066D: 3510                       puls  x            Restore X
+066F: ADF1              C8E3         jsr   [,s++]       Execute routine
+0671: 16FF09                     lbra  L05F8        Continue on
+0674:                   
+0674:                   * Vector points for PD.BSP-PD.QUT
+0674: 207F              L033F    bra   L03BB        Process PD.BSP
+0676: 2064                       bra   L03A5        Process PD.DEL
+0678: 200C                       bra   L0351        Process PD.EOR
+067A: 2020                       bra   L0366        Process PD.EOF
+067C: 2036                       bra   L0381        Process PD.RPR
+067E: 2041                       bra   L038B        Process PD.DUP
+0680: 39                         rts                PD.PSC we don't worry about
+0681: 12                         nop
+0682: 2058                       bra   L03A5        Process PD.INT
+0684: 2056                       bra   L03A5        Process PD.QUT
+0686:                   
+0686:                   * Process PD.EOR character
+0686: 3262              L0351    leas  2,s          Purge return address
+0688:                   
+0688: A7C4                       sta   ,u           Save character in buffer
+068A: 17FED6                     lbsr  L0413
+068D: EE26                       ldu   PD.RGS,y     Get callers register stack pointer
+068F: C601                       ldb   #1           Bump up char count by 1
+0691: 3A                         abx
+0692: AF46                       stx   R$Y,u        Store it in callers Y
+0694: 17FC8B                     lbsr  L042B
+0697: 3262                       leas  2,s
+0699: 16FCCC                     lbra  L0453
+069C:                   
+069C:                   * Process PD.EOF
+069C: 3262              L0366    leas  2,s          Purge return address
+069E: 3084                       leax  ,x           read anything?
+06A0: 1027FBFD                   lbeq  L02A2
+06A4: 2093                       bra   L030C
+06A6:                   
+06A6: 3404              L0370    pshs  b
+06A8: 860D                       lda   #C$CR
+06AA: A7C4                       sta   ,u
+06AC: 17FE9F                     lbsr  L0565        Send it to the driver
+06AF: 3504                       puls  b
+06B1: 16FBEF                     lbra  L02A4
+06B4:                   
+06B4:                   * Process PD.RPR
+06B4: A6A82B            L0381    lda   PD.EOR,y     Get end of record character
+06B7: A7C4                       sta   ,u           Put it in buffer
+06B9: 8E0000                     ldx   #0
+06BC: EE28                       ldu   PD.BUF,y     Get buffer ptr
+06BE: 17FEA7            L0388    lbsr  L0418        Send it to driver
+06C1: AC2D              L038B    cmpx  PD.MAX,y     Character maximum?
+06C3: 2714                       beq   L03A2        Yes, return
+06C5: C601                       ldb   #1           Bump char count up by 1
+06C7: 3A                         abx
+06C8: AC62                       cmpx  2,s          Done count?
+06CA: 240B                       bhs   L03A0        Yes, exit
+06CC: A6C0                       lda   ,u+          Get character from buffer
+06CE: 27EE                       beq   L0388        Null, go send it
+06D0: A1A82B                     cmpa  PD.EOR,y     Done line?
+06D3: 26E9                       bne   L0388        No go send it
+06D5: 335F                       leau  -1,u         Move back a character
+06D7: 301F              L03A0    leax  -1,x         Move character count back
+06D9: 39                L03A2    rts                Return
+06DA:                   
+06DA: 8D1D              L03A3    bsr   L03BF
+06DC:                   * PD.DEL/PD.QUT/PD.INT processing
+06DC: 3084              L03A5    leax  ,x           Any characters?
+06DE: 2712                       beq   L03B8        No, reset buffer ptr
+06E0: E6A823                     ldb   PD.DLO,y     Backspace over line?
+06E3: 27F5                       beq   L03A3        Yes, go do it
+06E5: E6A824                     ldb   PD.EKO,y     Echo character?
+06E8: 2705                       beq   L03B5        No, zero out buffer pointers & return
+06EA: 860D                       lda   #C$CR        Send CR to the driver
+06EC: 17FE5F                     lbsr  L0565        send it to driver
+06EF: 8E0000            L03B5    ldx   #0           zero out count
+06F2: EE28              L03B8    ldu   PD.BUF,y     reset buffer pointer
+06F4: 39                L03BA    rts                return
+06F5:                   
+06F5:                   * Process PD.BSP
+06F5: 3084              L03BB    leax  ,x           Any characters?
+06F7: 27E0                       beq   L03A2        No, return
+06F9: E6A834            L03BF    ldb   PD.PAR,y     KANJI: multibyte aware editing selected?
+06FC: 2706                       beq   L03BG        no, classic single byte backspace
+06FE: C103                       cmpb  #3
+0700: 1023001B                   lbls  KBsp         PD.PAR = 1 (UTF-8) 2 (EUC-JP) 3 (Shift_JIS)
+0704: 335F              L03BG    leau  -1,u         Mover buffer pointer back 1 character
+0706: 301F                       leax  -1,x         Move character count back 1
+0708: E6A824                     ldb   PD.EKO,y     Echoing characters?
+070B: 27E7                       beq   L03BA        No, return
+070D: E6A822                     ldb   PD.BSO,y     Which backspace method?
+0710: 2707                       beq   L03D4        Use BSE
+0712: 8D05                       bsr   L03D4        Do a BSE
+0714: 8620                       lda   #C$SPAC      Get code for space
+0716: 17FE35                     lbsr  L0565        Send it to driver
+0719: A6A832            L03D4    lda   PD.BSE,y     Get BSE
+071C: 16FE2F                     lbra  L0565        Send it to driver
+071F:                   
+071F:                   ********************************************************************
+071F:                   * KANJI extension (Japanese text editing in ReadLn)
+071F:                   *
+071F:                   * The path descriptor option PD.PAR (unused by the SCF drivers of the
+071F:                   * simulator) selects the character encoding of the terminal:
+071F:                   *   0 = single byte (original behaviour)   1 = UTF-8
+071F:                   *   2 = EUC-JP                             3 = Shift_JIS (CP932)
+071F:                   * In these modes a backspace removes one whole character from the line
+071F:                   * buffer and the erase sequence (BSE or BSE,SP,BSE) is echoed once for
+071F:                   * every display column the character occupies (2 for full width kanji
+071F:                   * and kana, 1 for ASCII and half width katakana).
+071F:                   *
+071F:                   * Entry: X = character count (> 0), U = buffer pointer, Y = path descriptor
+071F:                   * Exit : X, U moved back over the last character
+071F: 3084              KBsp     leax  ,x           Any characters?
+0721: 1027FFB4                   lbeq  L03A2        No, return
+0725: 3450                       pshs  x,u          S: X(0) U(2)
+0727: AE28                       ldx   PD.BUF,y     start of the line buffer
+0729: 3410                       pshs  x            S: last(0) X(2) U(4)
+072B: AC64              KB.scan  cmpx  4,s          reached the end of the line?
+072D: 2407                       bhs   KB.end       yes
+072F: AFE4                       stx   ,s           remember start of this character
+0731: 8D45                       bsr   KB.len       B = length of the character at ,X
+0733: 3A                         abx                skip it
+0734: 20F5                       bra   KB.scan
+0736: EC64              KB.end   ldd   4,s          D = old buffer pointer
+0738: A3E4                       subd  ,s           D = length of the last character
+073A: 5D                         tstb
+073B: 2602                       bne   KB.n0        (at least one byte)
+073D: C601                       ldb   #1
+073F: AEE4              KB.n0    ldx   ,s           X = start of the last character
+0741: AF64                       stx   4,s          new buffer pointer
+0743: 3404                       pshs  b            S: n(0) last(1) X(3) U(5)
+0745: EC63                       ldd   3,s          old character count
+0747: E0E4                       subb  ,s
+0749: 8200                       sbca  #0
+074B: ED63                       std   3,s          new character count
+074D: E6E4                       ldb   ,s           B = number of bytes
+074F: 8D76                       bsr   KB.wid       A = display width in columns
+0751: 3263                       leas  3,s          drop n, last
+0753: 3402                       pshs  a            S: width(0) X(1) U(3)
+0755: E6A824                     ldb   PD.EKO,y     Echoing characters?
+0758: 271A                       beq   KB.fin
+075A: E6A822            KB.lp    ldb   PD.BSO,y     Which backspace method?
+075D: 270B                       beq   KB.e1        BSE only
+075F: A6A832                     lda   PD.BSE,y
+0762: 17FDE9                     lbsr  L0565        BSE
+0765: 8620                       lda   #C$SPAC
+0767: 17FDE4                     lbsr  L0565        SP
+076A: A6A832            KB.e1    lda   PD.BSE,y
+076D: 17FDDE                     lbsr  L0565        BSE
+0770: 6AE4                       dec   ,s
+0772: 26E6                       bne   KB.lp
+0774: 3261              KB.fin   leas  1,s
+0776: 35D0                       puls  x,u,pc
+0778:                   
+0778:                   * KB.len: byte length of the character that starts at ,X  (B = 1..4)
+0778: E6A834            KB.len   ldb   PD.PAR,y
+077B: A684                       lda   ,x
+077D: 2A3C                       bpl   KB.l1        ASCII
+077F: C101                       cmpb  #1
+0781: 2728                       beq   KB.utf
+0783: C102                       cmpb  #2
+0785: 2712                       beq   KB.euc
+0787:                   * Shift_JIS: 81-9F and E0-FC are lead bytes, A1-DF half width katakana
+0787: 8181                       cmpa  #$81
+0789: 2530                       blo   KB.l1
+078B: 819F                       cmpa  #$9F
+078D: 232F                       bls   KB.l2
+078F: 81E0                       cmpa  #$E0
+0791: 2528                       blo   KB.l1
+0793: 81FC                       cmpa  #$FC
+0795: 2327                       bls   KB.l2
+0797: 2022                       bra   KB.l1
+0799: 818E              KB.euc   cmpa  #$8E         SS2: half width katakana
+079B: 2721                       beq   KB.l2
+079D: 818F                       cmpa  #$8F         SS3: JIS X 0212 (three bytes)
+079F: 2720                       beq   KB.l3
+07A1: 81A1                       cmpa  #$A1
+07A3: 2516                       blo   KB.l1
+07A5: 81FE                       cmpa  #$FE
+07A7: 2315                       bls   KB.l2
+07A9: 2010                       bra   KB.l1
+07AB: 81C0              KB.utf   cmpa  #$C0         stray continuation byte
+07AD: 250C                       blo   KB.l1
+07AF: 81E0                       cmpa  #$E0
+07B1: 250B                       blo   KB.l2
+07B3: 81F0                       cmpa  #$F0
+07B5: 250A                       blo   KB.l3
+07B7: 81F8                       cmpa  #$F8
+07B9: 2509                       blo   KB.l4
+07BB: C601              KB.l1    ldb   #1
+07BD: 39                         rts
+07BE: C602              KB.l2    ldb   #2
+07C0: 39                         rts
+07C1: C603              KB.l3    ldb   #3
+07C3: 39                         rts
+07C4: C604              KB.l4    ldb   #4
+07C6: 39                         rts
+07C7:                   
+07C7:                   * KB.wid: display width (A) of the character at ,X that is B bytes long
+07C7: 3404              KB.wid   pshs  b
+07C9: A6A834                     lda   PD.PAR,y
+07CC: 8101                       cmpa  #1
+07CE: 271C                       beq   KW.utf
+07D0: 8102                       cmpa  #2
+07D2: 270C                       beq   KW.euc
+07D4: C102                       cmpb  #2           Shift_JIS: two bytes = full width
+07D6: 2404                       bhs   KW.2
+07D8: 8601              KW.1     lda   #1
+07DA: 3584                       puls  b,pc
+07DC: 8602              KW.2     lda   #2
+07DE: 3584                       puls  b,pc
+07E0: C101              KW.euc   cmpb  #1
+07E2: 23F4                       bls   KW.1
+07E4: A684                       lda   ,x
+07E6: 818E                       cmpa  #$8E         half width katakana
+07E8: 27EE                       beq   KW.1
+07EA: 20F0                       bra   KW.2
+07EC: C103              KW.utf   cmpb  #3
+07EE: 25E8                       blo   KW.1         1-2 bytes: one column
+07F0: 22EA                       bhi   KW.2         4 bytes: two columns
+07F2: A684                       lda   ,x
+07F4: 81E3                       cmpa  #$E3
+07F6: 25E0                       blo   KW.1         U+0800-U+2FFF: one column
+07F8: 81EF                       cmpa  #$EF
+07FA: 26E0                       bne   KW.2         U+3000-U+EFFF: CJK, Hangul: two columns
+07FC: A601                       lda   1,x          U+F000-U+FFFF
+07FE: 81BD                       cmpa  #$BD
+0800: 2608                       bne   KW.f1
+0802: A602                       lda   2,x          EF BD A1-BF = half width katakana
+0804: 81A1                       cmpa  #$A1
+0806: 24D0                       bhs   KW.1
+0808: 20D2                       bra   KW.2
+080A: 81BE              KW.f1    cmpa  #$BE
+080C: 26CE                       bne   KW.2
+080E: A602                       lda   2,x          EF BE 80-9F = half width katakana
+0810: 819F                       cmpa  #$9F
+0812: 23C4                       bls   KW.1
+0814: 20C6                       bra   KW.2
+0816:                   
+0816:                            IFGT  Level-1
+0816:                   * check PD.DTP,y and update PD.WPTR,y if it's device type $10 (grfdrv)
+0816: 3450              get.wptr pshs  x,u
+0818: EE23                       ldu   PD.DEV,y     get device table entry
+081A: AE40                       ldx   V$DRIV,u     get device driver module
+081C: EC04                       ldd   M$Name,x     offset to name
+081E: EC8B                       ldd   d,x
+0820: 10835654                   cmpd  #"VT         is it VTIO?
+0824: 261D                       bne   no.fast      no, don't do the fast stuff
+0826: FC106E                     ldd   >WGlobal+G.GrfEnt     does GrfDrv have an entry address?
+0829: 2718                       beq   no.fast      nope, don't bother calling it.
+082B:                   
+082B: EE42                       ldu   V$STAT,u     and device static storage
+082D: 6DC82C                     tst   V.ParmCnt,u  are we busy getting more parameters?
+0830: 2611                       bne   no.fast      yes, don't do buffered writes
+0832:                   
+0832:                   * Get window table pointer & verify it: copied from CoWin and modified
+0832: E6C835                     ldb   V.WinNum,u   Get window # from device mem
+0835: 8640                       lda   #Wt.Siz      Size of each entry
+0837: 3D                         mul                Calculate window table offset
+0838: C31290                     addd  #WinBase     Point to specific window table entry
+083B: 1F02                       tfr   d,y          Move to y, the register we want
+083D: A6A9FFF0                   lda   Wt.STbl,y    Get MSB of scrn tbl ptr
+0841: 2E03                       bgt   VerExit      If $01-$7f, should be ok
+0843:                   
+0843:                   * Return illegal window definition error
+0843: 53                no.fast  comb               set carry: no error code, it's an internal routine
+0844: 35D0                       puls  x,u,pc
+0846:                   
+0846: 4F                VerExit  clra               No error
+0847: 35D0                       puls  x,u,pc
+0849:                   
+0849: 3476              call.grf pshs  d,x,y,u      save registers
+084B: 8E0180                     ldx   #$0180       where to put the text
+084E:                            IFNE  H6309
+084E:                            pshs  cc           save old CC
+084E:                            ELSE
+084E: 1FA8                       tfr   cc,a
+0850: A71E                       sta   -2,x
+0852:                            ENDC
+0852: 1AD0                       orcc  #IntMasks+Entire  shut everything else off
+0854:                   
+0854:                            IFNE  H6309
+0854:                            clra               make sure high byte=0
+0854:                            tfr   d,w
+0854:                            tfm   u+,x+        move the data into low memory
+0854:                            ELSE
+0854: A6C0              l@       lda   ,u+
+0856: A780                       sta   ,x+
+0858: 5A                         decb
+0859: 26F9                       bne   l@
+085B:                            ENDC
+085B:                   
+085B: C606                       ldb   #6           alpha put
+085D: F71002                     stb   >WGlobal+G.GfBusy  flag grfdrv busy
+0860:                            IFNE  H6309
+0860:                            lde   ,s+          grab old CC off of the stack
+0860:                            lda   1,s          get the number of characters to write
+0860:                            ELSE
+0860:                   *         ldb   ,s+          grab old CC off of the stack
+0860: A661                       lda   1,s          get the number of characters to write
+0862:                            ENDC
+0862:                   * A = number of bytes at $0180 to write out...
+0862: 8D02                       bsr   do.grf       do the call
+0864:                   * ignore errors : none possible from this particular call
+0864: 35F6              call.out puls  d,x,y,u,pc   and return
+0866:                   
+0866:                   * this routine should always be called by a BSR, and grfdrv will use the
+0866:                   * PC saved on-stack to return to the calling routine.
+0866:                   * ALL REGISTERS WILL BE TRASHED
+0866: 10FF1007          do.grf   sts   >WGlobal+G.GrfStk    stack pointer for GrfDrv
+086A: 10DEA7                     lds   <D.CCStk     get new stack pointer
+086D:                            IFNE  H6309
+086D:                            pshs  dp,x,y,u,pc
+086D:                            pshsw
+086D:                            pshs  cc,d         save all registers
+086D:                            ELSE
+086D: 34FF                       pshs  dp,cc,d,x,y,u,pc
+086F:                            ENDC
+086F:                   
+086F: BE106E                     ldx   >WGlobal+G.GrfEnt     get GrfDrv entry address
+0872:                   
+0872: AF6A                       stx   R$PC,s       save grfdrv entry address as PC on the stack
+0874:                            IFNE  H6309
+0874:                            ste   R$CC,s       save CC onto CC on the stack
+0874:                            ELSE
+0874: E762                       stb   R$B,s
+0876: F6017E                     ldb   $017E
+0879: E760                       stb   R$CC,s
+087B:                            ENDC
+087B: 6E9F00AB                   jmp   [>D.Flip1]   flip to grfdrv and execute it
+087F:                            ENDC
+087F:                   
+087F:                   * GrfDrv will execute function, and then call [D.Flip0] to return here. It 
+087F:                   * will use an RTS to return to the code that called here in the first place
+087F:                   * Only SP, PC & CC are set up - ALL OTHER REGISTERS MAY BE MODIFIED
+087F:                   
+087F:                   *         ELSE
+087F:                   *
+087F:                   *call.grf pshs  u,y,x,d
+087F:                   *         tfr   cc,a
+087F:                   *         orcc  #IntMasks+Entire
+087F:                   *         ldx   #$0180
+087F:                   *         sta   -2,x
+087F:                   *call.lp  lda   ,u+
+087F:                   *         sta   ,x+
+087F:                   *         decb
+087F:                   *         bne   call.lp
+087F:                   *         stb   ,x
+087F:                   *         lda   1,s
+087F:                   *         bsr   do.grf
+087F:                   *         puls  u,y,x,d,pc
+087F:                   *
+087F:                   *do.grf   sts   >$1007
+087F:                   *         lds   <D.CCStk
+087F:                   *         ldu   #$1100
+087F:                   *         ldb   #$3A
+087F:                   *         stb   >$1002
+087F:                   *         stb   >$017F
+087F:                   *         pshs  pc,u,y,x,dp,b,a,cc
+087F:                   *         ldx   >$106E
+087F:                   *         stx   R$PC,s
+087F:                   *         ldb   >$107E
+087F:                   *         stb   ,s
+087F:                   *         jmp   [>D.Flip1]
+087F:                   *         ENDC
+087F:                   
+087F: 2614F5                     emod
+0882:                   eom      equ   *
+0882:                            end
+0 Pass 2 errors.
+
+SYMBOL TABLE
+   A.ACIAP 01 ff68    A.MODP 01 ff6c   A.TERMV 01 ffc0   A.TERMW 02 ffa0
+      A.V1 01 ffc1      A.V2 01 ffc2      A.V3 01 ffc3      A.V4 01 ffc4
+      A.V5 01 ffc5      A.V6 01 ffc6      A.V7 01 ffc7       A.W 02 ff9f
+      A.W1 02 ffa1     A.W10 02 ffaa     A.W11 02 ffab     A.W12 02 ffac
+     A.W13 02 ffad     A.W14 02 ffae     A.W15 02 ffaf      A.W2 02 ffa2
+      A.W3 02 ffa3      A.W4 02 ffa4      A.W5 02 ffa5      A.W6 02 ffa6
+      A.W7 02 ffa7      A.W8 02 ffa8      A.W9 02 ffa9  ACIA2661 02 0003
+  ACIA6551 02 0002  ACIA6850 02 0001  ACIATYPE 03 0002  ALTERBIT 00 0004
+      ATRV 01 0080  ATTRMASK 00 00f0      B110 00 0000   B115200 00 000a
+     B1200 00 0003    B19200 00 0007     B2400 00 0004      B300 00 0001
+    B38400 00 0008     B4800 00 0005    B57600 00 0009      B600 00 0002
+     B9600 00 0006  BADINSTR 00 0040    BLACK. 02 0002   BLKSIZE 00 00f1
+  BLOCKTYP 00 0001     BLUE. 02 0001      BOLD 00 0020   BOOTSTR 02 0014
+   BORDREG 00 ff9a     BPNAM 02 0023  BT.BLOCK 00 003b   BT.FLAG 00 8a34
+  BT.OFFST 00 0002    BT.SEC 00 0000   BT.SIZE 00 1080  BT.START 01 ed00
+  BT.TRACK 00 0022   BUFBUSY 00 0040    BUFMOD 00 0001  BYTETYPE 00 0002
+    C$BELL 01 0007     C$BSP 01 0008  C$CLSALL 01 0016   C$CLSGR 01 0015
+    C$COMA 01 002c      C$CR 01 000d     C$DEL 01 0018  C$DELETE 01 0010
+     C$DWN 01 001f      C$EL 01 0005     C$EOF 01 001b    C$FORM 01 000c
+    C$HOME 01 000b  C$INSERT 01 0011    C$INTR 01 0003      C$LF 01 000a
+     C$LFT 01 001d    C$NULL 01 0000    C$PAUS 01 0017    C$PERD 01 002e
+   C$PLINE 01 0013    C$QUIT 01 0005    C$RARR 01 0009     C$RGT 01 001c
+    C$RPET 01 0001    C$RPRT 01 0004  C$SHRARR 01 0019      C$SI 01 000f
+      C$SO 01 000e    C$SPAC 01 0020      C$UP 01 001e    C$XOFF 01 0013
+     C$XON 01 0011      C8E3 02 066f  CALL.GRF 02 0849  CALL.OUT 02 0864
+   CAPSLCK 00 0004     CARRY 00 0001   CBLCODE 00 0005   CC3DSIZ 02 0100
+   CC3PARM 02 0038     CCODE 00 0004     CKCAR 02 00c0     CLOSE 02 00ef
+  CNTRLBIT 00 0002    COCO.D 01 0001COCOVTIO.D 01 0001     COLOR 01 0001
+    COLOR3 01 0002      COMP 00 0000    CONDEM 00 0002    COPYCR 02 005d
+   COPYMSG 02 0054  CPUSPEED 01 0002   CPUTYPE 01 0002   CRCCON1 00 0080
+  CRCCON23 00 0fe3    CRCOFF 00 0000     CRCON 00 0001   CURRENT 00 00ff
+     CYAN. 02 0007    D$GSTA 02 0009    D$INIT 02 0000    D$PSTA 02 000c
+    D$READ 02 0003    D$TERM 02 000f    D$WRIT 02 0006  D.ALTIRQ 02 00b2
+  D.APROCQ 02 0052  D.BLKMAP 02 0040    D.BOOT 02 0031   D.BORDR 02 009a
+   D.BTBUG 02 005e   D.BTPTR 02 0036    D.BTSZ 02 0038  D.CBSTRT 02 0071
+   D.CCMEM 02 00a5   D.CCSTK 02 00a7  D.CLDRES 02 005c   D.CLOCK 02 00e0
+  D.CLOCK2 02 00b6    D.CLTB 02 00b0  D.COCOXT 02 0009   D.CRASH 02 006b
+     D.CRC 02 003b     D.DAY 02 002a   D.DAYWK 02 0034  D.DBGMEM 02 000a
+  D.DEVTBL 02 0080  D.DMAREQ 02 008a D.DWSRVID 02 0010  D.DWSTAT 02 000e
+D.DWSUBADDR 02 000c  D.ERRCOD 02 0033  D.ERRRST 02 00ee    D.FIRQ 02 00f6
+   D.FLIP0 02 00a9   D.FLIP1 02 00ab   D.FRQER 02 0093   D.GPOLL 02 00b4
+   D.HINIT 02 0090   D.HOFF0 02 009f    D.HOUR 02 002b    D.INIT 02 0024
+     D.IRQ 02 00f8   D.IRQER 02 0092    D.IRQS 02 00af   D.MEMSZ 02 00a3
+     D.MIN 02 002c  D.MODDAT 02 005a  D.MODDIR 02 0044  D.MODEND 02 0058
+   D.MONTH 02 0029   D.MOTON 02 0032     D.NMI 02 00fc    D.PIPE 02 0061
+    D.POLL 02 0026  D.POLTBL 02 0082  D.PRCDBT 02 0048    D.PROC 02 0050
+  D.PTHDBT 02 0088    D.QCNT 02 007c    D.QIRQ 02 003f   D.QUICK 02 003e
+   D.RESV1 02 0096   D.RESV2 02 0097   D.RESV3 02 009b     D.SEC 02 002d
+   D.SLICE 02 002f   D.SPEED 02 00a0  D.SPROCQ 02 0056  D.SSTSKN 02 00a4
+  D.SVCIRQ 02 00ce     D.SWI 02 00fa    D.SWI2 02 00f4    D.SWI3 02 00f2
+  D.SWPAGE 02 0003  D.SYSDAT 02 004c  D.SYSDIS 02 00c2  D.SYSIRQ 02 00c4
+  D.SYSMEM 02 004e  D.SYSPRC 02 004a  D.SYSSTK 02 00cc  D.SYSSVC 02 00c0
+  D.SYSTSK 02 00d0  D.SYSVEC 02 00f0  D.TASK1N 02 003d   D.TASKS 02 0020
+  D.TENTHS 02 003c    D.TICK 02 002e    D.TIME 02 0028   D.TIMLS 02 0095
+   D.TIMMS 02 0094   D.TINIT 02 0091   D.TKCNT 02 0035  D.TMPDAT 02 0022
+  D.TSKIPT 02 00a1  D.TSLICE 02 0030  D.USRDIS 02 00c8  D.USRIRQ 02 00ca
+  D.USRSVC 02 00c6   D.VIDMD 02 0098   D.VIDRS 02 0099    D.VIRQ 02 00ad
+   D.VOFF0 02 009e   D.VOFF1 02 009d   D.VOFF2 02 009c  D.WDADDR 02 0000
+  D.WDBTDR 02 0002  D.WPROCQ 02 0054   D.XFIRQ 02 00e6    D.XIRQ 02 00e8
+    D.XNMI 02 00ec    D.XSWI 02 00ea   D.XSWI2 02 00e4   D.XSWI3 02 00e2
+    D.YEAR 02 0028  DAT.ADDR 00 ffe0  DAT.BLCT 00 0008  DAT.BLMX 00 003f
+  DAT.BLSZ 00 2000  DAT.BMSZ 00 0040  DAT.FREE 00 333e  DAT.IMSZ 00 0010
+  DAT.REGS 00 ffa0  DAT.TASK 00 ff91  DAT.TKCT 00 0020  DAT.WREN 00 0000
+  DAT.WRPR 00 0000      DATA 00 0040    DD.ATT 02 000d    DD.BIT 02 0006
+    DD.BSZ 02 0018     DD.BT 02 0015    DD.DAT 02 001a    DD.DIR 02 0008
+    DD.DSK 02 000e    DD.FMT 02 0010    DD.MAP 02 0004    DD.NAM 02 001f
+    DD.OPT 02 003f    DD.OWN 02 000b    DD.RES 02 0013    DD.SIZ 02 0015
+    DD.SPT 02 0011    DD.TKS 02 0003    DD.TOT 02 0000      DEAD 00 0001
+  DEFIOSIZ 00 0010    DEVCNT 02 000d     DEVIC 00 00f0    DEVSIZ 02 000d
+      DIR. 00 0080    DIR.FD 02 001d    DIR.NM 02 0000    DIR.SZ 02 0020
+      DIV0 00 0080   DNS.DTD 00 0002    DNS.FM 00 0000   DNS.FM0 00 0000
+   DNS.MFM 00 0001  DNS.MFM0 00 0004   DNS.STD 00 0000    DO.GRF 02 0866
+   DOWNBIT 00 0010     DPORT 01 ff40     DRIVR 00 00e0    DRVBEG 02 000f
+    DRVMEM 02 0026   DT.CDFM 00 0005    DT.NFM 00 0004   DT.PIPE 00 0002
+    DT.RBF 00 0001    DT.RFM 00 0006    DT.SBF 00 0003    DT.SCF 00 0000
+   E$ALIAS 02 00c7  E$ARROVF 02 0049  E$BADBUF 02 00c2   E$BMCRC 02 00e8
+    E$BMHP 02 00ec    E$BMID 02 00cd   E$BMODE 02 00cb    E$BNAM 02 00eb
+  E$BPADDR 02 00d2   E$BPNAM 02 00d7   E$BPNUM 02 00c9  E$BPRCID 02 00e0
+    E$BTYP 02 00f9  E$BUFSIZ 02 00bf     E$BUG 02 00be     E$CEF 02 00da
+     E$CRC 02 00f3  E$DEADLK 02 00fe   E$DELSP 02 00df  E$DEVBSY 02 00fa
+  E$DEVOVF 02 00cc    E$DIDC 02 00fb  E$DIMLRG 02 0019  E$DIRFUL 02 00ce
+  E$DIVZER 02 002d      E$DN 02 00c6     E$DNE 02 00ee  E$ENDQOU 02 0029
+     E$EOF 02 00d3  E$EXCVRB 02 000b  E$FLTOVF 02 0032     E$FNA 02 00d6
+    E$FULL 02 00f8  E$HANGUP 02 00dc     E$IBA 02 00db  E$ICHREF 02 000e
+  E$ICOORD 02 00bd   E$ICOVF 02 000d  E$IFORKP 02 00e6    E$ILLA 02 0043
+  E$ILLARG 02 00bb  E$ILLCMD 02 00c0  E$ILLCNT 02 0044  E$ILLDEC 02 0048
+  E$ILLDIM 02 0015  E$ILLEXP 02 0047  E$ILLFOR 02 0046  E$ILLINP 02 003d
+  E$ILLIVR 02 004d  E$ILLLIT 02 0016  E$ILLMOD 02 000f  E$ILLNUM 02 0010
+  E$ILLOPD 02 0012  E$ILLOPR 02 0013  E$ILLPNM 02 0040  E$ILLPRF 02 0011
+  E$ILLRET 02 0017  E$ILLRFN 02 0014  E$ILLSFX 02 0018  E$ILLSTC 02 000c
+  E$IOCONV 02 003c  E$IOFRPT 02 003e  E$IOFSYN 02 003f  E$IOMISM 02 003a
+   E$IONUM 02 003b  E$IPRCID 02 00e0    E$ISWI 02 00e3   E$IWDEF 02 00c3
+   E$IWTYP 02 00b7  E$KWNMOD 02 00e7  E$LINLRG 02 001a  E$LNCOMP 02 0033
+    E$LOCK 02 00fc  E$MEMFUL 02 00cf   E$MFULL 02 0020  E$MLTLIN 02 004b
+  E$MLTVAR 02 004c     E$MNF 02 00dd  E$MODBSY 02 00d1  E$MULPRC 02 002c
+   E$NEMOD 02 00ea     E$NES 02 00d5   E$NFONT 02 00b9  E$NOASSG 02 001b
+  E$NOCHLD 02 00e2  E$NOCOMA 02 001d  E$NODATA 02 004f   E$NODIM 02 001e
+    E$NODO 02 001f  E$NOGOTO 02 0021  E$NOLPAR 02 0022  E$NOLREF 02 0023
+  E$NONRCO 02 0042  E$NOOPRD 02 0024  E$NOPATH 02 001c   E$NORAM 02 00ed
+  E$NOROUT 02 0030  E$NORPAR 02 0025  E$NOTASK 02 00ef  E$NOTHEN 02 0026
+    E$NOTO 02 0027  E$NOTRDY 02 00f6  E$NOVREF 02 0028  E$PARMER 02 0038
+    E$PNNF 02 00d8    E$POLL 02 00ca  E$PRCABT 02 00e4  E$PRCFUL 02 00e5
+  E$PTHFUL 02 00c8    E$READ 02 00f4    E$SECT 02 00f1    E$SEEK 02 00f7
+  E$SEEKRG 02 004e   E$SHARE 02 00fd     E$SLF 02 00d9  E$STKOVF 02 00ba
+  E$STROVF 02 002f  E$SUBLRG 02 002a  E$SUBOVF 02 0035  E$SUBRNG 02 0037
+  E$SUBUND 02 0036  E$SYSOVF 02 0039  E$TBLFUL 02 00c1  E$TYPMIS 02 002e
+  E$UNDLIN 02 004a  E$UNDVAR 02 0031    E$UNIT 02 00f0  E$UNKPRC 02 002b
+  E$UNKSVC 02 00d0  E$UNKSYM 02 000a  E$UNMCNT 02 0045      E$UP 02 00c5
+   E$USIGP 02 00e9  E$VALRNG 02 0034   E$WADEF 02 00b8      E$WP 02 00f2
+   E$WRITE 02 00f5   E$WRSUB 02 0041  E$WUNDEF 02 00c4   EDITION 00 0012
+    ENTIRE 00 0080   EOFLOCK 00 0004       EOM 02 0882     EXEC. 00 0004
+   F$ALARM 02 001e  F$ALHRAM 02 0053   F$ALL64 02 0030  F$ALLBIT 02 0013
+  F$ALLIMG 02 003a  F$ALLPRC 02 004b  F$ALLRAM 02 0039  F$ALLTSK 02 003f
+   F$APROC 02 002c    F$BOOT 02 0035   F$BTMEM 02 0036   F$CHAIN 02 0005
+  F$CLRBLK 02 0050  F$CMPNAM 02 0011  F$CPYMEM 02 001b     F$CRC 02 0017
+  F$CRCMOD 02 0055  F$DATLOG 02 0044  F$DATTMP 02 0045   F$DEBUG 02 0023
+  F$DELBIT 02 0014  F$DELIMG 02 003b  F$DELPRC 02 004c  F$DELRAM 02 0051
+  F$DELTSK 02 0040   F$ELINK 02 004d    F$EXIT 02 0006  F$FIND64 02 002f
+  F$FMODUL 02 004e    F$FORK 02 0003  F$FREEHB 02 003e  F$FREELB 02 003d
+  F$GBLKMP 02 0019  F$GCMDIR 02 0052  F$GMODDR 02 001a  F$GPRDSC 02 0018
+  F$GPROCP 02 0037    F$ICPT 02 0009      F$ID 02 000c   F$IODEL 02 0033
+    F$IOQU 02 002b     F$IRQ 02 002a   F$LDABX 02 0049   F$LDAXY 02 0046
+  F$LDAXYP 02 0047  F$LDDDXY 02 0048    F$LINK 02 0000    F$LOAD 02 0001
+  F$MAPBLK 02 004f     F$MEM 02 0007    F$MOVE 02 0038  F$NMLINK 02 0021
+  F$NMLOAD 02 0022   F$NPROC 02 002d   F$NVRAM 02 0071    F$PERR 02 000f
+  F$PRSNAM 02 0010  F$REBOOT 02 0054  F$REGDMP 02 0070  F$RELTSK 02 0043
+  F$RESTSK 02 0042   F$RET64 02 0031  F$SCHBIT 02 0012    F$SEND 02 0008
+  F$SETIMG 02 003c  F$SETTSK 02 0041   F$SLEEP 02 000a   F$SLINK 02 0034
+  F$SPRIOR 02 000d  F$SRQMEM 02 0028  F$SRTMEM 02 0029    F$SSPD 02 000b
+    F$SSVC 02 0032    F$SSWI 02 000e   F$STABX 02 004a   F$STIME 02 0016
+   F$SUSER 02 001c  F$TIMALM 02 0026    F$TIME 02 0015     F$TPS 02 0025
+  F$UNLINK 02 0002  F$UNLOAD 02 001d  F$VBLOCK 02 0057    F$VIRQ 02 0027
+  F$VMODUL 02 002e    F$WAIT 02 0004   F$XTIME 02 0056     FALSE 00 0000
+    FD.ATT 02 0000  FD.CREAT 02 000d    FD.DAT 02 0003    FD.LNK 02 0008
+    FD.LS1 00 00fb    FD.LS2 00 00fa    FD.OWN 02 0001    FD.SEG 02 0010
+    FD.SIZ 02 0009     FDBUF 00 0004    FDSL.A 02 0000    FDSL.B 02 0003
+    FDSL.S 02 0005  FEATURE1 02 001b  FEATURE2 02 001c  FILELOCK 00 0002
+  FIRQMASK 00 0040     FLMGR 00 00d0    FMCDIR 02 0009    FMCLOS 02 0024
+    FMCREA 02 0000    FMDLET 02 000c    FMGSTA 02 001e    FMMDIR 02 0006
+    FMOPEN 02 0003    FMRDLN 02 0018    FMREAD 02 0012    FMSEEK 02 000f
+    FMSSTA 02 0021   FMT.DNS 00 0002  FMT.SIDE 00 0001  FMT.T0DN 00 0020
+  FMT.TDNS 00 0004    FMWRIT 02 0015    FMWRLN 02 001b  FNT.G8X8 02 0003
+  FNT.S6X8 02 0002  FNT.S8X8 02 0001  FRTNCODE 00 0006   G.2KEY1 02 002a
+   G.2KEY2 02 002b   G.2KEY3 02 002c  G.ALPCKT 02 000f   G.ALPID 02 0015
+   G.ALSIG 02 0016  G.ALTDWN 02 0033  G.AUTOMS 02 0066  G.BCFFLG 02 0024
+  G.BELTNF 02 001c  G.BELVEC 02 0017  G.CAPLOK 02 0036   G.CLEAR 02 0064
+  G.CNTLDN 02 0031  G.CNTTIK 02 0001  G.COTBLE 02 0068  G.CRDVFL 02 000a
+  G.CURDEV 02 0020  G.CURDVM 02 000c  G.CURTIK 02 0000  G.DEFPAL 02 0019
+  G.DEFPLS 02 00c7    G.DONE 02 046c    G.FAST 02 044f  G.GFBUSY 02 0002
+  G.GFXTBL 02 0075  G.GRFENT 02 006e  G.GRFSTK 02 0007  G.JOYENT 02 00ea
+  G.JOYMEM 02 00ec    G.KEY1 02 002d    G.KEY2 02 002e    G.KEY3 02 002f
+  G.KEYENT 02 00e0  G.KEYFLG 02 0032  G.KEYMEM 02 00e2  G.KTBLLC 02 0026
+  G.KYBUTT 02 0065   G.KYDLY 02 0061   G.KYMSE 02 0063  G.KYREPT 02 0029
+  G.KYSAME 02 0035   G.KYSNS 02 0034   G.KYSPD 02 0062  G.LASTCH 02 0027
+  G.LKEYCD 02 0028    G.LOOP 02 0458   G.LOOP1 02 0467  G.MONTYP 02 0009
+   G.MOUSE 02 003c   G.MSEMV 02 0067  G.MSINIT 02 00c4  G.MSMPRT 02 003b
+  G.MSMPRV 02 0060   G.MSSIG 02 00c6  G.ORGALT 02 0003  G.PRWMPT 02 0022
+     G.RAW 02 0448  G.SHFTDN 02 0030  G.SNDENT 02 00f4  G.SNDMEM 02 00f6
+   G.TNCNT 02 001b  G.WIBUSY 02 000e  G.WINDBK 02 00c2 G.WINTYPE 02 000b
+  G.WRKWTB 02 0077  G.WUSETB 02 0071     G0005 02 0005     G000A 02 000a
+     G001D 02 001d     G0025 02 0025     G0038 02 0038     G005C 02 005c
+     G005E 02 005e     G0070 02 0070     G00B7 02 00b7     G00B9 02 00b9
+     G00BB 02 00bb     G00BD 02 00bd     G00BE 02 00be     G00BF 02 00bf
+     G00C0 02 00c0     G00D7 02 00d7    GB0000 00 0048  GET.WPTR 02 0816
+    GETSTT 02 01aa  GIMEREGS 00 ff00     GPBUF 02 0100  GR.STYMK 02 0060
+    GR0000 02 0000    GR0001 02 0001    GR0002 02 0002    GR0004 02 0004
+    GR0005 02 0005    GR0006 02 0006    GR0007 02 0007    GR0008 02 0008
+    GR0009 02 0009    GR000A 02 000a    GR000B 02 000b    GR000C 02 000c
+    GR000E 02 000e    GR000F 02 000f    GR0010 02 0010    GR0012 02 0012
+    GR0018 02 0018    GR001A 02 001a    GR001C 02 001c    GR001E 02 001e
+    GR0020 02 0020    GR0022 02 0022    GR0024 02 0024    GR0026 02 0026
+    GR0028 02 0028    GR0029 02 0029    GR002A 02 002a    GR002B 02 002b
+    GR002C 02 002c    GR002E 02 002e    GR0030 02 0030    GR0032 02 0032
+    GR0033 02 0033    GR0035 02 0035    GR0036 02 0036    GR0038 02 0038
+    GR0039 02 0039    GR003A 02 003a    GR003B 02 003b    GR003D 02 003d
+    GR003F 02 003f    GR0041 02 0041    GR0043 02 0043    GR0044 02 0044
+    GR0045 02 0045    GR0047 02 0047    GR0049 02 0049    GR004B 02 004b
+    GR004D 02 004d    GR004F 02 004f    GR0051 02 0051    GR0053 02 0053
+    GR0055 02 0055    GR0057 02 0057    GR0058 02 0058    GR0059 02 0059
+    GR005A 02 005a    GR005B 02 005b    GR005D 02 005d    GR005F 02 005f
+    GR0061 02 0061    GR0062 02 0062    GR0063 02 0063    GR0064 02 0064
+    GR0066 02 0066    GR0068 02 0068    GR006A 02 006a    GR006C 02 006c
+    GR006E 02 006e    GR0070 02 0070    GR0072 02 0072    GR0074 02 0074
+    GR0075 02 0075    GR0077 02 0077    GR0079 02 0079    GR007A 02 007a
+    GR007C 02 007c    GR007D 02 007d    GR007E 02 007e    GR0080 02 0080
+    GR0082 02 0082    GR0085 02 0085    GR0087 02 0087    GR0097 02 0097
+    GR0098 02 0098    GR0099 02 0099    GR009B 02 009b    GR009C 02 009c
+    GR009D 02 009d    GR009F 02 009f    GR00A0 02 00a0    GR00A1 02 00a1
+    GR00A3 02 00a3    GR00A5 02 00a5    GR00A7 02 00a7    GR00A9 02 00a9
+    GR00AD 02 00ad    GR00AF 02 00af    GR00B1 02 00b1    GR00B2 02 00b2
+    GR00B3 02 00b3    GR00B4 02 00b4    GR00B5 02 00b5    GR00B6 02 00b6
+    GR00B7 02 00b7    GR00B9 02 00b9    GR00BB 02 00bb    GR00BD 02 00bd
+    GR00BF 02 00bf  GRBIGFNT 02 00ab    GREEN. 02 0003   GRF.BCK 02 0000
+   GRF.BSZ 02 0005  GRF.BUFF 02 0004   GRF.GRP 02 0003  GRF.LFPX 02 000c
+  GRF.NBLK 02 000f   GRF.OFF 02 0001   GRF.PAL 02 0010  GRF.RTPX 02 000d
+   GRF.SIZ 02 0020   GRF.STY 02 000e  GRF.XBSZ 02 000b   GRF.XSZ 02 0007
+   GRF.YSZ 02 0009    GRFMEM 00 1100  GRP.CLIP 02 00c9   GRP.FNT 02 00c8
+  GRP.PAT2 02 00cb  GRP.PAT4 02 00cc  GRP.PAT6 02 00cd   GRP.PTR 02 00ca
+   GT.BCLR 02 0008   GT.BMSK 02 000a   GT.DPTR 02 0005   GT.FCLR 02 0007
+   GT.FMSK 02 0009   GT.GBLK 02 000b   GT.GOFF 02 000c  GT.GXCUR 02 0001
+  GT.GYCUR 02 0003   GT.PBLK 02 000f   GT.PROC 02 000e    GT.RES 02 0010
+   GT.WTYP 02 0000    GTABSZ 02 0012     H6309 06 0000  HALFCRRY 00 0020
+   HW.PAGE 01 0007      HZ50 00 0001      HZ60 00 0002  I$ATTACH 02 0080
+  I$CHGDIR 02 0086   I$CLOSE 02 008f  I$CREATE 02 0083  I$DELETE 02 0087
+  I$DELETX 02 0090  I$DETACH 02 0081     I$DUP 02 0082  I$GETSTT 02 008d
+  I$MAKDIR 02 0085    I$OPEN 02 0084    I$READ 02 0089  I$READLN 02 008b
+    I$SEEK 02 0088  I$SETSTT 02 008e   I$WRITE 02 008a  I$WRITLN 02 008c
+     ICODE 00 0002    IMGCHG 00 0010  INDRIVER 00 0020   INITSTR 02 000e
+INSTALLNAME 02 001f  INTMASKS 00 0050    INVERS 00 0004    IOADDR 00 007f
+   IOBLOCK 00 003f   IOENTRY 00 00fe    IRQENR 00 ff92   IRQMASK 00 0010
+     ISIZ. 00 0020    IT.ALF 02 0017    IT.BAU 02 0027    IT.BDC 02 0035
+    IT.BGC 02 0034    IT.BSE 02 0024    IT.BSO 02 0014    IT.BSP 02 001b
+    IT.COL 02 002c    IT.CPX 02 0031    IT.CPY 02 0032    IT.CYL 02 0017
+    IT.D2P 02 0028    IT.DEL 02 001c    IT.DLO 02 0015    IT.DNS 02 0016
+    IT.DRV 02 0013    IT.DTP 02 0012    IT.DUP 02 0020    IT.DVC 02 0012
+    IT.EKO 02 0016    IT.EOF 02 001e    IT.EOR 02 001d  IT.EXTEN 02 0022
+    IT.FGC 02 0033    IT.ILV 02 001f    IT.INT 02 0022  IT.LLDRV 02 0028
+    IT.MPI 02 002a    IT.NUL 02 0018    IT.OFS 02 0026    IT.OVF 02 0025
+    IT.PAG 02 001a    IT.PAR 02 0026    IT.PAU 02 0019    IT.PSC 02 0021
+    IT.QUT 02 0023    IT.ROW 02 002d    IT.RPR 02 001f    IT.RWC 02 0028
+    IT.SAS 02 0020    IT.SCT 02 001b    IT.SID 02 0019  IT.SOFF1 02 0025
+  IT.SOFF2 02 0026  IT.SOFF3 02 0027  IT.STOFF 02 0024    IT.STP 02 0014
+    IT.STY 02 0030    IT.T0S 02 001d    IT.TFM 02 0021    IT.TYP 02 0015
+    IT.UPC 02 0013    IT.VAL 02 002f    IT.VFY 02 001a    IT.WND 02 002e
+    IT.WPC 02 0025   IT.XOFF 02 002b    IT.XON 02 002a   IT.XTYP 02 002e
+    J$INIT 02 0000   J$JYBTN 02 000c    J$JYXY 02 000f   J$MSBTN 02 0006
+    J$MSXY 02 0009    J$TERM 02 0003   K$FNKEY 02 0006    K$INIT 02 0000
+   K$RDKEY 02 0009    K$TERM 02 0003     KB.E1 02 076a    KB.END 02 0736
+    KB.EUC 02 0799    KB.FIN 02 0774     KB.L1 02 07bb     KB.L2 02 07be
+     KB.L3 02 07c1     KB.L4 02 07c4    KB.LEN 02 0778     KB.LP 02 075a
+     KB.N0 02 073f   KB.SCAN 02 072b    KB.UTF 02 07ab    KB.WID 02 07c7
+      KBSP 02 071f    KEYMSE 00 0001   KEYRPTD 02 0029   KEYRPTS 02 0028
+    KRNBLK 01 003f      KW.1 02 07d8      KW.2 02 07dc    KW.EUC 02 07e0
+     KW.F1 02 080a    KW.UTF 02 07ec     L00CF 02 0094     L00E6 02 00be
+     L00EF 02 00c7     L00F8 02 00d0     L010F 02 00e7     L0129 02 0101
+     L012A 02 0102     L012B 02 0103     L0136 02 0116     L013D 02 011d
+     L0147 02 0127     L016D 02 014d     L0172 02 0152     L017B 02 015b
+     L0180 02 0160     L0182 02 0162     L0198 02 0176     L01B9 02 0197
+     L01C4 02 01a2     L01CA 02 01a8     L01F6 02 01d2     L01F7 02 01d3
+     L01F8 02 01d4     L01FA 02 01d6     L0212 02 01e5     L021B 02 021c
+     L0250 02 024f     L025B 02 025a     L0282 02 0280     L0289 02 0287
+     L028A 02 0288     L02A2 02 02a1     L02A4 02 02a3     L02AD 02 02d3
+     L02B7 02 02dc     L02BC 02 02e0     L02C4 02 02e8     L02CF 02 02f4
+     L02D3 02 02f8     L02D5 02 02fa     L02DC 02 0300     L02E5 02 034f
+     L02EF 02 0359     L02FE 02 062b     L0303 02 0630     L030C 02 0639
+     L0312 02 063f     L0322 02 0651     L0328 02 0659     L032C 02 0661
+     L033F 02 0674     L0351 02 0686     L0366 02 069c     L0370 02 06a6
+     L0381 02 06b4     L0388 02 06be     L038B 02 06c1     L03A0 02 06d7
+     L03A2 02 06d9     L03A3 02 06da     L03A5 02 06dc     L03B5 02 06ef
+     L03B8 02 06f2     L03BA 02 06f4     L03BB 02 06f5     L03BF 02 06f9
+     L03BG 02 0704     L03D4 02 0719     L03DA 02 04fd     L03E2 02 0302
+     L03EA 02 030c     L03F1 02 0313     L0401 02 0320     L0403 02 04c9
+     L0412 02 04d3     L0413 02 0563     L0418 02 0568     L0423 02 0573
+     L042B 02 0322     L0435 02 032c     L0442 02 0339     L0451 02 0348
+     L0453 02 0368     L045D 02 0372     L0467 02 037d     L0468 02 037e
+     L046A 02 0380     L048A 02 039f     L049F 02 03b2     L04A2 02 03b5
+     L04A7 02 03ba     L04BB 02 03cf     L04C1 02 03d5     L04C4 02 03d8
+     L04C6 02 03da     L04D3 02 03e7     L04E1 02 03f5     L04EC 02 0402
+     L04F1 02 0407     L0508 02 041e     L0523 02 0439     L0524 02 0484
+     L052A 02 0491     L053D 02 04a2     L0544 02 04a9     L0554 02 04c0
+     L0556 02 04c2     L055A 02 04c6     L055D 02 04d4     L0565 02 054e
+     L056F 02 0558     L0571 02 0561     L0573 02 04dc     L0590 02 050a
+     L059A 02 0513     L05A2 02 051a     L05BA 02 0533     L05BE 02 0537
+     L05C5 02 053d     L05C7 02 053f     L05C9 02 0541     L05F8 02 057d
+     L0620 02 05ad     L0624 02 057b     L0629 02 05b1     L062D 02 05b5
+     L0634 02 05bd     L0642 02 05cb     L0647 02 05cf     L0664 02 05ec
+     L0671 02 05f9     L067C 02 0604     L0685 02 060d     L0687 02 060f
+     L068B 02 0613     L0696 02 061c     L069F 02 0625     L06DE 02 05db
+        L@ 02 0854  LANGMASK 00 000f   LASTRAM 00 003f     LC486 02 01de
+   LEFTBIT 00 0020     LEVEL 00 0002   LIMITED 00 0001    M$DTYP 02 0012
+    M$EXEC 02 0009    M$FMGR 02 0009      M$ID 02 0000     M$ID1 00 0087
+    M$ID12 00 87cd     M$ID2 00 00cd  M$IDSIZE 02 0009     M$MEM 02 000b
+    M$MODE 02 000d    M$NAME 02 0004     M$OPT 02 0011  M$PARITY 02 0008
+    M$PDEV 02 000b    M$PORT 02 000e    M$REVS 02 0007    M$SIZE 02 0002
+    M$TYPE 02 0006  MAGENTA. 02 0006  MAPPEDIO 02 0000   MAXLINE 00 00c6
+  MAXLINES 00 0019    MAXMEM 02 0009   MAXROWS 00 0280   MAXWIND 00 0020
+  MD$ESIZE 02 0008   MD$LINK 02 0006  MD$MBSIZ 02 0002  MD$MPDAT 02 0000
+   MD$MPTR 02 0004       MEG 01 0000   MI.ENBL 02 000f    MI.RES 02 0010
+    MI.SIZ 02 0015    MI.TTL 02 0000   MID.CHR 02 0008   MID.CLS 02 0002
+   MID.EDT 02 0016   MID.FIL 02 0015   MID.FNT 02 0018   MID.GRW 02 0003
+   MID.MOV 02 0001   MID.SDN 02 0005   MID.SLT 02 0007   MID.SRT 02 0006
+   MID.STY 02 0017   MID.SUP 02 0004   MID.TDY 02 0014    MINSEC 01 0010
+   MN.ENBL 02 0012     MN.ID 02 000f  MN.ITEMS 02 0015   MN.NITS 02 0011
+    MN.RES 02 0013    MN.SIZ 02 0017    MN.TTL 02 0000   MN.XSIZ 02 0010
+   MNUHSIZ 02 0004   MNUXEND 02 0002   MNUXNUM 02 0000  MNUXSTRT 02 0001
+  MODBLOCK 00 0002    MODNAT 00 0020   MODPROT 00 0040   MONITOR 01 0001
+      MONO 00 0002   MONTYPE 02 0025  MOUSEINF 02 0026  MOVEBLKS 00 0005
+  MPI.SLCT 01 ff7f  MPI.SLOT 01 0003       MSG 02 0011   MSGSIZE 00 000f
+     MULTI 00 0030   MXTTLEN 00 000f  NEFIOSIZ 00 000c  NEGATIVE 00 0008
+   NO.FAST 02 0843   NO.WPTR 02 0482    NOCURS 00 0002    NOECHO 02 0572
+     NOOUT 02 0508   NOS9MAJ 00 0000   NOS9MIN 00 0001   NOS9VER 00 0001
+   NOSHARE 02 00b1    NOTRAM 00 0080   NUMITMS 00 0014    NUMLCK 00 0002
+   NUMMENS 00 000a  NUMPATHS 00 0010   OBJ6309 00 0007     OBJCT 00 0001
+      OERR 02 0026    ONEMHZ 00 0001   OPBPNAM 02 0021      OPEN 02 0027
+     OPEN1 02 0042   OPENERR 02 00e9    OPTCNT 00 001a     OS9.D 01 0001
+  OS9MAJOR 00 0000  OS9MINOR 00 0001   OS9VRSN 00 0001   OSLEVEL 02 0017
+   OSMAJOR 02 0019   OSMINOR 02 001a    OSNAME 02 001d     OSVER 02 0018
+     P$AGE 02 000b   P$ALARM 02 00c3     P$CID 02 0003  P$DATBEG 02 00bd
+  P$DATIMG 02 0040  P$DEADLK 02 001e     P$DIO 02 0020  P$FCALLS 02 00b5
+  P$ICALLS 02 00b9      P$ID 02 0000    P$IOQN 02 0010    P$IOQP 02 000f
+   P$LINKS 02 0080     P$NIO 02 00a0  P$PAGCNT 02 0007    P$PATH 02 0030
+     P$PID 02 0001  P$PMODUL 02 0011   P$PRIOR 02 000a   P$QUEUE 02 000d
+    P$SELP 02 00ac     P$SID 02 0002  P$SIGDAT 02 001c  P$SIGNAL 02 0019
+  P$SIGVEC 02 001a    P$SIZE 02 0200      P$SP 02 0004   P$STACK 02 0200
+   P$STATE 02 000c  P$STICKS 02 00b1     P$SWI 02 0013    P$SWI2 02 0015
+    P$SWI3 02 0017    P$TASK 02 0006  P$TIMBEG 02 00c0    P$USER 02 0008
+  P$UTICKS 02 00ad    PALADR 00 ffb0   PAREVEN 00 0060   PARMARK 00 00a0
+   PARMASK 00 00e0   PARNONE 00 0000    PARODD 00 0020  PARSPACE 00 00e0
+  PAT.BDOT 02 0008   PAT.DOT 02 0001   PAT.HRZ 02 0003  PAT.LSNT 02 0005
+  PAT.RSNT 02 0006  PAT.SDOT 02 0007   PAT.VRT 02 0002  PAT.XHTC 02 0004
+     PCODE 00 0003    PD.ALF 02 0025    PD.ATT 02 0033    PD.BAU 02 0035
+    PD.BSE 02 0032    PD.BSO 02 0022    PD.BSP 02 0029    PD.BUF 02 0008
+    PD.CNT 02 0002     PD.CP 02 000b    PD.CPR 02 0005    PD.CYL 02 0025
+    PD.D2P 02 0036    PD.DCP 02 003a    PD.DEL 02 002a    PD.DEV 02 0003
+    PD.DFD 02 0037    PD.DLO 02 0023    PD.DNS 02 0024    PD.DRV 02 0021
+    PD.DSK 02 001c    PD.DTB 02 001e    PD.DTP 02 0020    PD.DUP 02 002e
+    PD.DV2 02 000a    PD.DVT 02 003e    PD.EKO 02 0024    PD.EOF 02 002c
+    PD.EOR 02 002b    PD.ERR 02 003a  PD.EXTEN 02 0030     PD.FD 02 0034
+    PD.FST 02 000a    PD.ILV 02 002d    PD.INT 02 0030    PD.MAX 02 000d
+    PD.MIN 02 000f    PD.MOD 02 0001    PD.NUL 02 0026    PD.OPT 02 0020
+    PD.OVF 02 0033    PD.PAG 02 0028    PD.PAR 02 0034    PD.PAU 02 0027
+     PD.PD 02 0000    PD.PLP 02 003d    PD.PSC 02 002f    PD.PST 02 003f
+    PD.QUT 02 0031    PD.RAW 02 000c    PD.RGS 02 0006    PD.RPR 02 002d
+    PD.SAS 02 002e    PD.SBL 02 0013    PD.SBP 02 0016    PD.SCT 02 0029
+    PD.SID 02 0027    PD.SIZ 02 000f    PD.SMF 02 000a    PD.SSZ 02 0019
+    PD.STM 02 0012  PD.STOFF 02 0032    PD.STP 02 0022    PD.STS 02 0010
+    PD.T0S 02 002b    PD.TBL 02 003b    PD.TFM 02 002f    PD.TYP 02 0023
+    PD.UPC 02 0021    PD.VFY 02 0028   PD.XOFF 02 0039    PD.XON 02 0038
+    PDELIM 00 002f      PDIR 00 002e    PDSIZE 02 0040  PE.CONFL 02 0005
+  PE.FILNM 02 0020  PE.HILCK 02 000c   PE.LOCK 02 0007  PE.LOLCK 02 0008
+  PE.NXFIL 02 0003  PE.OWNER 02 0014  PE.PDPTR 02 0001     PE.PE 02 0000
+  PE.PRIOR 02 0016    PE.REQ 02 0015  PE.SIGID 02 0018  PE.SIGSG 02 0017
+  PE.TMOUT 02 0012   PE.WAIT 02 0010    PENTIR 00 0040    PEXEC. 00 0020
+  PIA0BASE 00 ff00  PIA1BASE 00 ff20   POLLCNT 02 000c    POLSIZ 02 000b
+    PREAD. 00 0008     PRGRM 00 0010  PROC6309 00 0002  PROC6809 00 0000
+      PROP 00 0010   PROTECT 00 0001  PROTFLAG 02 0016   PST.DCD 00 0001
+   PT.ACTV 02 0001    PT.ACX 02 0018    PT.ACY 02 001a    PT.BDX 02 0012
+    PT.BDY 02 0014   PT.CBSA 02 0008   PT.CBSB 02 0009   PT.CCTA 02 000a
+   PT.CCTB 02 000b    PT.RES 02 0017    PT.SIZ 02 0020   PT.STAT 02 0016
+   PT.TLSA 02 000e   PT.TLSB 02 000f   PT.TOTM 02 0002   PT.TSST 02 0006
+   PT.TTSA 02 000c   PT.TTSB 02 000d   PT.TTTO 02 0005  PT.VALID 02 0000
+    PT.WRX 02 001c    PT.WRY 02 001e   PTR.ARR 02 0001   PTR.ILL 02 0005
+   PTR.LCH 02 0003   PTR.PEN 02 0002   PTR.SCH 02 0007   PTR.SLP 02 0004
+   PTR.TXT 02 0006    PUTKEY 02 01ee   PUTKEY1 02 021a    PWRIT. 00 0010
+  PWRLNFRQ 01 0002    Q$FLIP 02 0002     Q$MAP 02 0009    Q$MASK 02 0003
+    Q$POLL 02 0000    Q$PRTY 02 0008    Q$SERV 02 0004    Q$STAT 02 0006
+       R$A 00 0001       R$B 00 0002      R$CC 00 0000       R$D 00 0001
+      R$DP 00 0003      R$PC 00 000a    R$SIZE 00 000c       R$U 00 0008
+       R$X 00 0004       R$Y 00 0006  RAMCHECK 00 0001  RAMCOUNT 00 0001
+  RAMINUSE 00 0001     RBF.D 01 0001   RCDLOCK 00 0001      READ 02 0282
+     READ. 00 0001   READBUF 02 0080    READLN 02 034a      RED. 02 0004
+     REENT 00 0080REMOVEFROMPDLIST 02 0129       REV 01 0000  REVSMASK 00 000f
+       RGB 00 0001  RIGHTBIT 00 0040  ROMBLOCK 00 003f  ROMCHECK 00 0001
+  ROMCOUNT 00 0001   S$ABORT 02 0002   S$ALARM 02 0005  S$GETSTT 02 0003
+     S$HUP 02 0004    S$INIT 02 0000  S$INTRPT 02 0003    S$KILL 02 0000
+  S$SETSTT 02 0006    S$TERM 02 0009    S$WAKE 02 0001  S$WINDOW 02 0004
+     SBRTN 00 0020     SCALE 00 0008     SCF.D 01 0001    SCFENT 02 02ac
+   SCFNAME 02 000d    SETSTT 02 01e2    SHARE. 00 0040  SHELLSUB 00 0050
+  SHIFTBIT 00 0001      SIGN 00 0080    SINBUF 00 0002  SPACEBIT 00 0080
+  SS.AAGBF 02 0080  SS.ALFAS 02 001c  SS.ANPAL 02 009a   SS.ARAM 00 00ca
+  SS.ASCRN 02 008b   SS.ATTR 02 001c  SS.BLKRD 02 0014  SS.BLKWR 02 0015
+  SS.BREAK 02 001d  SS.CDREL 02 009b  SS.CDSIG 02 009a  SS.CDSTA 02 0099
+  SS.CLOSE 02 002a  SS.COMST 02 0028  SS.CURSR 02 0025   SS.DCMD 02 000d
+  SS.DEVNM 02 000e  SS.DFPAL 02 0097 SS.DIRENT 02 0020   SS.DRAM 00 00cb
+  SS.DREAD 02 0080  SS.DRVCH 02 0086  SS.DSCRN 02 008c  SS.DSIZE 02 0026
+  SS.DSTAT 02 0012  SS.DWRIT 02 0080    SS.ECC 02 00b0   SS.ELOG 02 0019
+    SS.EOF 02 0006  SS.FBRGS 02 0096   SS.FCLR 00 0081     SS.FD 02 000f
+  SS.FDINF 00 0020   SS.FEED 02 0009   SS.FILL 02 00a0  SS.FNDBF 02 009b
+    SS.FRZ 02 000a  SS.FSCRN 02 008d   SS.FSET 00 00c7   SS.FSIG 02 002c
+    SS.GIP 02 0094   SS.GIP2 02 0099   SS.HIST 02 00a1  SS.HNGUP 02 002b
+    SS.JOY 02 0013   SS.KCLR 00 00c9   SS.KSET 00 00c8  SS.KYSNS 02 0027
+   SS.LINK 02 0007   SS.LOCK 02 0011  SS.MNSEL 02 0087   SS.MOFF 02 0082
+  SS.MONTR 02 0092  SS.MOTIM 02 0083  SS.MOUNT 02 0082  SS.MOUSE 02 0089
+  SS.MPGPB 02 0084  SS.MSSIG 02 008a   SS.OPEN 02 0029    SS.OPT 02 0000
+  SS.PALET 02 0091    SS.POS 02 0005  SS.PSCRN 02 008e  SS.RDNET 02 0083
+  SS.READY 02 0001  SS.RELEA 02 001b  SS.RESET 02 0003  SS.RETEN 02 0016
+    SS.RFM 02 0018  SS.RSBIT 02 001e   SS.SBAR 02 0088  SS.SCINF 02 008f
+  SS.SCSIZ 02 0026  SS.SCTYP 02 0093   SS.SDRD 02 0084  SS.SDWRT 02 0084
+  SS.SETMF 02 0024   SS.SIZE 02 0002  SS.SLEEP 02 0085  SS.SLGBF 02 0081
+  SS.SLOTS 02 0085    SS.SPT 02 000b    SS.SQD 02 000c   SS.SSIG 02 001a
+  SS.TICKS 02 0010   SS.TONE 02 0098  SS.ULINK 02 0008  SS.UMBAR 02 0095
+  SS.UNFRZ 02 0081SS.VARSECT 02 0012   SS.VCTR 00 0080   SS.VSIG 00 0081
+    SS.WFM 02 0017  SS.WNSET 02 0086   SS.WTRK 02 0004   ST.BACK 02 0007
+   ST.BRDR 02 0005   ST.BROW 02 0004   ST.FORE 02 0006  ST.LSTRT 02 0002
+   ST.PALS 02 0010    ST.RES 02 0009   ST.SBLK 02 0001  ST.SCSIZ 02 0008
+    ST.SIZ 02 0020    ST.STY 02 0000   STBLBSE 00 1a80   STBLMAX 00 0010
+    STDSTR 02 0012     STOP1 00 0000     STOP2 00 0010  STP.12MS 00 0002
+  STP.20MS 00 0001  STP.30MS 00 0000   STP.6MS 00 0003   SUSPEND 00 0008
+  SYSSTATE 00 0080    SYSSTR 02 0010   SYSTASK 00 0000     SYSTM 00 00c0
+      TCHR 00 0080    TIMOUT 00 0020  TIMSLEEP 00 0040  TKPERSEC 01 003c
+      TRUE 00 0001    TWOMHZ 00 0002  TWOSOVFL 00 0002      TYLG 01 00d1
+   TYP.256 00 0000     TYP.3 00 0001     TYP.5 00 0000   TYP.512 00 0004
+   TYP.CCF 00 0020   TYP.FLP 00 0000  TYP.HARD 00 0080  TYP.NCCF 00 0000
+   TYP.NSF 00 0040   TYP.SBO 00 0002   TYP.SOF 00 0000  TYPEMASK 00 00f0
+ TYPH.1024 00 0002 TYPH.2048 00 0003  TYPH.256 00 0000  TYPH.512 00 0001
+ TYPH.DRSV 00 000c  TYPH.DSQ 00 0010  TYPH.SSM 00 0003     UNDER 00 0040
+  UNLIMITD 00 0002  UNLOCKED 00 0000     UPBIT 00 0008    UPDAT. 00 0003
+    V$DESC 02 0004    V$DRIV 02 0000  V$DRIVEX 02 0009    V$FMGR 02 0006
+  V$FMGREX 02 000b    V$STAT 02 0002    V$USRS 02 0008  V.BMAPSZ 02 001c
+     V.BMB 02 0017    V.BUSY 02 0004 V.CALLCDE 02 0037    V.DEV2 02 0009
+  V.DEVPAR 02 001f  V.DISKID 02 001a   V.DWNUM 02 0036  V.ENDPTR 02 0033
+     V.ERR 02 000e  V.FILEHD 02 0018  V.INFVLD 02 001e  V.INPPTR 02 0034
+    V.INTR 02 000b   V.KANJI 02 0011    V.KBUF 02 0012V.KYSNSFLG 02 0022
+    V.LINE 02 0007    V.LPRC 02 0003  V.MAPSCT 02 001d  V.MAUTOF 02 002b
+  V.MODADR 02 0014  V.MSIGID 02 0026  V.MSIGSG 02 0027   V.MSMPL 02 0028
+   V.MTIME 02 0029    V.NDRV 02 0006  V.NXTPRM 02 0031    V.PAGE 02 0000
+ V.PARMCNT 02 002c V.PARMVCT 02 002d    V.PAUS 02 0008    V.PCHR 02 000d
+   V.PDLHD 02 0016    V.PORT 02 0001 V.PRMSTRT 02 002f    V.QUIT 02 000c
+  V.RESBIT 02 001e     V.RSV 02 0018     V.SCF 02 001d  V.SCOFST 02 0020
+  V.SCRCHG 02 0023  V.SCTKOF 02 001f  V.SSIGID 02 0024  V.SSIGSG 02 0025
+  V.TKOFST 02 0021    V.TRAK 02 0015    V.TYPE 02 0006  V.ULCASE 02 0021
+    V.USER 02 0006    V.WAKE 02 0005  V.WINNUM 02 0035 V.WINTYPE 02 001d
+    V.XOFF 02 0010     V.XON 02 000f    VD.OFS 02 0061    VD.STP 02 0060
+   VEREXIT 02 0846    VI.CNT 02 0000  VI.IFLAG 00 0001   VI.PKSZ 02 0005
+    VI.RST 02 0002   VI.STAT 02 0004    VIDRAM 00 0004   WGLOBAL 00 1000
+    WHITE. 02 0000   WINBASE 00 1290   WINSYNC 00 c0c0    WN.BAR 02 0020
+   WN.NMNS 02 0014    WN.RES 02 0019    WN.SIZ 02 0022   WN.SYNC 02 0017
+    WN.TTL 02 0000   WN.XMIN 02 0015   WN.YMIN 02 0016     WORD7 00 0020
+     WORD8 00 0000  WR.CNTNT 00 0000  WR.CNTRL 00 0001  WR.OFWIN 00 0002
+     WRITE 02 03f1    WRITE. 00 0002    WRITLN 02 03ed   WT.ATTR 02 0008
+   WT.BACK 02 0007   WT.BLEN 02 001f   WT.BLNK 02 fff2   WT.BROW 02 0004
+    WT.BSW 02 0009    WT.CPX 02 fff5    WT.CPY 02 fff6    WT.CUR 02 fffb
+   WT.CURX 02 fffe   WT.CURY 02 0000  WT.CWTMP 02 0003   WT.DBOX 02 0004
+  WT.DFCPX 02 0026  WT.DFCPY 02 0027  WT.DFSZX 02 0028  WT.DFSZY 02 0029
+   WT.FBLK 02 000b   WT.FMSK 02 fffd   WT.FOFF 02 000c   WT.FORE 02 0006
+  WT.FSWIN 02 0002   WT.FWIN 02 0001   WT.GBLK 02 0018   WT.GOFF 02 0019
+   WT.LSET 02 000a  WT.LSTDF 02 0024  WT.LSTRT 02 fff3   WT.LVEC 02 0014
+   WT.MAXX 02 001b   WT.MAXY 02 001d   WT.NBLK 02 0021   WT.NBOX 02 0000
+   WT.NOFF 02 0022   WT.OBLK 02 0011   WT.OOFF 02 0012   WT.PBLK 02 000e
+   WT.PBOX 02 0005   WT.POFF 02 000f   WT.PVEC 02 0016    WT.RES 02 002a
+   WT.SBOX 02 0003    WT.SIZ 02 0040   WT.STBL 02 fff0  WT.SXFCT 02 fff9
+  WT.SYFCT 02 fffa    WT.SZX 02 fff7    WT.SZY 02 fff8  WT.XBCNT 02 0002
+   YELLOW. 02 0005   YESPATH 02 00b8      ZERO 00 0004

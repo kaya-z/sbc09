@@ -1,0 +1,1146 @@
+0000:                   ********************************************************************
+0000:                   * Shell - NitrOS-9 command line interpreter
+0000:                   *
+0000:                   * $Id$
+0000:                   *
+0000:                   * Edt/Rev  YYYY/MM/DD  Modified by
+0000:                   * Comment
+0000:                   * ------------------------------------------------------------------
+0000:                   *  21      ????/??/??  
+0000:                   * Original Tandy/Microware version.  
+0000:                   *
+0000:                   *  21/2    2003/01/22  Boisy Pitre
+0000:                   * CHD no longer sets WRITE. permission.
+0000:                   *
+0000:                   *  22      2010/01/19  Boisy Pitre
+0000:                   * Added code to honor S$HUP signal and exit when received to support
+0000:                   * networking. 
+0000:                   
+0000:                            nam   Shell
+0000:                            ttl   NitrOS-9 command line interpreter
+0000:                   
+0000:                   * Disassembled 99/04/18 22:59:49 by Disasm v1.6 (C) 1988 by RML
+0000:                   
+0000:                            ifp1
+0000:                            use   defsfile
+0000:                            endc
+0000:                   
+0011:                   tylg     set   Prgrm+Objct   
+0080:                   atrv     set   ReEnt+rev
+0000:                   rev      set   $00
+0016:                   edition  set   22
+0000:                   
+0000: 87CD0627000D1180           mod   eom,name,tylg,atrv,start,size
+0009: 00430300
+0000:                   
+0000:                            org   0
+0000:                   u0000    rmb   1
+0001:                   u0001    rmb   2
+0003:                   u0003    rmb   1
+0004:                   u0004    rmb   1
+0005:                   u0005    rmb   1
+0006:                   u0006    rmb   2
+0008:                   u0008    rmb   1
+0009:                   u0009    rmb   1
+000A:                   u000A    rmb   1
+000B:                   u000B    rmb   1
+000C:                   u000C    rmb   1
+000D:                   u000D    rmb   1
+000E:                   kbdsignl rmb   1
+000F:                   u000F    rmb   1
+0010:                   u0010    rmb   1
+0011:                   u0011    rmb   1
+0012:                   u0012    rmb   1
+0013:                   u0013    rmb   1
+0014:                   u0014    rmb   1
+0015:                   u0015    rmb   1
+0016:                   u0016    rmb   1
+0017:                   u0017    rmb   22
+002D:                   u002D    rmb   3
+0030:                   u0030    rmb   14
+003E:                   u003E    rmb   32
+005E:                   u005E    rmb   2
+0060:                   u0060    rmb   16
+0070:                   u0070    rmb   58
+00AA:                   u00AA    rmb   85
+00FF:                   u00FF    rmb   513
+0300:                   size     equ   .
+000D:                   name     equ   *
+0300:                   
+000D: 5368656CEC        L000D    fcs   /Shell/
+0012: 16                         fcb   edition
+0013:                   
+0013: 13                L0013    fcb   $13 
+0014: 50617363616CD3             fcs   "PascalS"
+001B: 25                         fcb   $25 %
+001C: 52756EC3                   fcs   "RunC"
+0020: 22                         fcb   $22 "
+0021: 52756EC2                   fcs   "RunB"
+0025: 00                         fcb   $00 
+0026: 00                         fcb   $00 
+0027: 00                         fcb   $00 
+0028: 00                         fcb   $00 
+0029: 00                         fcb   $00 
+002A: 00                         fcb   $00 
+002B: 00                         fcb   $00 
+002C: 00                         fcb   $00 
+002D: 00                         fcb   $00 
+002E: 0A                Intro    fcb   C$LF
+002F: 5368656C6C                 fcc   "Shell"
+0034: 0D                         fcb   C$CR
+0035: 0A                DefPrmpt fcb   C$LF
+0036: 4F53393A          OS9Prmpt fcc   "OS9:"
+0004:                   OS9PrmL  equ   *-OS9Prmpt
+0005:                   DefPrmL  equ   *-DefPrmpt
+003A:                   
+003A: D70E              IcptRtn  stb   <kbdsignl
+003C:                   * +++ BGP added for Hang Up
+003C: C104                       cmpb  #S$HUP
+003E: 1027008C                   lbeq  exit
+0042:                   * +++
+0042: 3B                         rti
+0043:                   
+0043: 327B              start    leas  -$05,s
+0045: 3436                       pshs  y,x,b,a
+0047: C66F                       ldb   #$6F
+0049: 17012F                     lbsr  L0175
+004C: 308CEB                     leax  <IcptRtn,pcr
+004F: 103F09                     os9   F$Icpt   
+0052: 3516                       puls  x,b,a
+0054: DD06                       std   <u0006
+0056: 2709                       beq   L005B
+0058: 170126                     lbsr  L017B
+005B: 256B                       bcs   L00C2
+005D: 0D0C                       tst   <u000C
+005F: 2666                       bne   L00C1
+0061: 10EEE1            L005B    lds   ,s++
+0064: 308CC7            L005E    leax  <Intro,pcr
+0067: 0D12                       tst   <u0012
+0069: 2611                       bne   L0076
+006B: 8D64                       bsr   WriteLin
+006D: 255F                       bcs   Exit
+006F: 308CC3            L0069    leax  <DefPrmpt,pcr
+0072: 108E0005                   ldy   #DefPrmL
+0076: 0D12              L0070    tst   <u0012
+0078: 2602                       bne   L0076
+007A: 8D59                       bsr   WritLin2
+007C: 4F                L0076    clra  
+007D: 30C870                     leax  <u0070,u
+0080: 108E00C8                   ldy   #$00C8
+0084: 103F8B                     os9   I$ReadLn 
+0087: 2411                       bcc   L0094
+0089: C1D3                       cmpb  #E$EOF
+008B: 2731                       beq   L00B8
+008D: 0D0F              L0087    tst   <u000F
+008F: 2604                       bne   L008F
+0091: 0D14                       tst   <u0014
+0093: 2633                       bne   L00C2
+0095: 103F0F            L008F    os9   F$PErr   
+0098: 20D5                       bra   L0069
+009A: 108C0001          L0094    cmpy  #$0001
+009E: 220A                       bhi   L00A4
+00A0: 308DFF92                   leax  >OS9Prmpt,pcr
+00A4: 108E0004                   ldy   #OS9PrmL
+00A8: 20CC                       bra   L0070
+00AA: 0D13              L00A4    tst   <u0013
+00AC: 2702                       beq   L00AA
+00AE: 8D21                       bsr   WriteLin
+00B0: 1700CE            L00AA    lbsr  L017B
+00B3: 24BA                       bcc   L0069
+00B5: 5D                         tstb  
+00B6: 26D5                       bne   L0087
+00B8: 20B5                       bra   L0069
+00BA:                   
+00BA: 656F66            eofmsg   fcc   "eof"
+00BD: 0D                         fcb   C$CR
+00BE:                   
+00BE: 0D12              L00B8    tst   <u0012
+00C0: 2605                       bne   L00C1
+00C2: 308CF5                     leax  <eofmsg,pcr
+00C5: 8D0A                       bsr   WriteLin
+00C7: 5F                L00C1    clrb  
+00C8: 960F              L00C2    lda   <u000F
+00CA: 10260269                   lbne  L0331
+00CE: 103F06            Exit     os9   F$Exit   
+00D1:                   
+00D1: 108E0050          WriteLin ldy   #80
+00D5: 8602              WritLin2 lda   #$02                     stderr
+00D7: 103F8C                     os9   I$WritLn                 write line
+00DA: 39                         rts   
+00DB:                   
+00DB:                   * I=...
+00DB: 1702DB            Immortal lbsr  L03B3
+00DE: 10250211                   lbcs  L02ED
+00E2: 3410                       pshs  x
+00E4: C60E                       ldb   #SS.DevNm
+00E6: 30C816                     leax  <u0016,u
+00E9: 862F                       lda   #PDELIM
+00EB: A780                       sta   ,x+
+00ED: 4F                         clra                           stdin
+00EE: 103F8D                     os9   I$GetStt                 get device name
+00F1: 3510                       puls  x
+00F3: 102501FC                   lbcs  L02ED
+00F7: 0C0F                       inc   <u000F
+00F9: 0C10                       inc   <u0010
+00FB: 1701F5                     lbsr  L02ED
+00FE: 0F10                       clr   <u0010
+0100: 39                         rts   
+0101:                   
+0101: 01E3              L00FB    fdb   Comment-*
+0103: AA                         fcs   "*"
+0104: 0360                       fdb   Wait-*
+0106: D7                         fcs   "W"
+0107: 01BF                       fdb   Chd-*
+0109: 4348C4                     fcs   "CHD"
+010C: 01B6                       fdb   Chx-*
+010E: 4348D8                     fcs   "CHX"
+0111: 018B                       fdb   Ex-*
+0113: 45D8                       fcs   "EX"
+0115: 04D4                       fdb   Kill-*
+0117: 4B494CCC                   fcs   "KILL"
+011B: 01C1                       fdb   X-*
+011D: D8                         fcs   "X"
+011E: 01C2                       fdb   NOX-*
+0120: 2DD8                       fcs   "-X"
+0122: 01AA                       fdb   Prompt-*
+0124: D0                         fcs   "P"
+0125: 01AA                       fdb   NoPrompt-*
+0127: 2DD0                       fcs   "-P"
+0129: 01AB                       fdb   Echo-*
+012B: D4                         fcs   "T"
+012C: 01AC                       fdb   NoEcho-*
+012E: 2DD4                       fcs   "-T"
+0130: 04E5                       fdb   SetPr-*
+0132: 53455450D2                 fcs   "SETPR"
+0137: FFA4                       fdb   Immortal-*
+0139: 49BD                       fcs   "I="
+013B: 012C                       fdb   NextCmd-*
+013D: BB                         fcs   ";"
+013E: 0000                       fdb   $0000
+0140: 0455              L013A    fdb   Pipe-*
+0142: A1                         fcs   "!"
+0143: 02FB                       fdb   NextCmd2-*
+0145: BB                         fcs   ";"
+0146: 0311                       fdb   Backgrnd-*
+0148: A6                         fcs   "&"
+0149: 02EE                       fdb   Return-*
+014B: 8D                         fcb   $8D
+014C: 0269              L0146    fdb   AllRedir-*
+014E: 3C3E3EBE                   fcs   "<>>>"
+0152: 0279                       fdb   IERedir-*
+0154: 3C3EBE                     fcs   "<>>"
+0157: 0267                       fdb   IORedir-*
+0159: 3CBE                       fcs   "<>"
+015B: 027D                       fdb   OERedir-*
+015D: 3E3EBE                     fcs   ">>>"
+0160: 01FB                       fdb   ErrRedir-*
+0162: 3EBE                       fcs   ">>"
+0164: 01F2                       fdb   InRedir-*
+0166: BC                         fcs   "<"
+0167: 01FB                       fdb   OutRedir-*
+0169: BE                         fcs   ">"
+016A: 02AB                       fdb   StkSize-*
+016C: A3                         fcs   "#"
+016D: 0000                       fdb   $0000
+016F:                   
+016F: 0D                L0169    fcb   $0d
+0170: 2829                       fcc   "()"
+0172: FF                         fcb   $ff
+0173: 0D                L016D    fcb   $0d
+0174: 2123263B3C3E               fcc   "!#&;<>"
+017A: FF                         fcb   $ff
+017B:                   
+017B: 6FC5              L0175    clr   b,u
+017D: 5A                         decb  
+017E: 2AFB                       bpl   L0175
+0180: 39                         rts   
+0181: C60E              L017B    ldb   #$0E
+0183: 8DF6                       bsr   L0175
+0185: 0F03              L017F    clr   <u0003
+0187: 0F0E                       clr   <kbdsignl
+0189: 318DFF74                   leay  >L00FB,pcr
+018D: 170085                     lbsr  L020F
+0190: 2552                       bcs   L01DE
+0192: 810D                       cmpa  #C$CR
+0194: 274E                       beq   L01DE
+0196: 970C                       sta   <u000C
+0198: 8128                       cmpa  #'(
+019A: 2624                       bne   L01BA
+019C: 318DFE6D                   leay  >L000D,pcr
+01A0: 109F04                     sty   <u0004
+01A3: 3001                       leax  $01,x
+01A5: 9F08                       stx   <u0008
+01A7: 0C0D              L01A1    inc   <u000D
+01A9: 318CC3            L01A3    leay  <L0169,pcr
+01AC: 8D7F                       bsr   L0227
+01AE: 8128                       cmpa  #'(
+01B0: 27F5                       beq   L01A1
+01B2: 8129                       cmpa  #')
+01B4: 2626                       bne   L01D6
+01B6: 0A0D                       dec   <u000D
+01B8: 26EF                       bne   L01A3
+01BA: 860D                       lda   #$0D
+01BC: A71F                       sta   -$01,x
+01BE: 2004                       bra   L01BE
+01C0: 8D25              L01BA    bsr   L01E1
+01C2: 2520                       bcs   L01DE
+01C4: 318CAC            L01BE    leay  <L016D,pcr
+01C7: 8D64                       bsr   L0227
+01C9: 1F10                       tfr   x,d
+01CB: 9308                       subd  <u0008
+01CD: DD06                       std   <u0006
+01CF: 301F                       leax  -$01,x
+01D1: 318DFF6B                   leay  >L013A,pcr
+01D5: 8D3E                       bsr   L020F
+01D7: 250B                       bcs   L01DE
+01D9: 109E04                     ldy   <u0004
+01DC: 1026014C          L01D6    lbne  L0326
+01E0: 810D                       cmpa  #C$CR
+01E2: 26A1                       bne   L017F
+01E4: 16010C            L01DE    lbra  L02ED
+01E7: 9F04              L01E1    stx   <u0004
+01E9: 8D0F                       bsr   L01F4
+01EB: 250C                       bcs   L01F3
+01ED: 8D0B              L01E7    bsr   L01F4
+01EF: 24FC                       bcc   L01E7
+01F1: 318DFF57                   leay  >L0146,pcr
+01F5: 8D1E                       bsr   L020F
+01F7: 9F08                       stx   <u0008
+01F9: 39                L01F3    rts   
+01FA: 103F10            L01F4    os9   F$PrsNam 
+01FD: 240C                       bcc   L0205
+01FF: A680                       lda   ,x+
+0201: 812E                       cmpa  #C$PERD
+0203: 260A                       bne   L0209
+0205: A180                       cmpa  ,x+
+0207: 2704                       beq   L0207
+0209: 311F                       leay  -$01,x
+020B: 30A4              L0205    leax  ,y
+020D: 4F                L0207    clra  
+020E: 39                         rts   
+020F: 53                L0209    comb  
+0210: 301F                       leax  -$01,x
+0212: C6D7                       ldb   #E$BPNam
+0214: 39                         rts   
+0215: 8D30              L020F    bsr   L0241
+0217: 3420                       pshs  y
+0219: 8D4F                       bsr   L0264
+021B: 2509                       bcs   L0220
+021D: ECA4                       ldd   ,y
+021F: ADAB                       jsr   d,y
+0221: 3520                       puls  y
+0223: 24F0                       bcc   L020F
+0225: 39                         rts   
+0226: 4F                L0220    clra  
+0227: A684                       lda   ,x
+0229: 35A0                       puls  pc,y
+022B: 3520              L0225    puls  y
+022D: 3420              L0227    pshs  y
+022F: A680                       lda   ,x+
+0231: 6DA4              L022B    tst   ,y
+0233: 2BF6                       bmi   L0225
+0235: 8122                       cmpa  #$22
+0237: 2608                       bne   L023B
+0239: A680              L0233    lda   ,x+
+023B: 8122                       cmpa  #$22
+023D: 26FA                       bne   L0233
+023F: A680                       lda   ,x+
+0241: A1A0              L023B    cmpa  ,y+
+0243: 26EC                       bne   L022B
+0245: 35A0                       puls  pc,y
+0247: 3410              L0241    pshs  x
+0249: A680                       lda   ,x+
+024B: 8120                       cmpa  #C$SPAC
+024D: 270E                       beq   L0257
+024F: 812C                       cmpa  #C$COMA
+0251: 270A                       beq   L0257
+0253: 308DFF1C                   leax  >L016D,pcr
+0257: A180              L0251    cmpa  ,x+
+0259: 22FC                       bhi   L0251
+025B: 3590                       puls  pc,x
+025D: 3262              L0257    leas  $02,s
+025F: 8620                       lda   #C$SPAC
+0261: A180              L025B    cmpa  ,x+
+0263: 27FC                       beq   L025B
+0265: 301F                       leax  -$01,x
+0267: 1CFE              NextCmd  andcc #^Carry
+0269: 39                         rts   
+026A: 3430              L0264    pshs  y,x
+026C: 3122                       leay  $02,y
+026E: AEE4              L0268    ldx   ,s
+0270: A680              L026A    lda   ,x+
+0272: 8161                       cmpa  #$61
+0274: 2502                       bcs   L0272
+0276: 8020                       suba  #$20
+0278: A8A0              L0272    eora  ,y+
+027A: 48                         lsla  
+027B: 260F                       bne   L0286
+027D: 24F1                       bcc   L026A
+027F: A63F                       lda   -$01,y
+0281: 81C1                       cmpa  #$C1
+0283: 2504                       bcs   L0283
+0285: 8DC0                       bsr   L0241
+0287: 2503                       bcs   L0286
+0289: 4F                L0283    clra  
+028A: 35A6                       puls  pc,y,b,a
+028C: 313F              L0286    leay  -$01,y
+028E: A6A0              L0288    lda   ,y+
+0290: 2AFC                       bpl   L0288
+0292: 10AF62                     sty   $02,s
+0295: ECA1                       ldd   ,y++
+0297: 26D5                       bne   L0268
+0299: 53                         comb  
+029A: 35B0                       puls  pc,y,x
+029C:                   
+029C: 17FF48            Ex       lbsr  L01E1
+029F: 4F                         clra  
+02A0: 8D1C                       bsr   L02B8
+02A2: 8D19                       bsr   L02B7
+02A4: 8D17                       bsr   L02B7
+02A6: 8D3C                       bsr   Comment
+02A8: 3001                       leax  $01,x
+02AA: 1F10                       tfr   x,d
+02AC: 9308                       subd  <u0008
+02AE: DD06                       std   <u0006
+02B0: 32C900FF                   leas  >u00FF,u
+02B4: 1701E6                     lbsr  L0497
+02B7: 103F05                     os9   F$Chain  
+02BA: 16FE0B                     lbra  L00C2
+02BD: 4C                L02B7    inca  
+02BE: 3402              L02B8    pshs  a
+02C0: 2057                       bra   L0313
+02C2:                   
+02C2: 8684              Chx      lda   #DIR.+EXEC.
+02C4: 2002                       bra   L02C2
+02C6:                   *Chd      lda   #DIR.+UPDAT.            note write mode!!
+02C6:                   * Removed WRITE. requirement above (some devices are read only)
+02C6: 8681              Chd      lda   #DIR.+READ.              note write mode!!
+02C8: 103F86            L02C2    os9   I$ChgDir 
+02CB: 39                         rts   
+02CC:                   
+02CC: 4F                Prompt   clra  
+02CD: 2002                       bra   L02CB
+02CF:                   
+02CF: 8601              NoPrompt lda   #$01
+02D1: 9712              L02CB    sta   <u0012
+02D3: 39                         rts   
+02D4:                   
+02D4: 8601              Echo     lda   #$01
+02D6: 2001                       bra   L02D3
+02D8: 4F                NoEcho   clra  
+02D9: 9713              L02D3    sta   <u0013
+02DB: 39                         rts   
+02DC:                   
+02DC: 8601              X        lda   #$01
+02DE: 2001                       bra   L02DB
+02E0:                   
+02E0: 4F                NOX      clra  
+02E1: 9714              L02DB    sta   <u0014
+02E3: 39                         rts   
+02E4: 860D              Comment  lda   #$0D
+02E6: A180              L02E0    cmpa  ,x+
+02E8: 26FC                       bne   L02E0
+02EA: A182                       cmpa  ,-x
+02EC: 39                         rts   
+02ED: 3407              L02E7    pshs  b,a,cc
+02EF:                   
+02EF: 8601                       lda   #$01
+02F1: 2004                       bra   L02F1
+02F3: 3407              L02ED    pshs  b,a,cc
+02F5: 8602                       lda   #$02
+02F7: 9711              L02F1    sta   <u0011
+02F9: 4F                         clra  
+02FA: 8D09              L02F4    bsr   L02FF
+02FC: 4C                         inca  
+02FD: 9111                       cmpa  <u0011
+02FF: 23F9                       bls   L02F4
+0301: 66E0                       ror   ,s+
+0303: 3586                       puls  pc,b,a
+0305: 3402              L02FF    pshs  a
+0307: 0D10                       tst   <u0010
+0309: 2B16                       bmi   L031B
+030B: 260C                       bne   L0313
+030D: 6DC6                       tst   a,u
+030F: 2713                       beq   L031E
+0311: 103F8F                     os9   I$Close  
+0314: A6C6                       lda   a,u
+0316: 103F82                     os9   I$Dup    
+0319: E6E4              L0313    ldb   ,s
+031B: A6C5                       lda   b,u
+031D: 2705                       beq   L031E
+031F: 6FC5                       clr   b,u
+0321: 103F8F            L031B    os9   I$Close  
+0324: 3582              L031E    puls  pc,a
+0326:                   
+0326: 574841543F        L0320    fcc   "WHAT?"
+032B: 0D                         fcb   C$CR
+032C:                   
+032C: 8DC5              L0326    bsr   L02ED
+032E: 308CF5                     leax  <L0320,pcr
+0331: 17FD9D                     lbsr  WriteLin
+0334: 5F                         clrb  
+0335: 43                         coma  
+0336: 39                         rts   
+0337:                   
+0337: 0C10              L0331    inc   <u0010
+0339: 8DB8                       bsr   L02ED
+033B: 86FF                       lda   #$FF
+033D: 9710                       sta   <u0010
+033F: 8DAC                       bsr   L02E7
+0341: 30C816                     leax  <u0016,u
+0344: 8D7C                       bsr   L03BC
+0346: 1025FD84                   lbcs  Exit
+034A: 8602                       lda   #$02
+034C: 8DB7                       bsr   L02FF
+034E: 170091                     lbsr  L03DC
+0351: 0F10                       clr   <u0010
+0353: 16FD0E                     lbra  L005E
+0356: CC0001            InRedir  ldd   #$0001
+0359: 2019                       bra   L036E
+035B: CC020D            ErrRedir ldd   #$020D
+035E: E71E                       stb   -$02,x
+0360: 2002                       bra   L035E
+0362:                   
+0362: 8601              OutRedir lda   #$01
+0364: C602              L035E    ldb   #$02
+0366: 200C                       bra   L036E
+0368: 6DC6              L0362    tst   a,u
+036A: 26C0                       bne   L0326
+036C: 3406                       pshs  b,a
+036E: 0D10                       tst   <u0010
+0370: 2B1A                       bmi   L0386
+0372: 200A                       bra   L0378
+0374: 6DC6              L036E    tst   a,u
+0376: 26B4                       bne   L0326
+0378: 3406                       pshs  b,a
+037A: C60D                       ldb   #$0D
+037C: E71F                       stb   -$01,x
+037E: 103F82            L0378    os9   I$Dup    
+0381: 252B                       bcs   L03A8
+0383: E6E4                       ldb   ,s
+0385: A7C5                       sta   b,u
+0387: A6E4                       lda   ,s
+0389: 103F8F                     os9   I$Close  
+038C: A661              L0386    lda   $01,s
+038E: 2B07                       bmi   L0391
+0390: E6E4                       ldb   ,s
+0392: 8D53                       bsr   L03E1
+0394: 4D                         tsta  
+0395: 2A07                       bpl   L0398
+0397: 840F              L0391    anda  #$0F
+0399: 103F82                     os9   I$Dup    
+039C: 200E                       bra   L03A6
+039E: 8502              L0398    bita  #$02
+03A0: 2605                       bne   L03A1
+03A2: 103F84                     os9   I$Open   
+03A5: 2005                       bra   L03A6
+03A7: C60B              L03A1    ldb   #PREAD.+READ.+WRITE.
+03A9: 103F83                     os9   I$Create 
+03AC: E761              L03A6    stb   $01,s
+03AE: 3586              L03A8    puls  pc,b,a
+03B0: 4F                L03AA    clra  
+03B1: C603              L03AB    ldb   #$03
+03B3: 20B3                       bra   L0362
+03B5:                   
+03B5: 860D              AllRedir lda   #$0D
+03B7: A71C              L03B1    sta   -$04,x
+03B9: 8D07              L03B3    bsr   L03BC
+03BB: 2425                       bcc   L03DC
+03BD: 39                L03B7    rts   
+03BE: 860D              IORedir  lda   #$0D
+03C0: A71E                       sta   -$02,x
+03C2: 8DEC              L03BC    bsr   L03AA
+03C4: 25F7                       bcs   L03B7
+03C6: CC0180                     ldd   #$0180
+03C9: 209D                       bra   L0362
+03CB: 860D              IERedir  lda   #$0D
+03CD: A71D                       sta   -$03,x
+03CF: 8DDF                       bsr   L03AA
+03D1: 25EA                       bcs   L03B7
+03D3: CC0280                     ldd   #$0280
+03D6: 2090                       bra   L0362
+03D8: 860D              OERedir  lda   #$0D
+03DA: A71D                       sta   -$03,x
+03DC: 8601                       lda   #$01
+03DE: 8DD1                       bsr   L03AB
+03E0: 25DB                       bcs   L03B7
+03E2: CC0281            L03DC    ldd   #$0281
+03E5: 2081                       bra   L0362
+03E7: 3416              L03E1    pshs  x,b,a
+03E9: EC81                       ldd   ,x++
+03EB: 10832F30                   cmpd  #$2F30
+03EF: 2522                       bcs   L040D
+03F1: 10832F32                   cmpd  #$2F32
+03F5: 221C                       bhi   L040D
+03F7: 3416                       pshs  x,b,a
+03F9: 17FE4B                     lbsr  L0241
+03FC: 3516                       puls  x,b,a
+03FE: 2513                       bcs   L040D
+0400: C403                       andb  #$03
+0402: E161                       cmpb  $01,s
+0404: 2604                       bne   L0404
+0406: E661                       ldb   $01,s
+0408: E6C5                       ldb   b,u
+040A: CA80              L0404    orb   #$80
+040C: E7E4                       stb   ,s
+040E: 3506                       puls  b,a
+0410: 3262                       leas  $02,s
+0412: 39                         rts   
+0413: 3596              L040D    puls  pc,x,b,a
+0415:                   
+0415: C60D              StkSize  ldb   #$0D
+0417: E71F                       stb   -$01,x
+0419: D603                       ldb   <u0003
+041B: 1026FF0D                   lbne  L0326
+041F: 1701D5                     lbsr  ASC2Int
+0422: 884B                       eora  #'K
+0424: 84DF                       anda  #$DF
+0426: 260A                       bne   L042C
+0428: 3001                       leax  $01,x
+042A: 8604                       lda   #$04
+042C: 3D                         mul   
+042D: 4D                         tsta  
+042E: 1026FEFA                   lbne  L0326
+0432: D703              L042C    stb   <u0003
+0434: 16FE10                     lbra  L0241
+0437:                   
+0437: 301F              Return   leax  -$01,x
+0439: 170094                     lbsr  L04CA
+043C: 2003                       bra   L043B
+043E:                   
+043E: 17008B            NextCmd2 lbsr  L04C6
+0441: 2511              L043B    bcs   L044E
+0443: 17FEAD                     lbsr  L02ED
+0446: 8D1D                       bsr   L045F
+0448: 250A              L0442    bcs   L044E
+044A: 17FDFA                     lbsr  L0241
+044D: 810D                       cmpa  #$0D
+044F: 2602                       bne   L044D
+0451: 3264                       leas  $04,s
+0453: 5F                L044D    clrb  
+0454: 16FE9C            L044E    lbra  L02ED
+0457:                   
+0457: 8D73              Backgrnd bsr   L04C6
+0459: 25F9                       bcs   L044E
+045B: 8DF7                       bsr   L044E
+045D: C626                       ldb   #$26
+045F: 170160                     lbsr  L0597
+0462: 20E4                       bra   L0442
+0464:                   
+0464: 4F                Wait     clra  
+0465: 3402              L045F    pshs  a
+0467: 103F04            L0461    os9   F$Wait   
+046A: 0D0E                       tst   <kbdsignl
+046C: 2711                       beq   L0479
+046E: D60E                       ldb   <kbdsignl
+0470: C102                       cmpb  #$02
+0472: 2623                       bne   L0491
+0474: A6E4                       lda   ,s
+0476: 271F                       beq   L0491
+0478: 103F08                     os9   F$Send   
+047B: 6FE4                       clr   ,s
+047D: 20E8                       bra   L0461
+047F: 251A              L0479    bcs   L0495
+0481: A1E4                       cmpa  ,s
+0483: 2712                       beq   L0491
+0485: 6DE4                       tst   ,s
+0487: 2703                       beq   L0486
+0489: 5D                         tstb  
+048A: 27DB                       beq   L0461
+048C: 3404              L0486    pshs  b
+048E: 8DC4                       bsr   L044E
+0490: C62D                       ldb   #$2D
+0492: 17012D                     lbsr  L0597
+0495: 3504                       puls  b
+0497: 5D                L0491    tstb  
+0498: 2701                       beq   L0495
+049A: 43                         coma  
+049B: 3582              L0495    puls  pc,a
+049D: 8611              L0497    lda   #Prgrm+Objct
+049F: D603                       ldb   <u0003
+04A1: 9E04                       ldx   <u0004
+04A3: 109E06                     ldy   <u0006
+04A6: DE08                       ldu   <u0008
+04A8: 39                         rts   
+04A9: 8604              L04A3    lda   #EXEC.
+04AB: 103F84                     os9   I$Open   
+04AE: 2566                       bcs   L0500
+04B0: 30C85E                     leax  <u005E,u
+04B3: 108E000D                   ldy   #$000D
+04B7: 103F89                     os9   I$Read   
+04BA: 3405                       pshs  b,cc
+04BC: 103F8F                     os9   I$Close  
+04BF: 3505                       puls  b,cc
+04C1: 102500C7                   lbcs  L0561
+04C5: A606                       lda   $06,x
+04C7: 10AE0B                     ldy   $0B,x
+04CA: 2021                       bra   L04D9
+04CC: 860D              L04C6    lda   #$0D
+04CE: A71F                       sta   -$01,x
+04D0: 3470              L04CA    pshs  u,y,x
+04D2: 4F                         clra  
+04D3: 9E04                       ldx   <u0004
+04D5:                            IFGT  Level-1
+04D5:                            os9   F$NMLink 
+04D5:                            ELSE
+04D5: 3440                       pshs  u
+04D7: 103F00                     os9   F$Link
+04DA: 3540                       puls  u
+04DC:                            ENDC
+04DC: 25CB                       bcs   L04A3
+04DE: 9E04                       ldx   <u0004
+04E0:                            IFGT  Level-1
+04E0:                            os9   F$UnLoad 
+04E0:                            ELSE
+04E0: 3476                       pshs  a,b,x,y,u
+04E2: 103F00                     os9   F$Link
+04E5: 103F02                     os9   F$UnLink
+04E8: 103F02                     os9   F$UnLink
+04EB: 3576                       puls  a,b,x,y,u
+04ED:                            ENDC
+04ED: 8111              L04D9    cmpa  #Prgrm+Objct
+04EF: 274C                       beq   L0527
+04F1: 109F0A                     sty   <u000A
+04F4: 308DFB1B                   leax  >L0013,pcr
+04F8: 6D84              L04E4    tst   ,x
+04FA:                            IFGT  Level-1
+04FA:                            beq   L055F
+04FA:                            ELSE
+04FA: 1027008C                   lbeq  L055F
+04FE:                            ENDC
+04FE: A180                       cmpa  ,x+
+0500: 2706                       beq   L04F2
+0502: 6D80              L04EC    tst   ,x+
+0504: 2AFC                       bpl   L04EC
+0506: 20F0                       bra   L04E4
+0508: DC08              L04F2    ldd   <u0008
+050A: 9304                       subd  <u0004
+050C: D306                       addd  <u0006
+050E: DD06                       std   <u0006
+0510: DC04                       ldd   <u0004
+0512: DD08                       std   <u0008
+0514: 2025                       bra   L0525
+0516: 9E06              L0500    ldx   <u0006
+0518: 3005                       leax  $05,x
+051A: 9F06                       stx   <u0006
+051C: 9E04                       ldx   <u0004
+051E: EE64                       ldu   $04,s
+0520: 17FE33                     lbsr  InRedir
+0523: 2567                       bcs   L0561
+0525: DE08                       ldu   <u0008
+0527: CC5820                     ldd   #$5820
+052A: EDC3                       std   ,--u
+052C: CC5020                     ldd   #$5020
+052F: EDC3                       std   ,--u
+0531: C62D                       ldb   #$2D
+0533: E7C2                       stb   ,-u
+0535: DF08                       stu   <u0008
+0537: 308DFAD2                   leax  >L000D,pcr
+053B: 9F04              L0525    stx   <u0004
+053D: 9E04              L0527    ldx   <u0004
+053F: 8611                       lda   #Prgrm+Objct
+0541:                            IFGT  Level-1
+0541:                            os9   F$NMLink 
+0541:                            ELSE
+0541: 3440                       pshs  u
+0543: 103F00                     os9   F$Link
+0546: 1F32                       tfr   u,y
+0548: 3540                       puls  u
+054A:                            ENDC
+054A: 240B                       bcc   L0535
+054C:                            IFGT  Level-1
+054C:                            os9   F$NMLoad
+054C:                            ELSE
+054C: 3440                       pshs  u
+054E: 103F01                     os9   F$Load
+0551: 1F32                       tfr   u,y
+0553: 3540                       puls  u
+0555:                            ENDC
+0555: 2535                       bcs   L0561
+0557:                   L0535    
+0557:                            IFEQ  Level-1
+0557: 10AE2B                     ldy   M$Mem,y
+055A:                            ENDC
+055A: 0D03                       tst   <u0003
+055C: 2609                       bne   L0542
+055E: 1F20                       tfr   y,d
+0560: D30A                       addd  <u000A
+0562: C300FF                     addd  #$00FF
+0565: 9703                       sta   <u0003
+0567: 17FF33            L0542    lbsr  L0497
+056A: 103F03                     os9   F$Fork   
+056D: 3407                       pshs  b,a,cc
+056F: 2506                       bcs   L0552
+0571: 8E0001                     ldx   #$0001
+0574: 103F0A                     os9   F$Sleep  
+0577: 8611              L0552    lda   #Prgrm+Objct
+0579: 9E04                       ldx   <u0004
+057B: 0F04                       clr   <u0004
+057D: 0F05                       clr   <u0005
+057F:                            IFGT  Level-1
+057F:                            os9   F$UnLoad 
+057F:                            ELSE
+057F: 103F00                     os9   F$Link
+0582: 103F02                     os9   F$UnLink
+0585: 103F02                     os9   F$UnLink
+0588:                            ENDC
+0588: 35F7                       puls  pc,u,y,x,b,a,cc
+058A:                   
+058A: C6EA              L055F    ldb   #E$NEMod
+058C: 43                L0561    coma  
+058D: 35F0                       puls  pc,u,y,x
+058F:                   
+058F: 2F70697065        PipeName fcc   "/pipe"
+0594: 0D                         fcb   C$CR
+0595:                   
+0595: 3410              Pipe     pshs  x
+0597: 308CF5                     leax  <PipeName,pcr
+059A: CC0103                     ldd   #$0103
+059D: 17FDC8                     lbsr  L0362
+05A0: 3510                       puls  x
+05A2: 2552                       bcs   L05CB
+05A4: 17FF25                     lbsr  L04C6
+05A7: 254D                       bcs   L05CB
+05A9: A6C4                       lda   ,u
+05AB: 2607                       bne   L0589
+05AD: 103F82                     os9   I$Dup
+05B0: 2544                       bcs   L05CB
+05B2: A7C4                       sta   ,u
+05B4: 4F                L0589    clra  
+05B5: 103F8F                     os9   I$Close  
+05B8: 8601                       lda   #$01
+05BA: 103F82                     os9   I$Dup    
+05BD: 8601                       lda   #$01
+05BF: 16FD43                     lbra  L02FF
+05C2: 3436              L0597    pshs  y,x,b,a
+05C4: 3434                       pshs  y,x,b
+05C6: 3061                       leax  $01,s
+05C8: C62F                       ldb   #$2F
+05CA: 5C                L059F    incb  
+05CB: 8064                       suba  #100
+05CD: 24FB                       bcc   L059F
+05CF: E780                       stb   ,x+
+05D1: C63A                       ldb   #$3A
+05D3: 5A                L05A8    decb  
+05D4: 8B0A                       adda  #$0A
+05D6: 24FB                       bcc   L05A8
+05D8: E780                       stb   ,x+
+05DA: 8B30                       adda  #$30
+05DC: C60D                       ldb   #$0D
+05DE: ED84                       std   ,x
+05E0: 30E4                       leax  ,s
+05E2: 17FAEC                     lbsr  WriteLin
+05E5: 3265                       leas  $05,s
+05E7: 35B6                       puls  pc,y,x,b,a
+05E9:                   
+05E9:                   * Kill a process
+05E9: 8D0C              Kill     bsr   ASC2Int
+05EB: C102                       cmpb  #$02             compare against first user process ID
+05ED: 2323                       bls   L05E7            if lower or same, 
+05EF: 1F98                       tfr   b,a              transfer process ID to A
+05F1: C600                       ldb   #S$Kill          load B with kill signal
+05F3: 103F08                     os9   F$Send           and send to process in A
+05F6: 39                L05CB    rts   
+05F7:                   
+05F7:                   * Entry: X = ASCII representation of number
+05F7:                   * Exit : B = decimal value of ASCII number
+05F7: 5F                ASC2Int  clrb  
+05F8: A680              L05CD    lda   ,x+
+05FA: 8030                       suba  #$30
+05FC: 8109                       cmpa  #$09
+05FE: 2209                       bhi   L05DE
+0600: 3402                       pshs  a
+0602: 860A                       lda   #10
+0604: 3D                         mul   
+0605: EBE0                       addb  ,s+
+0607: 24EF                       bcc   L05CD
+0609: A682              L05DE    lda   ,-x
+060B: 2503                       bcs   L05E5
+060D: 5D                         tstb  
+060E: 26E6                       bne   L05CB
+0610: 3262              L05E5    leas  $02,s
+0612: 16FD17            L05E7    lbra  L0326
+0615:                   
+0615: 8DE0              SetPr    bsr   ASC2Int
+0617: D715                       stb   <u0015
+0619: 17FC2B                     lbsr  L0241
+061C: 8DD9                       bsr   ASC2Int
+061E: 9615                       lda   <u0015
+0620: 103F0D                     os9   F$SPrior 
+0623: 39                         rts   
+0624:                   
+0624: CC309C                     emod
+0627:                   eom      equ   *
+0627:                            end
+0 Pass 2 errors.
+
+SYMBOL TABLE
+   A.ACIAP 01 ff68    A.MODP 01 ff6c   A.TERMV 01 ffc0      A.V1 01 ffc1
+      A.V2 01 ffc2      A.V3 01 ffc3      A.V4 01 ffc4      A.V5 01 ffc5
+      A.V6 01 ffc6      A.V7 01 ffc7  ACIA2661 02 0003  ACIA6551 02 0002
+  ACIA6850 02 0001  ACIATYPE 03 0002  ALLREDIR 02 03b5  ALTERBIT 00 0004
+   ASC2INT 02 05f7      ATRV 01 0080  ATTRMASK 00 00f0      B110 00 0000
+   B115200 00 000a     B1200 00 0003    B19200 00 0007     B2400 00 0004
+      B300 00 0001    B38400 00 0008     B4800 00 0005    B57600 00 0009
+      B600 00 0002     B9600 00 0006  BACKGRND 02 0457  BADINSTR 00 0040
+    BMAPSZ 00 0020   BOOTSTR 02 0014    BT.SEC 00 0000   BT.SIZE 00 1080
+  BT.START 00 ee00  BT.TRACK 00 0022   BUFBUSY 00 0040    BUFMOD 00 0001
+    C$BELL 01 0007     C$BSP 01 0008  C$CLSALL 01 0016   C$CLSGR 01 0015
+    C$COMA 01 002c      C$CR 01 000d     C$DEL 01 0018  C$DELETE 01 0010
+     C$DWN 01 001f      C$EL 01 0005     C$EOF 01 001b    C$FORM 01 000c
+    C$HOME 01 000b  C$INSERT 01 0011    C$INTR 01 0003      C$LF 01 000a
+     C$LFT 01 001d    C$NULL 01 0000    C$PAUS 01 0017    C$PERD 01 002e
+   C$PLINE 01 0013    C$QUIT 01 0005    C$RARR 01 0009     C$RGT 01 001c
+    C$RPET 01 0001    C$RPRT 01 0004  C$SHRARR 01 0019      C$SI 01 000f
+      C$SO 01 000e    C$SPAC 01 0020      C$UP 01 001e    C$XOFF 01 0013
+     C$XON 01 0011     CARRY 00 0001   CBLCODE 00 0005     CCODE 00 0004
+       CHD 02 02c6CHECK_FOR_VALID_ 00 0001       CHX 02 02c2  CNTRLBIT 00 0002
+    COCO.D 01 0001     COLOR 01 0001    COLOR3 01 0002   COMMENT 02 02e4
+    CONDEM 00 0002  CPUSPEED 01 0001   CPUTYPE 01 0001   CRCCON1 00 0080
+  CRCCON23 00 0fe3    CRCOFF 00 0000     CRCON 00 0001    D$GSTA 02 0009
+    D$INIT 02 0000    D$PSTA 02 000c    D$READ 02 0003    D$TERM 02 000f
+    D$WRIT 02 0006  D.ALTIRQ 02 006b  D.APROCQ 02 004d    D.BOOT 02 0083
+    D.BTHI 02 0068    D.BTLO 02 0066  D.CBSTRT 02 0071   D.CLOCK 02 0081
+  D.CLOCK2 02 008a    D.CLTB 02 0086  D.COCOXT 02 0009     D.CRC 02 0089
+     D.DAY 02 0055  D.DBGMEM 02 000a  D.DEVTBL 02 0060  D.DMAREQ 02 006a
+  D.DSKTMR 02 006f D.DWSRVID 02 0010  D.DWSTAT 02 000eD.DWSUBADDR 02 000c
+    D.FIRQ 02 0030    D.FMBM 02 0020    D.HOUR 02 0056    D.INIT 02 002a
+    D.IOMH 02 005e    D.IOML 02 005c     D.IRQ 02 0032  D.KBDSTA 02 006d
+   D.MDREG 02 0088     D.MIN 02 0057    D.MLIM 02 0024  D.MODDIR 02 0026
+   D.MONTH 02 0054     D.NMI 02 0036    D.POLL 02 003a  D.POLTBL 02 0062
+  D.PRCDBT 02 0049    D.PROC 02 004b  D.PTHDBT 02 0064     D.SEC 02 0058
+   D.SLICE 02 0048  D.SPROCQ 02 0051  D.SVCIRQ 02 0038     D.SWI 02 0034
+    D.SWI2 02 002e    D.SWI3 02 002c  D.SWPAGE 02 0003  D.SYSDIS 02 0046
+  D.SYSIRQ 02 003e  D.SYSSVC 02 0042    D.TICK 02 0059    D.TIME 02 0053
+    D.TSEC 02 005a  D.TSLICE 02 005b  D.URTOSS 02 0084  D.USRDIS 02 0044
+  D.USRIRQ 02 003c  D.USRSVC 02 0040  D.WDADDR 02 0000  D.WDBTDR 02 0002
+  D.WPROCQ 02 004f   D.XFIRQ 02 010f    D.XIRQ 02 010c    D.XNMI 02 0109
+    D.XSWI 02 0106   D.XSWI2 02 0103   D.XSWI3 02 0100    D.YEAR 02 0053
+      DATA 00 0040    DD.ATT 02 000d    DD.BIT 02 0006    DD.BSZ 02 0018
+     DD.BT 02 0015    DD.DAT 02 001a    DD.DIR 02 0008    DD.DSK 02 000e
+    DD.FMT 02 0010    DD.MAP 02 0004    DD.NAM 02 001f    DD.OPT 02 003f
+    DD.OWN 02 000b    DD.RES 02 0013    DD.SIZ 02 0015    DD.SPT 02 0011
+    DD.TKS 02 0003    DD.TOT 02 0000      DEAD 00 0001  DEFIOSIZ 00 000c
+   DEFPRML 00 0005  DEFPRMPT 02 0035    DEVCNT 02 000d     DEVIC 00 00f0
+    DEVSIZ 02 0009      DIR. 00 0080    DIR.FD 02 001d    DIR.NM 02 0000
+    DIR.SZ 02 0020      DIV0 00 0080   DNS.DTD 00 0002    DNS.FM 00 0000
+   DNS.FM0 00 0000   DNS.MFM 00 0001  DNS.MFM0 00 0004   DNS.STD 00 0000
+   DOWNBIT 00 0010     DPORT 01 ff40     DRIVR 00 00e0    DRVBEG 02 000f
+    DRVMEM 02 0026   DT.CDFM 00 0005    DT.NFM 00 0004   DT.PIPE 00 0002
+    DT.RBF 00 0001    DT.RFM 00 0006    DT.SBF 00 0003    DT.SCF 00 0000
+   E$ALIAS 02 00c7  E$ARROVF 02 0049  E$BADBUF 02 00c2   E$BMCRC 02 00e8
+    E$BMHP 02 00ec    E$BMID 02 00cd   E$BMODE 02 00cb    E$BNAM 02 00eb
+  E$BPADDR 02 00d2   E$BPNAM 02 00d7   E$BPNUM 02 00c9  E$BPRCID 02 00e0
+    E$BTYP 02 00f9  E$BUFSIZ 02 00bf     E$BUG 02 00be     E$CEF 02 00da
+     E$CRC 02 00f3  E$DEADLK 02 00fe   E$DELSP 02 00df  E$DEVBSY 02 00fa
+  E$DEVOVF 02 00cc    E$DIDC 02 00fb  E$DIMLRG 02 0019  E$DIRFUL 02 00ce
+  E$DIVZER 02 002d      E$DN 02 00c6     E$DNE 02 00ee  E$ENDQOU 02 0029
+     E$EOF 02 00d3  E$EXCVRB 02 000b  E$FLTOVF 02 0032     E$FNA 02 00d6
+    E$FULL 02 00f8  E$HANGUP 02 00dc     E$IBA 02 00db  E$ICHREF 02 000e
+  E$ICOORD 02 00bd   E$ICOVF 02 000d  E$IFORKP 02 00e6    E$ILLA 02 0043
+  E$ILLARG 02 00bb  E$ILLCMD 02 00c0  E$ILLCNT 02 0044  E$ILLDEC 02 0048
+  E$ILLDIM 02 0015  E$ILLEXP 02 0047  E$ILLFOR 02 0046  E$ILLINP 02 003d
+  E$ILLIVR 02 004d  E$ILLLIT 02 0016  E$ILLMOD 02 000f  E$ILLNUM 02 0010
+  E$ILLOPD 02 0012  E$ILLOPR 02 0013  E$ILLPNM 02 0040  E$ILLPRF 02 0011
+  E$ILLRET 02 0017  E$ILLRFN 02 0014  E$ILLSFX 02 0018  E$ILLSTC 02 000c
+  E$IOCONV 02 003c  E$IOFRPT 02 003e  E$IOFSYN 02 003f  E$IOMISM 02 003a
+   E$IONUM 02 003b  E$IPRCID 02 00e0    E$ISWI 02 00e3   E$IWDEF 02 00c3
+   E$IWTYP 02 00b7  E$KWNMOD 02 00e7  E$LINLRG 02 001a  E$LNCOMP 02 0033
+    E$LOCK 02 00fc  E$MEMFUL 02 00cf   E$MFULL 02 0020  E$MLTLIN 02 004b
+  E$MLTVAR 02 004c     E$MNF 02 00dd  E$MODBSY 02 00d1  E$MULPRC 02 002c
+   E$NEMOD 02 00ea     E$NES 02 00d5   E$NFONT 02 00b9  E$NOASSG 02 001b
+  E$NOCHLD 02 00e2  E$NOCOMA 02 001d  E$NODATA 02 004f   E$NODIM 02 001e
+    E$NODO 02 001f  E$NOGOTO 02 0021  E$NOLPAR 02 0022  E$NOLREF 02 0023
+  E$NONRCO 02 0042  E$NOOPRD 02 0024  E$NOPATH 02 001c   E$NORAM 02 00ed
+  E$NOROUT 02 0030  E$NORPAR 02 0025  E$NOTASK 02 00ef  E$NOTHEN 02 0026
+    E$NOTO 02 0027  E$NOTRDY 02 00f6  E$NOVREF 02 0028  E$PARMER 02 0038
+    E$PNNF 02 00d8    E$POLL 02 00ca  E$PRCABT 02 00e4  E$PRCFUL 02 00e5
+  E$PTHFUL 02 00c8    E$READ 02 00f4    E$SECT 02 00f1    E$SEEK 02 00f7
+  E$SEEKRG 02 004e   E$SHARE 02 00fd     E$SLF 02 00d9  E$STKOVF 02 00ba
+  E$STROVF 02 002f  E$SUBLRG 02 002a  E$SUBOVF 02 0035  E$SUBRNG 02 0037
+  E$SUBUND 02 0036  E$SYSOVF 02 0039  E$TBLFUL 02 00c1  E$TYPMIS 02 002e
+  E$UNDLIN 02 004a  E$UNDVAR 02 0031    E$UNIT 02 00f0  E$UNKPRC 02 002b
+  E$UNKSVC 02 00d0  E$UNKSYM 02 000a  E$UNMCNT 02 0045      E$UP 02 00c5
+   E$USIGP 02 00e9  E$VALRNG 02 0034   E$WADEF 02 00b8      E$WP 02 00f2
+   E$WRITE 02 00f5   E$WRSUB 02 0041  E$WUNDEF 02 00c4      ECHO 02 02d4
+   EDITION 01 0016    ENTIRE 00 0080    EOFMSG 02 00ba       EOM 02 0627
+  ERRREDIR 02 035b        EX 02 029c     EXEC. 00 0004      EXIT 02 00ce
+   F$ALL64 02 0030  F$ALLBIT 02 0013   F$APROC 02 002c   F$CHAIN 02 0005
+  F$CMPNAM 02 0011     F$CRC 02 0017   F$DEBUG 02 0023  F$DELBIT 02 0014
+    F$EXIT 02 0006  F$FIND64 02 002f    F$FORK 02 0003    F$ICPT 02 0009
+      F$ID 02 000c   F$IODEL 02 0033    F$IOQU 02 002b     F$IRQ 02 002a
+    F$LINK 02 0000    F$LOAD 02 0001     F$MEM 02 0007   F$NPROC 02 002d
+    F$PERR 02 000f  F$PRSNAM 02 0010   F$RET64 02 0031  F$SCHBIT 02 0012
+    F$SEND 02 0008   F$SLEEP 02 000a  F$SPRIOR 02 000d  F$SRQMEM 02 0028
+  F$SRTMEM 02 0029    F$SSPD 02 000b    F$SSVC 02 0032    F$SSWI 02 000e
+   F$STIME 02 0016    F$TIME 02 0015  F$UNLINK 02 0002    F$VIRQ 02 0027
+  F$VMODUL 02 002e    F$WAIT 02 0004     FALSE 00 0000    FD.ATT 02 0000
+  FD.CREAT 02 000d    FD.DAT 02 0003    FD.LNK 02 0008    FD.LS1 00 00fb
+    FD.LS2 00 00fa    FD.OWN 02 0001    FD.SEG 02 0010    FD.SIZ 02 0009
+     FDBUF 00 0004    FDSL.A 02 0000    FDSL.B 02 0003    FDSL.S 02 0005
+  FEATURE1 02 001b  FEATURE2 02 001c  FIRQMASK 00 0040     FLMGR 00 00d0
+    FMCDIR 02 0009    FMCLOS 02 0024    FMCREA 02 0000    FMDLET 02 000c
+    FMGSTA 02 001e    FMMDIR 02 0006    FMOPEN 02 0003    FMRDLN 02 0018
+    FMREAD 02 0012    FMSEEK 02 000f    FMSSTA 02 0021   FMT.DNS 00 0002
+  FMT.SIDE 00 0001  FMT.T0DN 00 0020  FMT.TDNS 00 0004    FMWRIT 02 0015
+    FMWRLN 02 001b  FRTNCODE 00 0006     H6309 06 0000  HALFCRRY 00 0020
+   HW.PAGE 01 00ff      HZ50 00 0001      HZ60 00 0002  I$ATTACH 02 0080
+  I$CHGDIR 02 0086   I$CLOSE 02 008f  I$CREATE 02 0083  I$DELETE 02 0087
+  I$DELETX 02 0090  I$DETACH 02 0081     I$DUP 02 0082  I$GETSTT 02 008d
+  I$MAKDIR 02 0085    I$OPEN 02 0084    I$READ 02 0089  I$READLN 02 008b
+    I$SEEK 02 0088  I$SETSTT 02 008e   I$WRITE 02 008a  I$WRITLN 02 008c
+     ICODE 00 0002   ICPTRTN 02 003a   IEREDIR 02 03cb    IMGCHG 00 0010
+  IMMORTAL 02 00db  INDRIVER 00 0020   INITSTR 02 000e   INREDIR 02 0356
+INSTALLNAME 02 001f  INTMASKS 00 0050     INTRO 02 002e   IOREDIR 02 03be
+   IRQMASK 00 0010     ISIZ. 00 0020    IT.ALF 02 0017    IT.BAU 02 0027
+    IT.BSE 02 0024    IT.BSO 02 0014    IT.BSP 02 001b    IT.COL 02 002c
+    IT.CYL 02 0017    IT.D2P 02 0028    IT.DEL 02 001c    IT.DLO 02 0015
+    IT.DNS 02 0016    IT.DRV 02 0013    IT.DTP 02 0012    IT.DUP 02 0020
+    IT.DVC 02 0012    IT.EKO 02 0016    IT.EOF 02 001e    IT.EOR 02 001d
+  IT.EXTEN 02 0022    IT.ILV 02 001f    IT.INT 02 0022  IT.LLDRV 02 0028
+    IT.MPI 02 002a    IT.NUL 02 0018    IT.OFS 02 0026    IT.OVF 02 0025
+    IT.PAG 02 001a    IT.PAR 02 0026    IT.PAU 02 0019    IT.PSC 02 0021
+    IT.QUT 02 0023    IT.ROW 02 002d    IT.RPR 02 001f    IT.RWC 02 0028
+    IT.SAS 02 0020    IT.SCT 02 001b    IT.SID 02 0019  IT.SOFF1 02 0025
+  IT.SOFF2 02 0026  IT.SOFF3 02 0027  IT.STOFF 02 0024    IT.STP 02 0014
+    IT.T0S 02 001d    IT.TFM 02 0021    IT.TYP 02 0015    IT.UPC 02 0013
+    IT.VFY 02 001a    IT.WPC 02 0025   IT.XOFF 02 002b    IT.XON 02 002a
+   IT.XTYP 02 002e  KBDSIGNL 02 000e      KILL 02 05e9     L000D 02 000d
+     L0013 02 0013     L005B 02 0061     L005E 02 0064     L0069 02 006f
+     L0070 02 0076     L0076 02 007c     L0087 02 008d     L008F 02 0095
+     L0094 02 009a     L00A4 02 00aa     L00AA 02 00b0     L00B8 02 00be
+     L00C1 02 00c7     L00C2 02 00c8     L00FB 02 0101     L013A 02 0140
+     L0146 02 014c     L0169 02 016f     L016D 02 0173     L0175 02 017b
+     L017B 02 0181     L017F 02 0185     L01A1 02 01a7     L01A3 02 01a9
+     L01BA 02 01c0     L01BE 02 01c4     L01D6 02 01dc     L01DE 02 01e4
+     L01E1 02 01e7     L01E7 02 01ed     L01F3 02 01f9     L01F4 02 01fa
+     L0205 02 020b     L0207 02 020d     L0209 02 020f     L020F 02 0215
+     L0220 02 0226     L0225 02 022b     L0227 02 022d     L022B 02 0231
+     L0233 02 0239     L023B 02 0241     L0241 02 0247     L0251 02 0257
+     L0257 02 025d     L025B 02 0261     L0264 02 026a     L0268 02 026e
+     L026A 02 0270     L0272 02 0278     L0283 02 0289     L0286 02 028c
+     L0288 02 028e     L02B7 02 02bd     L02B8 02 02be     L02C2 02 02c8
+     L02CB 02 02d1     L02D3 02 02d9     L02DB 02 02e1     L02E0 02 02e6
+     L02E7 02 02ed     L02ED 02 02f3     L02F1 02 02f7     L02F4 02 02fa
+     L02FF 02 0305     L0313 02 0319     L031B 02 0321     L031E 02 0324
+     L0320 02 0326     L0326 02 032c     L0331 02 0337     L035E 02 0364
+     L0362 02 0368     L036E 02 0374     L0378 02 037e     L0386 02 038c
+     L0391 02 0397     L0398 02 039e     L03A1 02 03a7     L03A6 02 03ac
+     L03A8 02 03ae     L03AA 02 03b0     L03AB 02 03b1     L03B1 02 03b7
+     L03B3 02 03b9     L03B7 02 03bd     L03BC 02 03c2     L03DC 02 03e2
+     L03E1 02 03e7     L0404 02 040a     L040D 02 0413     L042C 02 0432
+     L043B 02 0441     L0442 02 0448     L044D 02 0453     L044E 02 0454
+     L045F 02 0465     L0461 02 0467     L0479 02 047f     L0486 02 048c
+     L0491 02 0497     L0495 02 049b     L0497 02 049d     L04A3 02 04a9
+     L04C6 02 04cc     L04CA 02 04d0     L04D9 02 04ed     L04E4 02 04f8
+     L04EC 02 0502     L04F2 02 0508     L0500 02 0516     L0525 02 053b
+     L0527 02 053d     L0535 02 0557     L0542 02 0567     L0552 02 0577
+     L055F 02 058a     L0561 02 058c     L0589 02 05b4     L0597 02 05c2
+     L059F 02 05ca     L05A8 02 05d3     L05CB 02 05f6     L05CD 02 05f8
+     L05DE 02 0609     L05E5 02 0610     L05E7 02 0612  LANGMASK 00 000f
+   LEFTBIT 00 0020     LEVEL 00 0001    M$DTYP 02 0012    M$EXEC 02 0009
+    M$FMGR 02 0009      M$ID 02 0000     M$ID1 00 0087    M$ID12 00 87cd
+     M$ID2 00 00cd  M$IDSIZE 02 0009     M$MEM 02 000b    M$MODE 02 000d
+    M$NAME 02 0004     M$OPT 02 0011  M$PARITY 02 0008    M$PDEV 02 000b
+    M$PORT 02 000e    M$REVS 02 0007    M$SIZE 02 0002    M$TYPE 02 0006
+    MAXMEM 02 0009  MD$ESIZE 02 0004   MD$LINK 02 0002   MD$MPTR 02 0000
+    MINSEC 01 0010    MODNAT 00 0020   MODPROT 00 0040  MPI.SLCT 01 ff7f
+  MPI.SLOT 01 0003     MULTI 00 0030      NAME 02 000d  NEGATIVE 00 0008
+   NEXTCMD 02 0267  NEXTCMD2 02 043e    NOECHO 02 02d8  NOPROMPT 02 02cf
+   NOS9MAJ 00 0000   NOS9MIN 00 0001   NOS9VER 00 0001       NOX 02 02e0
+  NUMPATHS 00 0010   OBJ6309 00 0007     OBJCT 00 0001   OEREDIR 02 03d8
+    ONEMHZ 00 0001    OPTCNT 00 001a     OS9.D 01 0001  OS9MAJOR 00 0000
+  OS9MINOR 00 0001   OS9PRML 00 0004  OS9PRMPT 02 0036   OS9VRSN 00 0001
+   OSLEVEL 02 0017   OSMAJOR 02 0019   OSMINOR 02 001a    OSNAME 02 001d
+     OSVER 02 0018  OUTREDIR 02 0362    P$ADDR 02 0007     P$AGE 02 000c
+    P$CHAP 02 0006     P$CID 02 0003     P$DIO 02 001a      P$ID 02 0000
+    P$IOQN 02 0011    P$IOQP 02 0010     P$NIO 02 003b  P$PAGCNT 02 0008
+    P$PATH 02 0026     P$PID 02 0001  P$PMODUL 02 0012   P$PRIOR 02 000b
+   P$QUEUE 02 000e     P$SID 02 0002  P$SIGDAT 02 0039  P$SIGNAL 02 0036
+  P$SIGVEC 02 0037    P$SIZE 02 0040      P$SP 02 0004   P$STATE 02 000d
+     P$SWI 02 0014    P$SWI2 02 0016    P$SWI3 02 0018    P$USER 02 0009
+   PAREVEN 00 0060   PARMARK 00 00a0   PARMASK 00 00e0   PARNONE 00 0000
+    PARODD 00 0020  PARSPACE 00 00e0     PCODE 00 0003    PD.ALF 02 0025
+    PD.ATT 02 0033    PD.BAU 02 0035    PD.BSE 02 0032    PD.BSO 02 0022
+    PD.BSP 02 0029    PD.BUF 02 0008    PD.CNT 02 0002     PD.CP 02 000b
+    PD.CPR 02 0005    PD.CYL 02 0025    PD.D2P 02 0036    PD.DCP 02 003a
+    PD.DEL 02 002a    PD.DEV 02 0003    PD.DFD 02 0037    PD.DLO 02 0023
+    PD.DNS 02 0024    PD.DRV 02 0021    PD.DSK 02 001c    PD.DTB 02 001e
+    PD.DTP 02 0020    PD.DUP 02 002e    PD.DV2 02 000a    PD.DVT 02 003e
+    PD.EKO 02 0024    PD.EOF 02 002c    PD.EOR 02 002b    PD.ERR 02 003a
+  PD.EXTEN 02 0030     PD.FD 02 0034    PD.FST 02 000a    PD.ILV 02 002d
+    PD.INT 02 0030    PD.MAX 02 000d    PD.MIN 02 000f    PD.MOD 02 0001
+    PD.NUL 02 0026    PD.OPT 02 0020    PD.OVF 02 0033    PD.PAG 02 0028
+    PD.PAR 02 0034    PD.PAU 02 0027     PD.PD 02 0000    PD.PLP 02 003d
+    PD.PSC 02 002f    PD.PST 02 003f    PD.QUT 02 0031    PD.RAW 02 000c
+    PD.RGS 02 0006    PD.RPR 02 002d    PD.SAS 02 002e    PD.SBL 02 0013
+    PD.SBP 02 0016    PD.SCT 02 0029    PD.SID 02 0027    PD.SIZ 02 000f
+    PD.SMF 02 000a    PD.SSZ 02 0019    PD.STM 02 0012  PD.STOFF 02 0032
+    PD.STP 02 0022    PD.STS 02 0010    PD.T0S 02 002b    PD.TBL 02 003b
+    PD.TFM 02 002f    PD.TYP 02 0023    PD.UPC 02 0021    PD.VFY 02 0028
+   PD.XOFF 02 0039    PD.XON 02 0038    PDELIM 00 002f      PDIR 00 002e
+    PDSIZE 02 0040    PENTIR 00 0040    PEXEC. 00 0020  PIA0BASE 00 ff00
+  PIA1BASE 00 ff20      PIPE 02 0595  PIPENAME 02 058f   POLLCNT 02 000c
+    POLSIZ 02 0009    PREAD. 00 0008     PRGRM 00 0010  PROC6309 00 0002
+  PROC6809 00 0000    PROMPT 02 02cc  PROTFLAG 02 0016   PST.DCD 00 0001
+    PWRIT. 00 0010  PWRLNFRQ 01 0002    Q$FLIP 02 0002    Q$MASK 02 0003
+    Q$POLL 02 0000    Q$PRTY 02 0008    Q$SERV 02 0004    Q$STAT 02 0006
+       R$A 00 0001       R$B 00 0002      R$CC 00 0000       R$D 00 0001
+      R$DP 00 0003      R$PC 00 000a    R$SIZE 00 000c       R$U 00 0008
+       R$X 00 0004       R$Y 00 0006     RBF.D 01 0001     READ. 00 0001
+     REENT 00 0080    RETURN 02 0437       REV 01 0000  REVSMASK 00 000f
+  RIGHTBIT 00 0040   S$ABORT 02 0002   S$ALARM 02 0005     S$HUP 02 0004
+  S$INTRPT 02 0003    S$KILL 02 0000    S$WAKE 02 0001  S$WINDOW 02 0004
+     SBRTN 00 0020     SCF.D 01 0001     SETPR 02 0615    SHARE. 00 0040
+  SHELLSUB 00 0050  SHIFTBIT 00 0001      SIGN 00 0080    SINBUF 00 0002
+      SIZE 02 0300  SPACEBIT 00 0080  SS.AAGBF 02 0080  SS.ALFAS 02 001c
+  SS.ANPAL 02 009a  SS.ASCRN 02 008b   SS.ATTR 02 001c  SS.BLKRD 02 0014
+  SS.BLKWR 02 0015  SS.BREAK 02 001d  SS.CDREL 02 009b  SS.CDSIG 02 009a
+  SS.CDSTA 02 0099  SS.CLOSE 02 002a  SS.COMST 02 0028  SS.CURSR 02 0025
+   SS.DCMD 02 000d  SS.DEVNM 02 000e  SS.DFPAL 02 0097 SS.DIRENT 02 0020
+  SS.DSCRN 02 008c  SS.DSIZE 02 0026  SS.DSTAT 02 0012    SS.ECC 02 00b0
+   SS.ELOG 02 0019    SS.EOF 02 0006  SS.FBRGS 02 0096     SS.FD 02 000f
+  SS.FDINF 00 0020   SS.FEED 02 0009   SS.FILL 02 00a0  SS.FNDBF 02 009b
+    SS.FRZ 02 000a  SS.FSCRN 02 008d   SS.FSIG 02 002c    SS.GIP 02 0094
+   SS.GIP2 02 0099   SS.HIST 02 00a1  SS.HNGUP 02 002b    SS.JOY 02 0013
+  SS.KYSNS 02 0027   SS.LINK 02 0007   SS.LOCK 02 0011  SS.MNSEL 02 0087
+  SS.MONTR 02 0092  SS.MOUNT 02 0082  SS.MOUSE 02 0089  SS.MPGPB 02 0084
+  SS.MSSIG 02 008a   SS.OPEN 02 0029    SS.OPT 02 0000  SS.PALET 02 0091
+    SS.POS 02 0005  SS.PSCRN 02 008e  SS.RDNET 02 0083  SS.READY 02 0001
+  SS.RELEA 02 001b  SS.RESET 02 0003  SS.RETEN 02 0016    SS.RFM 02 0018
+  SS.RSBIT 02 001e   SS.SBAR 02 0088  SS.SCINF 02 008f  SS.SCSIZ 02 0026
+  SS.SCTYP 02 0093  SS.SETMF 02 0024   SS.SIZE 02 0002  SS.SLGBF 02 0081
+  SS.SLOTS 02 0085    SS.SPT 02 000b    SS.SQD 02 000c   SS.SSIG 02 001a
+  SS.TICKS 02 0010   SS.TONE 02 0098  SS.ULINK 02 0008  SS.UMBAR 02 0095
+SS.VARSECT 02 0012    SS.WFM 02 0017  SS.WNSET 02 0086   SS.WTRK 02 0004
+     START 02 0043    STDSTR 02 0012   STKSIZE 02 0415     STOP1 00 0000
+     STOP2 00 0010  STP.12MS 00 0002  STP.20MS 00 0001  STP.30MS 00 0000
+   STP.6MS 00 0003    SVCTNM 00 0002    SVCTSZ 00 006e  SYSSTATE 00 0080
+    SYSSTR 02 0010     SYSTM 00 00c0    TIMOUT 00 0020  TIMSLEEP 00 0040
+  TKPERSEC 01 003c      TRUE 00 0001    TWOMHZ 00 0002  TWOSOVFL 00 0002
+      TYLG 01 0011   TYP.256 00 0000     TYP.3 00 0001     TYP.5 00 0000
+   TYP.512 00 0004   TYP.CCF 00 0020   TYP.FLP 00 0000  TYP.HARD 00 0080
+  TYP.NCCF 00 0000   TYP.NSF 00 0040   TYP.SBO 00 0002   TYP.SOF 00 0000
+  TYPEMASK 00 00f0 TYPH.1024 00 0002 TYPH.2048 00 0003  TYPH.256 00 0000
+  TYPH.512 00 0001 TYPH.DRSV 00 000c  TYPH.DSQ 00 0010  TYPH.SSM 00 0003
+     U0000 02 0000     U0001 02 0001     U0003 02 0003     U0004 02 0004
+     U0005 02 0005     U0006 02 0006     U0008 02 0008     U0009 02 0009
+     U000A 02 000a     U000B 02 000b     U000C 02 000c     U000D 02 000d
+     U000F 02 000f     U0010 02 0010     U0011 02 0011     U0012 02 0012
+     U0013 02 0013     U0014 02 0014     U0015 02 0015     U0016 02 0016
+     U0017 02 0017     U002D 02 002d     U0030 02 0030     U003E 02 003e
+     U005E 02 005e     U0060 02 0060     U0070 02 0070     U00AA 02 00aa
+     U00FF 02 00ff     UPBIT 00 0008    UPDAT. 00 0003    V$DESC 02 0004
+    V$DRIV 02 0000    V$FMGR 02 0006    V$STAT 02 0002    V$USRS 02 0008
+  V.BMAPSZ 02 001c     V.BMB 02 0017    V.BUSY 02 0004    V.DEV2 02 0009
+  V.DISKID 02 001a     V.ERR 02 000e  V.FILEHD 02 0018    V.INTR 02 000b
+   V.KANJI 02 0011    V.KBUF 02 0012    V.LINE 02 0007    V.LPRC 02 0003
+  V.MAPSCT 02 001d  V.MODADR 02 0014    V.NDRV 02 0006    V.PAGE 02 0000
+    V.PAUS 02 0008    V.PCHR 02 000d   V.PDLHD 02 0016    V.PORT 02 0001
+    V.QUIT 02 000c  V.RESBIT 02 001e     V.RSV 02 0018     V.SCF 02 001d
+  V.SCOFST 02 0020  V.SCTKOF 02 001f  V.TKOFST 02 0021    V.TRAK 02 0015
+    V.TYPE 02 0006    V.USER 02 0006    V.WAKE 02 0005    V.XOFF 02 0010
+     V.XON 02 000f    VD.OFS 02 0061    VD.STP 02 0060    VI.CNT 02 0000
+  VI.IFLAG 00 0001   VI.PKSZ 02 0005    VI.RST 02 0002   VI.STAT 02 0004
+      WAIT 02 0464     WORD7 00 0020     WORD8 00 0000    WRITE. 00 0002
+  WRITELIN 02 00d1  WRITLIN2 02 00d5         X 02 02dc      ZERO 00 0004

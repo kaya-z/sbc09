@@ -1,0 +1,1067 @@
+0000:                   ********************************************************************
+0000:                   * Copy - File copy utility
+0000:                   *
+0000:                   * $Id$
+0000:                   *
+0000:                   * Edt/Rev  YYYY/MM/DD  Modified by
+0000:                   * Comment
+0000:                   * ------------------------------------------------------------------
+0000:                   *   9      ????/??/??
+0000:                   * From Tandy OS-9 Level Two VR 02.00.01.
+0000:                   *
+0000:                   *  10      ????/??/??  Ron Lamardo
+0000:                   * Reworked.
+0000:                   *
+0000:                   *  11      2003/01/11  Boisy G. Pitre
+0000:                   * Added useful options, made more robust.
+0000:                   
+0000:                            nam   Copy
+0000:                            ttl   File copy utility
+0000:                   
+0000:                            ifp1
+0000:                            use   defsfile
+0000:                            endc
+0000:                   
+0000:                   DOHELP   set   0
+0000:                   
+0011:                   tylg     set   Prgrm+Objct   
+0080:                   atrv     set   ReEnt+rev
+0000:                   rev      set   $00
+000B:                   edition  set   11
+0000:                   
+0000: 87CD05BE000D1180           mod   eom,name,tylg,atrv,start,size
+0009: 00EF2357
+0000:                   
+0080:                   STACKSZ  equ   128      estimated stack size
+0100:                   PARMSZ   equ   256      estimated parameter size
+0040:                   DDIRBSIZ equ   64       destination directory buffer size
+0000:                   
+0000:                            org   0
+0000:                   rdbufptr rmb   2
+0002:                   parmptr  rmb   2
+0004:                   srcpath  rmb   1
+0005:                   dstpath  rmb   1
+0006:                   devtyp   rmb   1
+0007:                   bufsiz   rmb   2
+0009:                   srcflsiz rmb   4
+000D:                   abortflg rmb   1
+000E:                   quiet    rmb   1
+000F:                   single   rmb   1
+0010:                   rewrite  rmb   1
+0011:                   filecnt  rmb   1
+0012:                   srccnt   rmb   1
+0013:                   srcmode  rmb   1
+0014:                   wopt     rmb   1
+0015:                   vopt     rmb   1
+0016:                   srcfname rmb   2
+0018:                   dstfptr  rmb   2
+001A:                   wfileptr rmb   2
+001C:                   wfilelen rmb   2
+001E:                   lstfopen rmb   2                pointer to name of last file attempted open
+0020:                   lstfopln rmb   2                length of last file atteppted open
+0022:                   srcattr  rmb   1
+0023:                   writemsb rmb   2
+0025:                   writelsb rmb   2
+0027:                   fdbufcpy rmb   16
+0037:                   optbuf   rmb   32
+0057:                   wdest    rmb   DDIRBSIZ         portion after '-w='
+0097:                            rmb   DDIRBSIZ         additional space
+00D7:                   * Note: copy buffer must come just before the stack
+00D7:                   vfybuff  rmb   256              verify buffer
+01D7:                            IFGT  Level-1
+01D7:                   copybuff rmb   8*1024           8K default buffer for Level 2
+21D7:                            ELSE
+01D7:                   copybuff rmb   512              512 byte default buffer for Level 1
+21D7:                            ENDC
+21D7:                            rmb   STACKSZ+PARMSZ
+2357:                   size     equ   .
+2357:                   
+000D: 436F70F9          name     fcs   /Copy/
+0011: 0B                         fcb   edition
+0012:                   
+0012: 526561647920534F  SrcPmpt  fcc   /Ready SOURCE, hit C to continue: /
+001B: 5243452C20686974
+0023: 204320746F20636F
+002B: 6E74696E75653A20
+0021:                   SrcPmptL equ   *-SrcPmpt
+0033: 5265616479204445  DstPmpt  fcc   /Ready DESTINATION, hit C to continue: /
+003C: 54494E4154494F4E
+0044: 2C20686974204320
+004C: 746F20636F6E7469
+0054: 6E75653A20
+0026:                   DstPmptL equ   *-DstPmpt
+0059: 0D                CrRtn    fcb   C$CR
+005A:                            IFNE  DOHELP
+0007:                   HlpMsg   fcb   C$LF
+005A:                            fcc   /Use: Copy [<opts>] <srcpath> [<dstpath>] [<opts>]/
+005A:                            fcb   C$LF
+005A:                            fcc   /  -a = abort on error/
+005A:                            fcb   C$LF
+005A:                            fcc   /  -p = don't print files copied (use with -w)/
+005A:                            fcb   C$LF
+005A:                            fcc   /  -r = rewrite destination/
+005A:                            fcb   C$LF
+005A:                            fcc   /  -s = single drive copy/
+005A:                            fcb   C$LF
+005A:                            fcc   /  -v = verify the copy/
+005A:                            fcb   C$LF
+005A:                            fcc   /  -w=<dir> = copy to <dir>/
+005A:                            fcb   C$LF
+005A:                            fcc   /  -x = copy from exec dir/
+005A:                            fcb   C$CR
+0007:                   HlpMsgL  equ   *-HlpMsg
+005A:                            ENDC
+005A: 636F70793A206465  PLIncmp  fcc   /copy: destination must be complete pathlist/
+0063: 74696E6174696F6E
+006B: 206D757374206265
+0073: 20636F6D706C6574
+007B: 6520706174686C69
+0083: 7374
+0085: 0D                         fcb   C$CR
+0086: 636F70793A206D75  TooMany  fcc   /copy: must specify output directory if more than 2 files/
+008F: 7420737065636966
+0097: 79206F7574707574
+009F: 206469726563746F
+00A7: 7279206966206D6F
+00AF: 7265207468616E20
+00B7: 322066696C6573
+00BE: 0D                         fcb   C$CR
+00BF: 636F7079696E6720  Copying  fcc   /copying /
+0008:                   CopyingL equ   *-Copying
+00C7: 20746F20          CopyTo   fcc   / to /
+0004:                   CopyToL  equ   *-CopyTo
+00CB: 436F6E74696E7565  Cont     fcc   !Continue (y/n) ?!
+00D4: 28792F6E29203F
+0010:                   ContL    equ   *-Cont
+00DB: 636F70793A206361  CantCpy  fcc   /copy: can't open /
+00E4: 2774206F70656E20
+0011:                   CantCpyL equ   *-CantCpy
+00EC: 202D20            SpcDsh   fcc   / - /
+0003:                   SpcDshL  equ   *-SpcDsh
+00EF:                   
+00EF:                   *   +-----------------+  <--  Y          (highest address)
+00EF:                   *   !                 !
+00EF:                   *   !   Parameter     !
+00EF:                   *   !     Area        !
+00EF:                   *   !                 !
+00EF:                   *   +-----------------+  <-- X, SP
+00EF:                   *   !                 !
+00EF:                   *   !                 !
+00EF:                   *   !   Data Area     !
+00EF:                   *   !                 !
+00EF:                   *   !                 !
+00EF:                   *   +-----------------+
+00EF:                   *   !   Direct Page   !
+00EF:                   *   +-----------------+  <-- U, DP       (lowest address)
+00EF:                   *
+00EF:                   *   D = parameter area size
+00EF:                   *  PC = module entry point abs. address
+00EF:                   *  CC = F=0, I=0, others undefined
+00EF:                   
+00EF: 3450              start    pshs  u,x
+00F1: 30C857                     leax  <wdest,u
+00F4: 3410                       pshs   x
+00F6: 6FC0              clrnxt   clr   ,u+
+00F8: 11A3E4                     cmpu  ,s
+00FB: 26F9                       bne   clrnxt
+00FD: 3262                       leas  2,s
+00FF: 3550                       puls  x,u
+0101: 31C901D7                   leay  copybuff,u       point Y to copy buffer offset in U
+0105: 9F02                       stx   <parmptr         save parameter pointer
+0107: 109F00                     sty   <rdbufptr        save pointer to buffer
+010A: 1F40                       tfr   s,d              place top of stack in D
+010C: 3420                       pshs  y                save Y on stack
+010E: A3E1                       subd  ,s++             get size of space between copybuf and X
+0110: 830180                     subd  #STACKSZ+PARMSZ  subtract out our stack
+0113: DD07                       std   <bufsiz          size of our buffer
+0115: 1703AF                     lbsr  SkipSpcs         move past any spaces on command line
+0118: 810D                       cmpa  #C$CR            CR?
+011A: 10270314                   lbeq  ShowHelp         if so, show help
+011E: A680              GetNChr  lda   ,x+
+0120: 810D                       cmpa  #C$CR            CR?
+0122: 102700F1                   lbeq  CpyFiles         branch if so
+0126: 812D                       cmpa  #'-              option?
+0128: 270A                       beq   GetDash
+012A: 0C11                       inc   <filecnt         must be a file
+012C: 1703A5                     lbsr  SkipNSpc         else go past non-spaces
+012F: 170395            ChkDash  lbsr  SkipSpcs         and any following spaces
+0132: 20EA                       bra   GetNChr          and check for Cr
+0134: 8620              GetDash  lda   #C$SPAC
+0136: A71F                       sta   -1,x
+0138: EC80              GetDash2 ldd   ,x+              load option char and char following
+013A: 845F                       anda  #$5F
+013C: 8153                       cmpa  #'S              single drive copy?
+013E: 2605                       bne   IsItA            branch if not
+0140: 0C0F                       inc   <single
+0142: 160090                     lbra  FixCmdLn
+0145: 8141              IsItA    cmpa  #'A              abort option?
+0147: 2605                       bne   IsItP            branch if not
+0149: 0C0D                       inc   <abortflg
+014B: 160087                     lbra  FixCmdLn
+014E: 8150              IsItP    cmpa  #'P              supress output?
+0150: 2604                       bne   IsItV            branch if not
+0152: 0C0E                       inc   <quiet
+0154: 207F                       bra   FixCmdLn
+0156: 8156              IsItV    cmpa  #'V              supress output?
+0158: 2604                       bne   IsItX            branch if not
+015A: 0C15                       inc   <vopt
+015C: 2077                       bra   FixCmdLn
+015E: 8158              IsItX    cmpa  #'X              execution dir?
+0160: 2606                       bne   IsItW            branch if not
+0162: 8604                       lda   #EXEC.           else get EXEC.
+0164: 9713                       sta   <srcmode         and save as source mode
+0166: 206D                       bra   FixCmdLn
+0168: 8157              IsItW    cmpa  #'W              directory specification?
+016A: 2663                       bne   IsItR            branch if not
+016C: 0D14                       tst   <wopt            already specified?
+016E: 2672                       bne   BadOpt           show help if so
+0170: C13D                       cmpb  #'=              2nd char =?
+0172: 266E                       bne   BadOpt           show help if not
+0174: 0C14                       inc   <wopt            else tag wopt as specified
+0176: C620                       ldb   #C$SPAC          get space
+0178: E71F                       stb   -$01,x           write over w
+017A: E780                       stb   ,x+              and = sign, inc X to dest dir
+017C:                   * check for valid char after -w=
+017C: A684                       lda   ,x
+017E: 8120                       cmpa  #C$SPAC
+0180: 102702AE                   lbeq  ShowHelp         
+0184: 812C                       cmpa  #C$COMA
+0186: 102702A8                   lbeq  ShowHelp         
+018A: 810D                       cmpa  #C$CR
+018C: 102702A2                   lbeq  ShowHelp         
+0190: 31C857                     leay  <wdest,u         point Y to parameber buffer
+0193: 109F18                     sty   <dstfptr         save pointer to destination file
+0196: 1F20                       tfr   y,d              transfer Y to D
+0198: C30040                     addd  #DDIRBSIZ        add size
+019B: 3406                       pshs  b,a              save updated ptr value
+019D: C620                       ldb   #C$SPAC          get space
+019F: A684              L0339    lda   ,x               get byte at X
+01A1: E780                       stb   ,x+              store space at X and inc
+01A3: A7A0                       sta   ,y+              save loaded byte at Y and inc
+01A5: 10ACE4                     cmpy  ,s               are we at end?
+01A8: 271C                       beq   L035D            branch if so (buffer too small)
+01AA: 8120                       cmpa  #C$SPAC          else is char in A a space?
+01AC: 2708                       beq   L0350            branch if so
+01AE: 812C                       cmpa  #C$COMA          coma?
+01B0: 2704                       beq   L0350            branch if so
+01B2: 810D                       cmpa  #C$CR            cr?
+01B4: 26E9                       bne   L0339            get next byte if not
+01B6: 301F              L0350    leax  -1,x
+01B8: A784                       sta   ,x               restore previous A
+01BA: 862F                       lda   #PDELIM          get pathlist delimiter
+01BC: A73F                       sta   -$01,y           save slash at end (for building path later)
+01BE: 109F1A                     sty   <wfileptr        save pointer for -w pathlist file copying
+01C1: 3262                       leas  $02,s            kill stack
+01C3: 16FF69                     lbra  ChkDash
+01C6: 3262              L035D    leas  $02,s
+01C8: C6BF                       ldb   #$BF             else buffer size too small
+01CA: 1A01                       orcc  #Carry
+01CC: 160264                     lbra  Exit
+01CF: 8152              IsItR    cmpa  #'R              rewrite?
+01D1: 260F                       bne   BadOpt           branch if not
+01D3: 0C10                       inc   <rewrite
+01D5: 8620              FixCmdLn lda   #C$SPAC          get space
+01D7: A71F                       sta   -$01,x           and wipe out option character
+01D9: C130                       cmpb  #'0
+01DB: 102DFF50                   lblt  ChkDash          start dash option processing again
+01DF: 16FF52                     lbra  GetDash          possibly another option following?
+01E2:                   
+01E2: 3510              BadOpt   puls  x
+01E4: 16024B                     lbra  ShowHelp
+01E7:                   
+01E7: 9E16              CopyToW  ldx   <srcfname        get ptr to next file to process
+01E9:                   * In case the source file name has a / in it (i.e. /dd/x/y/fname),
+01E9:                   * we go past the file and then back up to either the first / we
+01E9:                   * encounter, or a space (be sure we don't go past parmptr)
+01E9: A684                       lda   ,x
+01EB: 810D                       cmpa  #C$CR            carriage return?
+01ED: 10270241                   lbeq  ExitOk           yep, no more files
+01F1: 1702E0                     lbsr  SkipNSpc         skip over filename
+01F4:                   * X points to first char after file name (space, comma or CR)
+01F4: 9C02              L038B    cmpx  <parmptr         are we at start of command line?
+01F6: 2712                       beq   PlugIt2          if so, we can't go further back
+01F8: A682                       lda   ,-x              get byte
+01FA: 812F                       cmpa  #PDELIM          path delimiter?
+01FC: 270A                       beq   PlugIt           branch if so
+01FE: 8120                       cmpa  #C$SPAC          space?
+0200: 2706                       beq   PlugIt           branch if so
+0202: 812C                       cmpa  #C$COMA          comma?
+0204: 2702                       beq   PlugIt           branch if so
+0206: 20EC                       bra   L038B            else get next char 
+0208: 3001              PlugIt   leax  1,x              go forward 1
+020A: 109E1A            PlugIt2  ldy   <wfileptr        get address past xxxx/ (specified by -w=)
+020D: 17029A                     lbsr  StrCpy           copy filename
+0210: DD1C                       std   <wfilelen        save file length
+0212: 860D                       lda   #C$CR            get CR
+0214: A7A4                       sta   ,y               and terminate
+0216:                   *         ldx   <wopt
+0216:                   *         stx   <wfileptr
+0216: 39                         rts   
+0217:                   
+0217:                   * At this point options are processed, so we need to start copying files
+0217: 0D11              CpyFiles tst   <filecnt         we should have at least one file on cmdline
+0219: 10270215                   lbeq  ShowHelp         if not, exit with error
+021D: 9E02                       ldx   <parmptr         get our parameter pointer off stack
+021F: 1702A5                     lbsr  SkipSpcs         skip any leading spaces
+0222: 0D14                       tst   <wopt            -w specified?
+0224: 2708                       beq   L03C5            branch if not
+0226: 9F16                       stx   <srcfname        else save start of parameter pointer as next file
+0228: 0F0F                       clr   <single          no single option with -w
+022A: 8DBB              L03BE    bsr   CopyToW          copy file at <srcfname to -w buffer
+022C: 201F                       bra   OpenSrc
+022E:                   * This code handles single file copy (i.e. copy file1 file2)
+022E:                   * or a single disk copy (i.e. copy -s abc)
+022E: 1702B4            L03C5    lbsr  GetSDFl          else get source/destination files
+0231: 240A                       bcc   L03D4            branch if we got both ok
+0233: 0D0F                       tst   <single          is this a single drive copy?
+0235: 10260191                   lbne  PListErr         if not, user didn't specify enough files
+0239: 102501F6                   lbcs  Exit             if error, exit
+023D:                   * test for right number of files
+023D: 9611              L03D4    lda   <filecnt         get total file count
+023F: 8102                       cmpa  #2               should be no more than two files
+0241: 2F0A                       ble   OpenSrc
+0243: 308DFE3F                   leax  TooMany,pcr
+0247: 1701EC                     lbsr  WrLine
+024A: 1601E5                     lbra  ExitOk
+024D:                   OpenSrc  
+024D: CC0000                     ldd   #$0000
+0250: DD23                       std   <writemsb        clear writemsb/lsb
+0252: DD25                       std   <writelsb
+0254: 9E16                       ldx   <srcfname        get file to open
+0256: 3410                       pshs  x
+0258: 170234                     lbsr  StrLen           get length
+025B: DD20                       std   <lstfopln        save length
+025D: 3510                       puls  x
+025F: 8601                       lda   #READ.           read mode
+0261: 9A13                       ora   <srcmode         or in any additional modes (i.e. EXEC.)
+0263: 9F1E                       stx   <lstfopen        save pointer to last file open var
+0265: 103F84                     os9   I$Open           open source file
+0268: 240F                       bcc   L03FA            branch if open ok
+026A: 9C16                       cmpx  <srcfname        did open go past pathlist?
+026C: 2606                       bne   OpenFail         branch if so
+026E: 170263                     lbsr  SkipNSpc         else skip over failed filename
+0271: 170253                     lbsr  SkipSpcs         and any trailing spaces
+0274: 9F16              OpenFail stx   <srcfname        save updated pathlist pointer (points to next file on cmd line)
+0276: 160159                     lbra  ShutDown
+0279: 9704              L03FA    sta   <srcpath         save source path
+027B: 3402                       pshs  a                save path
+027D: 170247                     lbsr  SkipSpcs         destroy any leading spaces
+0280: 9F16                       stx   <srcfname        and save pointer to next source filename
+0282: 17020A                     lbsr  StrLen           get length
+0285: DD20                       std   <lstfopln        save length
+0287: 3502                       puls  a                get path off stack
+0289: 30C827                     leax  <fdbufcpy,u      point to FD buffer
+028C: 108E0010                   ldy   #FD.SEG          number of bytes
+0290: C60F                       ldb   #SS.FD
+0292: 103F8D                     os9   I$GetStt         get file's file descriptor
+0295: 250F                       bcs   L041B            branch if error
+0297: 0D0F                       tst   <single          single drive copy?
+0299: 270B                       beq   L041B            branch if not
+029B: A6D818                     lda   [<dstfptr,u]     get first char of destination filename
+029E: C6D7                       ldb   #E$BPNam         prepare for possible error
+02A0: 812F                       cmpa  #PDELIM          path has leading slash?
+02A2: 10260124                   lbne  PListErr         if not, show error
+02A6: 9604              L041B    lda   <srcpath         get source path
+02A8: 30C837                     leax  <optbuf,u        point to options buffer
+02AB: 5F                         clrb                   was: ldb #SS.Opt
+02AC: 103F8D                     os9   I$GetStt         get path options
+02AF: 1025011F                   lbcs  ShutDown         branch if error
+02B3: A684                       lda   ,x               get device type
+02B5: 9706                       sta   <devtyp          save
+02B7: C60F                       ldb   #READ.+WRITE.+EXEC.+PREAD.
+02B9: 8101                       cmpa  #DT.RBF          rbf device?
+02BB: 2616                       bne   L0449            branch if not
+02BD: 3450                       pshs  u,x              save regs
+02BF: 9604                       lda   <srcpath         get source path
+02C1: C602                       ldb   #SS.Size
+02C3: 103F8D                     os9   I$GetStt         get size
+02C6: 10250108                   lbcs  ShutDown
+02CA: 9F09                       stx   <srcflsiz        save file size
+02CC: DF0B                       stu   <srcflsiz+2
+02CE: 3550                       puls  u,x              restore regs
+02D0: E68813                     ldb   <PD.ATT-PD.OPT,x get source file's attributes
+02D3: D722              L0449    stb   <srcattr         save
+02D5: 8601                       lda   #$01
+02D7: 170166                     lbsr  SwapDsk          check for single disk copy and prompt if necessary
+02DA: 9E18              L0450    ldx   <dstfptr         point to destination file
+02DC: 3410                       pshs  x
+02DE: 1701AE                     lbsr  StrLen           get length
+02E1: DD20                       std   <lstfopln        save length
+02E3: 3510                       puls  x
+02E5: 8603                       lda   #UPDAT.          update mode (in case we have to verify)
+02E7: D622                       ldb   <srcattr         get source attributes
+02E9: 9F1E                       stx   <lstfopen
+02EB: 103F83                     os9   I$Create         create file
+02EE: 2415                       bcc   L048B            branch if create ok
+02F0: 0D10                       tst   <rewrite         rewrite flag set?
+02F2: 102700DC                   lbeq  ShutDown         branch if no
+02F6: C1DA                       cmpb  #E$CEF           file already exists?
+02F8: 102600D6                   lbne  ShutDown         branch if any other error
+02FC: 103F87            L047A    os9   I$Delete         delete file first
+02FF: 102500CF                   lbcs  ShutDown         branch if error
+0303: 20D5                       bra   L0450            else try opening again
+0305: 9705              L048B    sta   <dstpath         save destination path
+0307: 0D14                       tst   <wopt            w option specified?
+0309: 272B                       beq   GetOpts          branch iff not
+030B: 0D0E                       tst   <quiet           p option specified?
+030D: 2627                       bne   GetOpts          branch if so
+030F: 3402                       pshs  a                else save dest path on stack
+0311: 308DFDAA                   leax  >Copying,pcr     else print 'Copying...'
+0315: 108E0008                   ldy   #CopyingL
+0319: 1700A8                     lbsr  WritSOut         write it to stdout
+031C: 9E1A                       ldx   <wfileptr        get pointer to file being copied
+031E: 109E1C                     ldy   <wfilelen        get file name length
+0321: 1700A0                     lbsr  WritSOut         print file name
+0324: 308DFD9F                   leax  >CopyTo,pcr      print ' to '
+0328: 108E0004                   ldy   #CopyToL
+032C: 170095                     lbsr  WritSOut         write it to stdout
+032F: 9E18                       ldx   <dstfptr         get pointer to file being copied
+0331: 170102                     lbsr  WrLine           print file with CR
+0334: 3502                       puls  a                restore dest path
+0336: 30C837            GetOpts  leax  <optbuf,u        point to option buffer
+0339: 5F                         clrb                   was: ldb #SS.Opt
+033A: 103F8D                     os9   I$GetStt         get options
+033D: 10250091                   lbcs  ShutDown         branch if error
+0341: E684                       ldb   ,x               get device type
+0343: C101                       cmpb  #DT.RBF          rbf?
+0345: 2627                       bne   CopyLoop         if not rbf device, don't get file size or fd seg
+0347: 9606              L04B4    lda   <devtyp          get device type
+0349: 8101                       cmpa  #DT.RBF          rbf?
+034B: 2621                       bne   CopyLoop         branch if not
+034D: 3440                       pshs  u                save our statics ptr
+034F: 9605                       lda   <dstpath         else get dest path
+0351: C602                       ldb   #SS.Size         and setstat option
+0353: 9E09                       ldx   <srcflsiz        get file size of source
+0355: DE0B                       ldu   <srcflsiz+2
+0357: 103F8E                     os9   I$SetStt         and set dest file to same size
+035A: 10250074                   lbcs  ShutDown         branch if error
+035E: 3540                       puls  u                restore U
+0360: 9605                       lda   <dstpath         get dest path
+0362: 30C827                     leax  <fdbufcpy,u      point to file desc. buffer
+0365: 108E0010                   ldy   #FD.SEG          get size
+0369: C60F                       ldb   #SS.FD
+036B: 103F8E                     os9   I$SetStt         write src fd seg to dest file
+036E:                   * Copy loop is here
+036E: 9E00              CopyLoop ldx   <rdbufptr        get ptr to read buffer
+0370: 4F                         clra                   A = 0 = source prompt if needed
+0371: 1700CC                     lbsr  SwapDsk          check for single disk copy and prompt if so
+0374: 9604                       lda   <srcpath         get source path
+0376: 109E07                     ldy   <bufsiz          get buffer size
+0379: 103F89                     os9   I$Read           read it!
+037C: 2522                       bcs   L0558            branch if error
+037E: 8601                       lda   #$01             A = 1 = dest prompt
+0380: 1700BD                     lbsr  SwapDsk          check for single disk copy and prompt if so
+0383: 9605                       lda   <dstpath         get dest path
+0385: 103F8A                     os9   I$Write          write it out!
+0388: 10250046                   lbcs  ShutDown         branch if error
+038C: 0D15                       tst   <vopt            verify on?
+038E: 2703                       beq   chkeof
+0390: 1701A7                     lbsr  DoVerify
+0393: 9604              chkeof   lda   <srcpath         get source path
+0395: C606                       ldb   #SS.EOF
+0397: 103F8D                     os9   I$GetStt         are we at end of file?
+039A: 24D2                       bcc   CopyLoop         branch if not
+039C: C1D3                       cmpb  #E$EOF           end of file error?
+039E: 2709                       beq   L0561            branch if so
+03A0: C1D3              L0558    cmpb  #E$EOF           end of file rror?
+03A2: 262E                       bne   ShutDown         branch if not
+03A4: 8601                       lda   #$01             prompt destination flag
+03A6: 170097                     lbsr  SwapDsk          check for single drive copy and prompt if necessary
+03A9: 9605              L0561    lda   <dstpath         get destination path
+03AB: 103F8F                     os9   I$Close          close that file
+03AE: 2522                       bcs   ShutDown         branch if error
+03B0: 0F05                       clr   <dstpath         else clear dest path
+03B2: 9604                       lda   <srcpath         get source path
+03B4: 103F8F                     os9   I$Close          close it
+03B7: 2519                       bcs   ShutDown         branch if error
+03B9: 0F04                       clr   <srcpath         clear src path
+03BB: 0D14                       tst   <wopt            -w specified
+03BD: 10270071                   lbeq  ExitOk           branch if not
+03C1: 16FE66                     lbra  L03BE
+03C4:                   
+03C4:                   * Entry: X = ptr to data to write, Y = length
+03C4: 8601              WritSOut lda   #$01             standard out
+03C6: 103F8A                     os9   I$Write          write it
+03C9: 39                         rts   
+03CA:                   
+03CA: 308DFC8C          PListErr leax  >PLIncmp,pcr
+03CE: 8D66                       bsr   WrLine
+03D0: 2060                       bra   ExitOk
+03D2:                   
+03D2: 3404              ShutDown pshs  b
+03D4: 9604                       lda   <srcpath         get source path
+03D6: 2703                       beq   L05AA            branch if none
+03D8: 103F8F                     os9   I$Close          close it
+03DB: 9605              L05AA    lda   <dstpath         get dest path
+03DD: 2703                       beq   L05B1            branch if none
+03DF: 103F8F                     os9   I$Close          close it
+03E2: 0F04              L05B1    clr   <srcpath         clear source path
+03E4: 0F05                       clr   <dstpath         and destination
+03E6: 308DFCF1                   leax  >CantCpy,pcr     else show can't copy error
+03EA: 108E0011                   ldy   #CantCpyL
+03EE: 8DD4                       bsr   WritSOut         write out
+03F0: 9E1E                       ldx   <lstfopen        show filename that failed
+03F2: 109E20                     ldy   <lstfopln        get length
+03F5: 8DCD                       bsr   WritSOut
+03F7: 308DFCF1                   leax  >SpcDsh,pcr
+03FB: 108E0003                   ldy   #SpcDshL
+03FF: 8DC3                       bsr   WritSOut         write out
+0401: 3504                       puls  b
+0403: 103F0F            PrintErr os9   F$PErr           print error
+0406: 0D14                       tst   <wopt            -w used?
+0408: 2728                       beq   ExitOk           branch if not
+040A: 0D0D                       tst   <abortflg        abort flag set?
+040C: 2624                       bne   ExitOk           branch if so
+040E: 308DFCB9          AskAgain leax  >Cont,pcr        point to continue prompt
+0412: 108E0010                   ldy   #ContL           get length
+0416: 8DAC                       bsr   WritSOut         write
+0418: 4F                         clra                   ADDED +BGP+
+0419: 9E00                       ldx   <rdbufptr        get pointer at readbuf
+041B: 108E0002                   ldy   #$0002           2 bytes
+041F: 103F8B                     os9   I$ReadLn         read form stdin
+0422: A684                       lda   ,x               get byte at X
+0424: 845F                       anda  #$5F
+0426: 8159                       cmpa  #'Y              user wants to continue?
+0428: 1027FDFE                   lbeq  L03BE            branch if so
+042C: 814E                       cmpa  #'N              no?
+042E: 2702                       beq   ExitOk           branch if so
+0430: 20DC                       bra   AskAgain         else ask again
+0432:                   
+0432:                   ShowHelp equ   *
+0432:                            IFNE  DOHELP
+0432:                            leax  >HlpMsg,pcr      point to help message
+0432:                            ldy   #HlpMsgL         get length
+0432:                            lda   #$02             std error
+0432:                            os9   I$WritLn         write it
+0432:                            ENDC
+0432: 5F                ExitOk   clrb                   clear carry
+0433: 103F06            Exit     os9   F$Exit           and exit
+0436:                   
+0436:                   * Write line passed in X
+0436: 108E00A0          WrLine   ldy   #$00A0
+043A: 8601              WrNBytes lda   #$01
+043C: 103F8C                     os9   I$WritLn 
+043F: 39                         rts   
+0440:                   
+0440:                   * Prompt User for Source or Destination Disk
+0440: 0D0F              SwapDsk  tst   <single          single disk copy?
+0442: 2739                       beq   NoSwap           branch if not
+0444: 3430                       pshs  y,x
+0446: 3402              L0626    pshs  a
+0448: 4D                         tsta  
+0449: 260A                       bne   L0635
+044B: 308DFBC3                   leax  >SrcPmpt,pcr     point to source prompt
+044F: 108E0021                   ldy   #SrcPmptL        get size
+0453: 2008                       bra   L063D            write it and get input
+0455: 308DFBDA          L0635    leax  >DstPmpt,pcr     point to dest prompt
+0459: 108E0026                   ldy   #DstPmptL        get size
+045D: 8DDB              L063D    bsr   WrNBytes         write it
+045F: 30E2                       leax  ,-s              point to stack for temp buffer
+0461: 108E0001                   ldy   #$0001           one byte
+0465: 4F                         clra                   from std in
+0466: 103F89                     os9   I$Read           read byte from user
+0469: A6E0                       lda   ,s+              get char
+046B: 8843                       eora  #'C
+046D: 84DF                       anda  #$DF
+046F: 2706                       beq   L0657            branch if C
+0471: 8D0B                       bsr   L065E
+0473: 3502                       puls  a
+0475: 26CF                       bne   L0626
+0477: 8D05              L0657    bsr   L065E
+0479: 3502                       puls  a
+047B: 3530                       puls  y,x
+047D: 39                NoSwap   rts   
+047E: 3432              L065E    pshs  y,x,a
+0480: 8601                       lda   #$01
+0482: 308DFBD3                   leax  >CrRtn,pcr
+0486: 108E0050                   ldy   #80
+048A: 103F8C                     os9   I$WritLn 
+048D: 35B2                       puls  pc,y,x,a
+048F:                   
+048F:                   * StrLen
+048F:                   *
+048F:                   * Entry:
+048F:                   *   X = ptr to string (space, comma or CR terminated)
+048F:                   * Exit:
+048F:                   *   D = length of string
+048F:                   *   X = ptr to byte after string
+048F: 3440              StrLen   pshs  u
+0491: CE0000                     ldu   #$0000
+0494: A680              StrLenLp lda   ,x+
+0496: 8120                       cmpa  #C$SPAC
+0498: 270C                       beq   StrLenEx
+049A: 812C                       cmpa  #C$COMA
+049C: 2708                       beq   StrLenEx
+049E: 810D                       cmpa  #C$CR
+04A0: 2704                       beq   StrLenEx
+04A2: 3341                       leau  1,u
+04A4: 20EE                       bra   StrLenLp
+04A6: 1F30              StrLenEx tfr   u,d
+04A8: 35C0                       puls  u,pc
+04AA:                   
+04AA:                   * StrCpy
+04AA:                   *
+04AA:                   * Entry:
+04AA:                   *   X = ptr to src string
+04AA:                   *   Y = ptr to dest string
+04AA:                   * Exit:
+04AA:                   *   D = number of bytes copied
+04AA:                   *   X = ptr to byte after original string
+04AA:                   *   X = ptr to byte after copied string
+04AA: 3440              StrCpy   pshs  u
+04AC: CE0000                     ldu   #$0000
+04AF: A680              CopyFnLp lda   ,x+
+04B1: 8120                       cmpa  #C$SPAC
+04B3: 270E                       beq   CopyFnEx
+04B5: 812C                       cmpa  #C$COMA
+04B7: 270A                       beq   CopyFnEx
+04B9: 810D                       cmpa  #C$CR
+04BB: 2706                       beq   CopyFnEx
+04BD: A7A0                       sta   ,y+
+04BF: 3341                       leau  1,u
+04C1: 20EC                       bra   CopyFnLp
+04C3: 1F30              CopyFnEx tfr   u,d
+04C5: 35C0                       puls  u,pc
+04C7:                   
+04C7:                   * Skip over spaces and commas
+04C7:                   *
+04C7:                   * Entry:
+04C7:                   *   X = ptr to string
+04C7:                   * Exit:
+04C7:                   *   X = ptr to first non-whitespace char
+04C7:                   *   A = non-whitespace char
+04C7: A680              SkipSpcs lda   ,x+
+04C9: 8120                       cmpa  #C$SPAC
+04CB: 27FA                       beq   SkipSpcs
+04CD: 812C                       cmpa  #C$COMA
+04CF: 27F6                       beq   SkipSpcs
+04D1: 301F                       leax  -1,x
+04D3: 39                         rts
+04D4:                   
+04D4:                   * Skip over non-spaces and non-commas
+04D4:                   *
+04D4:                   * Entry:
+04D4:                   *   X = ptr to string
+04D4:                   * Exit:
+04D4:                   *   X = ptr to first non-whitespace char
+04D4:                   *   A = non-whitespace char
+04D4: A680              SkipNSpc lda   ,x+
+04D6: 8120                       cmpa  #C$SPAC
+04D8: 2708                       beq   EatOut
+04DA: 812C                       cmpa  #C$COMA
+04DC: 2704                       beq   EatOut
+04DE: 810D                       cmpa  #C$CR
+04E0: 26F2                       bne   SkipNSpc
+04E2: 301F              EatOut   leax  -1,x
+04E4: 39                         rts
+04E5:                   
+04E5:                   * Get source file in <srcfname and destination file in <dstfptr
+04E5: 31C816            GetSDFl  leay  <srcfname,u      point X to next file pointer
+04E8: 8D0C                       bsr   SrchFile         skip white spaces, look for name on cmd line
+04EA: 2509                       bcs   L067D            branch if end
+04EC: 0C12                       inc   <srccnt          else increment souce count
+04EE: 31C818                     leay  <dstfptr,u       point Y to destination file
+04F1: 8DD4                       bsr   SkipSpcs         destroy any leading spaces
+04F3: 8D01                       bsr   SrchFile         skip white spaces, look for name on cmd line
+04F5: 39                L067D    rts   
+04F6:                   
+04F6:                   * Starting at X, parse for a filename, skipping leading white spaces
+04F6: A684              SrchFile lda   ,x
+04F8: 810D                       cmpa  #C$CR            CR?
+04FA: 2706                       beq   L06A2            branch if so
+04FC: AFA4                       stx   ,y               else store X at Y
+04FE: 8DD4              SkipFile bsr   SkipNSpc         skip non-spaces
+0500: 5F                ParseOk  clrb                   clear B
+0501: 39                         rts                    return 
+0502: 0D12              L06A2    tst   <srccnt          any file specified?
+0504: 2604                       bne   L06AA            branch if so
+0506: C6D7              BadPName ldb   #E$BPNam         else no source was specified
+0508: 43                         coma  
+0509: 39                         rts   
+050A:                   
+050A: 9E16              L06AA    ldx   <srcfname        get pointer
+050C: A680              L06AC    lda   ,x+              get char
+050E: 8120                       cmpa  #C$SPAC          space?
+0510: 2712                       beq   L06C4            branch if so
+0512: 812C                       cmpa  #C$COMA          comma?
+0514: 270E                       beq   L06C4            branch if so
+0516: 810D                       cmpa  #C$CR            carriage return?
+0518: 270A                       beq   L06C4            branch if so
+051A: 812F                       cmpa  #PDELIM          pathlist delimiter?
+051C: 26EE                       bne   L06AC            branch if not
+051E: 0F12                       clr   <srccnt          else clear file count
+0520: AFA4                       stx   ,y               and store
+0522: 20E8                       bra   L06AC            continue parsing
+0524: 0D12              L06C4    tst   <srccnt          file count 0?
+0526: 270A                       beq   L06D2            branch if so
+0528: 0D13                       tst   <srcmode         source mode? (exec or data dir)
+052A: 27DA                       beq   BadPName         branch if data
+052C: 9E16                       ldx   <srcfname        else get pointer
+052E: AFA4                       stx   ,y               save
+0530: 20CE                       bra   ParseOk          branch 
+0532: A61E              L06D2    lda   -$02,x
+0534: 812F                       cmpa  #PDELIM
+0536: 27CE                       beq   BadPName
+0538: 20C6                       bra   ParseOk
+053A:                   
+053A:                   DoVerify
+053A: 3460                       pshs  u,y        save registers
+053C: 9E23                       ldx   <writemsb  get 2 msb's of last write
+053E: DE25                       ldu   <writelsb  get 2 lsb's of last write
+0540: 9605                       lda   <dstpath   get out path number
+0542: 103F88                     os9   I$Seek
+0545: 1025FEEA                   lbcs  Exit       exit on error
+0549: EE62                       ldu   2,s        get original u back
+054B: 33C901D7                   leau  copybuff,u point to buffer start
+054F: ECE4                       ldd   ,s         get bytes written
+0551: D325                       addd  <writelsb  add on to current 2 lsb positions
+0553: DD25                       std   <writelsb  save them
+0555: ECE4                       ldd   ,s         get bytes written
+0557: 2404                       bcc   vfy000     skip if no carry
+0559: 3001                       leax  1,x        bump up 2 msb's
+055B: 9F23                       stx   <writemsb  and save them
+055D:                   
+055D: 108E0100          vfy000   ldy   #$0100     chars to read for verify
+0561: EDE4                       std   ,s         save it
+0563: 4D                         tsta             did we write more than 255 bytes ?
+0564: 2602                       bne   vfy010     yes...only read 256
+0566: 1F02                       tfr   d,y        else xfer amount we did write
+0568:                   
+0568: AE62              vfy010   ldx   2,s        get u register
+056A: 308900D7                   leax  vfybuff,x  point to start of verify buffer
+056E: 9605                       lda   <dstpath   get output path number
+0570: 103F89                     os9   I$Read     read a block in
+0573: 1025FEBC                   lbcs  Exit       exit on error
+0577:                   
+0577: A6C0              vfy020   lda   ,u+        get char from in buffer
+0579: A180                       cmpa  ,x+        get char from out buffer
+057B: 260D                       bne   snderr1    not equal...send write verfiy msg
+057D: 313F                       leay  -1,y       decrement read count
+057F: 26F6                       bne   vfy020     if more..loop back
+0581: ECE4                       ldd   ,s         get write count back
+0583: 830100                     subd  #$0100     subtract verify buffer size
+0586: 22D5                       bhi   vfy000     if more left...loop back
+0588: 35E0                       puls  u,y,pc     else restore registers and return
+058A:                   
+058A: 308D0009          snderr1  leax  errmsg1,pcr address of 'write verify failed' msg
+058E: 17FEA5                     lbsr  WrLine     send it
+0591: 53                         comb             set carry
+0592: C601                       ldb   #$01       set error
+0594: 16FE9C                     lbra  Exit       exit
+0597:                   
+0597: 07                errmsg1  fcb   C$BELL
+0598: 4572726F72202D20           fcc   /Error - write verification failed./
+05A1: 7269746520766572
+05A9: 696669636174696F
+05B1: 6E206661696C6564
+05B9: 2E
+05BA: 0D                         fcb   C$CR
+05BB:                            
+05BB: C4F99D                     emod
+05BE:                   eom      equ   *
+05BE:                            end
+0 Pass 2 errors.
+
+SYMBOL TABLE
+   A.ACIAP 01 ff68    A.MODP 01 ff6c   A.TERMV 01 ffc0      A.V1 01 ffc1
+      A.V2 01 ffc2      A.V3 01 ffc3      A.V4 01 ffc4      A.V5 01 ffc5
+      A.V6 01 ffc6      A.V7 01 ffc7  ABORTFLG 02 000d  ACIA2661 02 0003
+  ACIA6551 02 0002  ACIA6850 02 0001  ACIATYPE 03 0002  ALTERBIT 00 0004
+  ASKAGAIN 02 040e      ATRV 01 0080  ATTRMASK 00 00f0      B110 00 0000
+   B115200 00 000a     B1200 00 0003    B19200 00 0007     B2400 00 0004
+      B300 00 0001    B38400 00 0008     B4800 00 0005    B57600 00 0009
+      B600 00 0002     B9600 00 0006  BADINSTR 00 0040    BADOPT 02 01e2
+  BADPNAME 02 0506  BLOCKTYP 00 0001   BOOTSTR 02 0014   BORDREG 00 ff9a
+  BT.BLOCK 00 003b   BT.FLAG 00 8a34  BT.OFFST 00 0002    BT.SEC 00 0000
+   BT.SIZE 00 1080  BT.START 01 ed00  BT.TRACK 00 0022   BUFBUSY 00 0040
+    BUFMOD 00 0001    BUFSIZ 02 0007  BYTETYPE 00 0002    C$BELL 01 0007
+     C$BSP 01 0008  C$CLSALL 01 0016   C$CLSGR 01 0015    C$COMA 01 002c
+      C$CR 01 000d     C$DEL 01 0018  C$DELETE 01 0010     C$DWN 01 001f
+      C$EL 01 0005     C$EOF 01 001b    C$FORM 01 000c    C$HOME 01 000b
+  C$INSERT 01 0011    C$INTR 01 0003      C$LF 01 000a     C$LFT 01 001d
+    C$NULL 01 0000    C$PAUS 01 0017    C$PERD 01 002e   C$PLINE 01 0013
+    C$QUIT 01 0005    C$RARR 01 0009     C$RGT 01 001c    C$RPET 01 0001
+    C$RPRT 01 0004  C$SHRARR 01 0019      C$SI 01 000f      C$SO 01 000e
+    C$SPAC 01 0020      C$UP 01 001e    C$XOFF 01 0013     C$XON 01 0011
+   CANTCPY 02 00db  CANTCPYL 00 0011     CARRY 00 0001   CBLCODE 00 0005
+     CCODE 00 0004   CHKDASH 02 012f    CHKEOF 02 0393    CLRNXT 02 00f6
+  CNTRLBIT 00 0002    COCO.D 01 0001     COLOR 01 0001    COLOR3 01 0002
+    CONDEM 00 0002      CONT 02 00cb     CONTL 00 0010  COPYBUFF 02 01d7
+  COPYFNEX 02 04c3  COPYFNLP 02 04af   COPYING 02 00bf  COPYINGL 00 0008
+  COPYLOOP 02 036e    COPYTO 02 00c7   COPYTOL 00 0004   COPYTOW 02 01e7
+  CPUSPEED 01 0002   CPUTYPE 01 0002  CPYFILES 02 0217   CRCCON1 00 0080
+  CRCCON23 00 0fe3    CRCOFF 00 0000     CRCON 00 0001     CRRTN 02 0059
+    D$GSTA 02 0009    D$INIT 02 0000    D$PSTA 02 000c    D$READ 02 0003
+    D$TERM 02 000f    D$WRIT 02 0006  D.ALTIRQ 02 00b2  D.APROCQ 02 0052
+  D.BLKMAP 02 0040    D.BOOT 02 0031   D.BORDR 02 009a   D.BTBUG 02 005e
+   D.BTPTR 02 0036    D.BTSZ 02 0038  D.CBSTRT 02 0071   D.CCMEM 02 00a5
+   D.CCSTK 02 00a7  D.CLDRES 02 005c   D.CLOCK 02 00e0  D.CLOCK2 02 00b6
+    D.CLTB 02 00b0  D.COCOXT 02 0009   D.CRASH 02 006b     D.CRC 02 003b
+     D.DAY 02 002a   D.DAYWK 02 0034  D.DBGMEM 02 000a  D.DEVTBL 02 0080
+  D.DMAREQ 02 008a D.DWSRVID 02 0010  D.DWSTAT 02 000eD.DWSUBADDR 02 000c
+  D.ERRCOD 02 0033  D.ERRRST 02 00ee    D.FIRQ 02 00f6   D.FLIP0 02 00a9
+   D.FLIP1 02 00ab   D.FRQER 02 0093   D.GPOLL 02 00b4   D.HINIT 02 0090
+   D.HOFF0 02 009f    D.HOUR 02 002b    D.INIT 02 0024     D.IRQ 02 00f8
+   D.IRQER 02 0092    D.IRQS 02 00af   D.MEMSZ 02 00a3     D.MIN 02 002c
+  D.MODDAT 02 005a  D.MODDIR 02 0044  D.MODEND 02 0058   D.MONTH 02 0029
+   D.MOTON 02 0032     D.NMI 02 00fc    D.PIPE 02 0061    D.POLL 02 0026
+  D.POLTBL 02 0082  D.PRCDBT 02 0048    D.PROC 02 0050  D.PTHDBT 02 0088
+    D.QCNT 02 007c    D.QIRQ 02 003f   D.QUICK 02 003e   D.RESV1 02 0096
+   D.RESV2 02 0097   D.RESV3 02 009b     D.SEC 02 002d   D.SLICE 02 002f
+   D.SPEED 02 00a0  D.SPROCQ 02 0056  D.SSTSKN 02 00a4  D.SVCIRQ 02 00ce
+     D.SWI 02 00fa    D.SWI2 02 00f4    D.SWI3 02 00f2  D.SWPAGE 02 0003
+  D.SYSDAT 02 004c  D.SYSDIS 02 00c2  D.SYSIRQ 02 00c4  D.SYSMEM 02 004e
+  D.SYSPRC 02 004a  D.SYSSTK 02 00cc  D.SYSSVC 02 00c0  D.SYSTSK 02 00d0
+  D.SYSVEC 02 00f0  D.TASK1N 02 003d   D.TASKS 02 0020  D.TENTHS 02 003c
+    D.TICK 02 002e    D.TIME 02 0028   D.TIMLS 02 0095   D.TIMMS 02 0094
+   D.TINIT 02 0091   D.TKCNT 02 0035  D.TMPDAT 02 0022  D.TSKIPT 02 00a1
+  D.TSLICE 02 0030  D.USRDIS 02 00c8  D.USRIRQ 02 00ca  D.USRSVC 02 00c6
+   D.VIDMD 02 0098   D.VIDRS 02 0099    D.VIRQ 02 00ad   D.VOFF0 02 009e
+   D.VOFF1 02 009d   D.VOFF2 02 009c  D.WDADDR 02 0000  D.WDBTDR 02 0002
+  D.WPROCQ 02 0054   D.XFIRQ 02 00e6    D.XIRQ 02 00e8    D.XNMI 02 00ec
+    D.XSWI 02 00ea   D.XSWI2 02 00e4   D.XSWI3 02 00e2    D.YEAR 02 0028
+  DAT.ADDR 00 ffe0  DAT.BLCT 00 0008  DAT.BLMX 00 003f  DAT.BLSZ 00 2000
+  DAT.BMSZ 00 0040  DAT.FREE 00 333e  DAT.IMSZ 00 0010  DAT.REGS 00 ffa0
+  DAT.TASK 00 ff91  DAT.TKCT 00 0020  DAT.WREN 00 0000  DAT.WRPR 00 0000
+      DATA 00 0040    DD.ATT 02 000d    DD.BIT 02 0006    DD.BSZ 02 0018
+     DD.BT 02 0015    DD.DAT 02 001a    DD.DIR 02 0008    DD.DSK 02 000e
+    DD.FMT 02 0010    DD.MAP 02 0004    DD.NAM 02 001f    DD.OPT 02 003f
+    DD.OWN 02 000b    DD.RES 02 0013    DD.SIZ 02 0015    DD.SPT 02 0011
+    DD.TKS 02 0003    DD.TOT 02 0000  DDIRBSIZ 00 0040      DEAD 00 0001
+  DEFIOSIZ 00 0010    DEVCNT 02 000d     DEVIC 00 00f0    DEVSIZ 02 000d
+    DEVTYP 02 0006      DIR. 00 0080    DIR.FD 02 001d    DIR.NM 02 0000
+    DIR.SZ 02 0020      DIV0 00 0080   DNS.DTD 00 0002    DNS.FM 00 0000
+   DNS.FM0 00 0000   DNS.MFM 00 0001  DNS.MFM0 00 0004   DNS.STD 00 0000
+    DOHELP 01 0000  DOVERIFY 02 053a   DOWNBIT 00 0010     DPORT 01 ff40
+     DRIVR 00 00e0    DRVBEG 02 000f    DRVMEM 02 0026   DSTFPTR 02 0018
+   DSTPATH 02 0005   DSTPMPT 02 0033  DSTPMPTL 00 0026   DT.CDFM 00 0005
+    DT.NFM 00 0004   DT.PIPE 00 0002    DT.RBF 00 0001    DT.RFM 00 0006
+    DT.SBF 00 0003    DT.SCF 00 0000   E$ALIAS 02 00c7  E$ARROVF 02 0049
+  E$BADBUF 02 00c2   E$BMCRC 02 00e8    E$BMHP 02 00ec    E$BMID 02 00cd
+   E$BMODE 02 00cb    E$BNAM 02 00eb  E$BPADDR 02 00d2   E$BPNAM 02 00d7
+   E$BPNUM 02 00c9  E$BPRCID 02 00e0    E$BTYP 02 00f9  E$BUFSIZ 02 00bf
+     E$BUG 02 00be     E$CEF 02 00da     E$CRC 02 00f3  E$DEADLK 02 00fe
+   E$DELSP 02 00df  E$DEVBSY 02 00fa  E$DEVOVF 02 00cc    E$DIDC 02 00fb
+  E$DIMLRG 02 0019  E$DIRFUL 02 00ce  E$DIVZER 02 002d      E$DN 02 00c6
+     E$DNE 02 00ee  E$ENDQOU 02 0029     E$EOF 02 00d3  E$EXCVRB 02 000b
+  E$FLTOVF 02 0032     E$FNA 02 00d6    E$FULL 02 00f8  E$HANGUP 02 00dc
+     E$IBA 02 00db  E$ICHREF 02 000e  E$ICOORD 02 00bd   E$ICOVF 02 000d
+  E$IFORKP 02 00e6    E$ILLA 02 0043  E$ILLARG 02 00bb  E$ILLCMD 02 00c0
+  E$ILLCNT 02 0044  E$ILLDEC 02 0048  E$ILLDIM 02 0015  E$ILLEXP 02 0047
+  E$ILLFOR 02 0046  E$ILLINP 02 003d  E$ILLIVR 02 004d  E$ILLLIT 02 0016
+  E$ILLMOD 02 000f  E$ILLNUM 02 0010  E$ILLOPD 02 0012  E$ILLOPR 02 0013
+  E$ILLPNM 02 0040  E$ILLPRF 02 0011  E$ILLRET 02 0017  E$ILLRFN 02 0014
+  E$ILLSFX 02 0018  E$ILLSTC 02 000c  E$IOCONV 02 003c  E$IOFRPT 02 003e
+  E$IOFSYN 02 003f  E$IOMISM 02 003a   E$IONUM 02 003b  E$IPRCID 02 00e0
+    E$ISWI 02 00e3   E$IWDEF 02 00c3   E$IWTYP 02 00b7  E$KWNMOD 02 00e7
+  E$LINLRG 02 001a  E$LNCOMP 02 0033    E$LOCK 02 00fc  E$MEMFUL 02 00cf
+   E$MFULL 02 0020  E$MLTLIN 02 004b  E$MLTVAR 02 004c     E$MNF 02 00dd
+  E$MODBSY 02 00d1  E$MULPRC 02 002c   E$NEMOD 02 00ea     E$NES 02 00d5
+   E$NFONT 02 00b9  E$NOASSG 02 001b  E$NOCHLD 02 00e2  E$NOCOMA 02 001d
+  E$NODATA 02 004f   E$NODIM 02 001e    E$NODO 02 001f  E$NOGOTO 02 0021
+  E$NOLPAR 02 0022  E$NOLREF 02 0023  E$NONRCO 02 0042  E$NOOPRD 02 0024
+  E$NOPATH 02 001c   E$NORAM 02 00ed  E$NOROUT 02 0030  E$NORPAR 02 0025
+  E$NOTASK 02 00ef  E$NOTHEN 02 0026    E$NOTO 02 0027  E$NOTRDY 02 00f6
+  E$NOVREF 02 0028  E$PARMER 02 0038    E$PNNF 02 00d8    E$POLL 02 00ca
+  E$PRCABT 02 00e4  E$PRCFUL 02 00e5  E$PTHFUL 02 00c8    E$READ 02 00f4
+    E$SECT 02 00f1    E$SEEK 02 00f7  E$SEEKRG 02 004e   E$SHARE 02 00fd
+     E$SLF 02 00d9  E$STKOVF 02 00ba  E$STROVF 02 002f  E$SUBLRG 02 002a
+  E$SUBOVF 02 0035  E$SUBRNG 02 0037  E$SUBUND 02 0036  E$SYSOVF 02 0039
+  E$TBLFUL 02 00c1  E$TYPMIS 02 002e  E$UNDLIN 02 004a  E$UNDVAR 02 0031
+    E$UNIT 02 00f0  E$UNKPRC 02 002b  E$UNKSVC 02 00d0  E$UNKSYM 02 000a
+  E$UNMCNT 02 0045      E$UP 02 00c5   E$USIGP 02 00e9  E$VALRNG 02 0034
+   E$WADEF 02 00b8      E$WP 02 00f2   E$WRITE 02 00f5   E$WRSUB 02 0041
+  E$WUNDEF 02 00c4    EATOUT 02 04e2   EDITION 01 000b    ENTIRE 00 0080
+   EOFLOCK 00 0004       EOM 02 05be   ERRMSG1 02 0597     EXEC. 00 0004
+      EXIT 02 0433    EXITOK 02 0432   F$ALARM 02 001e  F$ALHRAM 02 0053
+   F$ALL64 02 0030  F$ALLBIT 02 0013  F$ALLIMG 02 003a  F$ALLPRC 02 004b
+  F$ALLRAM 02 0039  F$ALLTSK 02 003f   F$APROC 02 002c    F$BOOT 02 0035
+   F$BTMEM 02 0036   F$CHAIN 02 0005  F$CLRBLK 02 0050  F$CMPNAM 02 0011
+  F$CPYMEM 02 001b     F$CRC 02 0017  F$CRCMOD 02 0055  F$DATLOG 02 0044
+  F$DATTMP 02 0045   F$DEBUG 02 0023  F$DELBIT 02 0014  F$DELIMG 02 003b
+  F$DELPRC 02 004c  F$DELRAM 02 0051  F$DELTSK 02 0040   F$ELINK 02 004d
+    F$EXIT 02 0006  F$FIND64 02 002f  F$FMODUL 02 004e    F$FORK 02 0003
+  F$FREEHB 02 003e  F$FREELB 02 003d  F$GBLKMP 02 0019  F$GCMDIR 02 0052
+  F$GMODDR 02 001a  F$GPRDSC 02 0018  F$GPROCP 02 0037    F$ICPT 02 0009
+      F$ID 02 000c   F$IODEL 02 0033    F$IOQU 02 002b     F$IRQ 02 002a
+   F$LDABX 02 0049   F$LDAXY 02 0046  F$LDAXYP 02 0047  F$LDDDXY 02 0048
+    F$LINK 02 0000    F$LOAD 02 0001  F$MAPBLK 02 004f     F$MEM 02 0007
+    F$MOVE 02 0038  F$NMLINK 02 0021  F$NMLOAD 02 0022   F$NPROC 02 002d
+   F$NVRAM 02 0071    F$PERR 02 000f  F$PRSNAM 02 0010  F$REBOOT 02 0054
+  F$REGDMP 02 0070  F$RELTSK 02 0043  F$RESTSK 02 0042   F$RET64 02 0031
+  F$SCHBIT 02 0012    F$SEND 02 0008  F$SETIMG 02 003c  F$SETTSK 02 0041
+   F$SLEEP 02 000a   F$SLINK 02 0034  F$SPRIOR 02 000d  F$SRQMEM 02 0028
+  F$SRTMEM 02 0029    F$SSPD 02 000b    F$SSVC 02 0032    F$SSWI 02 000e
+   F$STABX 02 004a   F$STIME 02 0016   F$SUSER 02 001c  F$TIMALM 02 0026
+    F$TIME 02 0015     F$TPS 02 0025  F$UNLINK 02 0002  F$UNLOAD 02 001d
+  F$VBLOCK 02 0057    F$VIRQ 02 0027  F$VMODUL 02 002e    F$WAIT 02 0004
+   F$XTIME 02 0056     FALSE 00 0000    FD.ATT 02 0000  FD.CREAT 02 000d
+    FD.DAT 02 0003    FD.LNK 02 0008    FD.LS1 00 00fb    FD.LS2 00 00fa
+    FD.OWN 02 0001    FD.SEG 02 0010    FD.SIZ 02 0009     FDBUF 00 0004
+  FDBUFCPY 02 0027    FDSL.A 02 0000    FDSL.B 02 0003    FDSL.S 02 0005
+  FEATURE1 02 001b  FEATURE2 02 001c   FILECNT 02 0011  FILELOCK 00 0002
+  FIRQMASK 00 0040  FIXCMDLN 02 01d5     FLMGR 00 00d0    FMCDIR 02 0009
+    FMCLOS 02 0024    FMCREA 02 0000    FMDLET 02 000c    FMGSTA 02 001e
+    FMMDIR 02 0006    FMOPEN 02 0003    FMRDLN 02 0018    FMREAD 02 0012
+    FMSEEK 02 000f    FMSSTA 02 0021   FMT.DNS 00 0002  FMT.SIDE 00 0001
+  FMT.T0DN 00 0020  FMT.TDNS 00 0004    FMWRIT 02 0015    FMWRLN 02 001b
+  FRTNCODE 00 0006   GETDASH 02 0134  GETDASH2 02 0138   GETNCHR 02 011e
+   GETOPTS 02 0336   GETSDFL 02 04e5  GIMEREGS 00 ff00     H6309 06 0000
+  HALFCRRY 00 0020   HW.PAGE 01 0007      HZ50 00 0001      HZ60 00 0002
+  I$ATTACH 02 0080  I$CHGDIR 02 0086   I$CLOSE 02 008f  I$CREATE 02 0083
+  I$DELETE 02 0087  I$DELETX 02 0090  I$DETACH 02 0081     I$DUP 02 0082
+  I$GETSTT 02 008d  I$MAKDIR 02 0085    I$OPEN 02 0084    I$READ 02 0089
+  I$READLN 02 008b    I$SEEK 02 0088  I$SETSTT 02 008e   I$WRITE 02 008a
+  I$WRITLN 02 008c     ICODE 00 0002    IMGCHG 00 0010  INDRIVER 00 0020
+   INITSTR 02 000eINSTALLNAME 02 001f  INTMASKS 00 0050    IOADDR 00 007f
+   IOBLOCK 00 003f   IOENTRY 00 00fe    IRQENR 00 ff92   IRQMASK 00 0010
+     ISITA 02 0145     ISITP 02 014e     ISITR 02 01cf     ISITV 02 0156
+     ISITW 02 0168     ISITX 02 015e     ISIZ. 00 0020    IT.ALF 02 0017
+    IT.BAU 02 0027    IT.BDC 02 0035    IT.BGC 02 0034    IT.BSE 02 0024
+    IT.BSO 02 0014    IT.BSP 02 001b    IT.COL 02 002c    IT.CPX 02 0031
+    IT.CPY 02 0032    IT.CYL 02 0017    IT.D2P 02 0028    IT.DEL 02 001c
+    IT.DLO 02 0015    IT.DNS 02 0016    IT.DRV 02 0013    IT.DTP 02 0012
+    IT.DUP 02 0020    IT.DVC 02 0012    IT.EKO 02 0016    IT.EOF 02 001e
+    IT.EOR 02 001d  IT.EXTEN 02 0022    IT.FGC 02 0033    IT.ILV 02 001f
+    IT.INT 02 0022  IT.LLDRV 02 0028    IT.MPI 02 002a    IT.NUL 02 0018
+    IT.OFS 02 0026    IT.OVF 02 0025    IT.PAG 02 001a    IT.PAR 02 0026
+    IT.PAU 02 0019    IT.PSC 02 0021    IT.QUT 02 0023    IT.ROW 02 002d
+    IT.RPR 02 001f    IT.RWC 02 0028    IT.SAS 02 0020    IT.SCT 02 001b
+    IT.SID 02 0019  IT.SOFF1 02 0025  IT.SOFF2 02 0026  IT.SOFF3 02 0027
+  IT.STOFF 02 0024    IT.STP 02 0014    IT.STY 02 0030    IT.T0S 02 001d
+    IT.TFM 02 0021    IT.TYP 02 0015    IT.UPC 02 0013    IT.VAL 02 002f
+    IT.VFY 02 001a    IT.WND 02 002e    IT.WPC 02 0025   IT.XOFF 02 002b
+    IT.XON 02 002a   IT.XTYP 02 002e   KEYRPTD 02 0029   KEYRPTS 02 0028
+    KRNBLK 01 003f     L0339 02 019f     L0350 02 01b6     L035D 02 01c6
+     L038B 02 01f4     L03BE 02 022a     L03C5 02 022e     L03D4 02 023d
+     L03FA 02 0279     L041B 02 02a6     L0449 02 02d3     L0450 02 02da
+     L047A 02 02fc     L048B 02 0305     L04B4 02 0347     L0558 02 03a0
+     L0561 02 03a9     L05AA 02 03db     L05B1 02 03e2     L0626 02 0446
+     L0635 02 0455     L063D 02 045d     L0657 02 0477     L065E 02 047e
+     L067D 02 04f5     L06A2 02 0502     L06AA 02 050a     L06AC 02 050c
+     L06C4 02 0524     L06D2 02 0532  LANGMASK 00 000f   LASTRAM 00 003f
+   LEFTBIT 00 0020     LEVEL 00 0002   LIMITED 00 0001  LSTFOPEN 02 001e
+  LSTFOPLN 02 0020    M$DTYP 02 0012    M$EXEC 02 0009    M$FMGR 02 0009
+      M$ID 02 0000     M$ID1 00 0087    M$ID12 00 87cd     M$ID2 00 00cd
+  M$IDSIZE 02 0009     M$MEM 02 000b    M$MODE 02 000d    M$NAME 02 0004
+     M$OPT 02 0011  M$PARITY 02 0008    M$PDEV 02 000b    M$PORT 02 000e
+    M$REVS 02 0007    M$SIZE 02 0002    M$TYPE 02 0006  MAPPEDIO 02 0000
+    MAXMEM 02 0009  MD$ESIZE 02 0008   MD$LINK 02 0006  MD$MBSIZ 02 0002
+  MD$MPDAT 02 0000   MD$MPTR 02 0004    MINSEC 01 0010  MODBLOCK 00 0002
+    MODNAT 00 0020   MODPROT 00 0040   MONTYPE 02 0025  MOUSEINF 02 0026
+  MOVEBLKS 00 0005  MPI.SLCT 01 ff7f  MPI.SLOT 01 0003     MULTI 00 0030
+      NAME 02 000d  NEFIOSIZ 00 000c  NEGATIVE 00 0008   NOS9MAJ 00 0000
+   NOS9MIN 00 0001   NOS9VER 00 0001    NOSWAP 02 047d    NOTRAM 00 0080
+  NUMPATHS 00 0010   OBJ6309 00 0007     OBJCT 00 0001    ONEMHZ 00 0001
+  OPENFAIL 02 0274   OPENSRC 02 024d    OPTBUF 02 0037    OPTCNT 00 001a
+     OS9.D 01 0001  OS9MAJOR 00 0000  OS9MINOR 00 0001   OS9VRSN 00 0001
+   OSLEVEL 02 0017   OSMAJOR 02 0019   OSMINOR 02 001a    OSNAME 02 001d
+     OSVER 02 0018     P$AGE 02 000b   P$ALARM 02 00c3     P$CID 02 0003
+  P$DATBEG 02 00bd  P$DATIMG 02 0040  P$DEADLK 02 001e     P$DIO 02 0020
+  P$FCALLS 02 00b5  P$ICALLS 02 00b9      P$ID 02 0000    P$IOQN 02 0010
+    P$IOQP 02 000f   P$LINKS 02 0080     P$NIO 02 00a0  P$PAGCNT 02 0007
+    P$PATH 02 0030     P$PID 02 0001  P$PMODUL 02 0011   P$PRIOR 02 000a
+   P$QUEUE 02 000d    P$SELP 02 00ac     P$SID 02 0002  P$SIGDAT 02 001c
+  P$SIGNAL 02 0019  P$SIGVEC 02 001a    P$SIZE 02 0200      P$SP 02 0004
+   P$STACK 02 0200   P$STATE 02 000c  P$STICKS 02 00b1     P$SWI 02 0013
+    P$SWI2 02 0015    P$SWI3 02 0017    P$TASK 02 0006  P$TIMBEG 02 00c0
+    P$USER 02 0008  P$UTICKS 02 00ad    PALADR 00 ffb0   PAREVEN 00 0060
+   PARMARK 00 00a0   PARMASK 00 00e0   PARMPTR 02 0002    PARMSZ 00 0100
+   PARNONE 00 0000    PARODD 00 0020   PARSEOK 02 0500  PARSPACE 00 00e0
+     PCODE 00 0003    PD.ALF 02 0025    PD.ATT 02 0033    PD.BAU 02 0035
+    PD.BSE 02 0032    PD.BSO 02 0022    PD.BSP 02 0029    PD.BUF 02 0008
+    PD.CNT 02 0002     PD.CP 02 000b    PD.CPR 02 0005    PD.CYL 02 0025
+    PD.D2P 02 0036    PD.DCP 02 003a    PD.DEL 02 002a    PD.DEV 02 0003
+    PD.DFD 02 0037    PD.DLO 02 0023    PD.DNS 02 0024    PD.DRV 02 0021
+    PD.DSK 02 001c    PD.DTB 02 001e    PD.DTP 02 0020    PD.DUP 02 002e
+    PD.DV2 02 000a    PD.DVT 02 003e    PD.EKO 02 0024    PD.EOF 02 002c
+    PD.EOR 02 002b    PD.ERR 02 003a  PD.EXTEN 02 0030     PD.FD 02 0034
+    PD.FST 02 000a    PD.ILV 02 002d    PD.INT 02 0030    PD.MAX 02 000d
+    PD.MIN 02 000f    PD.MOD 02 0001    PD.NUL 02 0026    PD.OPT 02 0020
+    PD.OVF 02 0033    PD.PAG 02 0028    PD.PAR 02 0034    PD.PAU 02 0027
+     PD.PD 02 0000    PD.PLP 02 003d    PD.PSC 02 002f    PD.PST 02 003f
+    PD.QUT 02 0031    PD.RAW 02 000c    PD.RGS 02 0006    PD.RPR 02 002d
+    PD.SAS 02 002e    PD.SBL 02 0013    PD.SBP 02 0016    PD.SCT 02 0029
+    PD.SID 02 0027    PD.SIZ 02 000f    PD.SMF 02 000a    PD.SSZ 02 0019
+    PD.STM 02 0012  PD.STOFF 02 0032    PD.STP 02 0022    PD.STS 02 0010
+    PD.T0S 02 002b    PD.TBL 02 003b    PD.TFM 02 002f    PD.TYP 02 0023
+    PD.UPC 02 0021    PD.VFY 02 0028   PD.XOFF 02 0039    PD.XON 02 0038
+    PDELIM 00 002f      PDIR 00 002e    PDSIZE 02 0040  PE.CONFL 02 0005
+  PE.FILNM 02 0020  PE.HILCK 02 000c   PE.LOCK 02 0007  PE.LOLCK 02 0008
+  PE.NXFIL 02 0003  PE.OWNER 02 0014  PE.PDPTR 02 0001     PE.PE 02 0000
+  PE.PRIOR 02 0016    PE.REQ 02 0015  PE.SIGID 02 0018  PE.SIGSG 02 0017
+  PE.TMOUT 02 0012   PE.WAIT 02 0010    PENTIR 00 0040    PEXEC. 00 0020
+  PIA0BASE 00 ff00  PIA1BASE 00 ff20   PLINCMP 02 005a  PLISTERR 02 03ca
+    PLUGIT 02 0208   PLUGIT2 02 020a   POLLCNT 02 000c    POLSIZ 02 000b
+    PREAD. 00 0008     PRGRM 00 0010  PRINTERR 02 0403  PROC6309 00 0002
+  PROC6809 00 0000  PROTFLAG 02 0016   PST.DCD 00 0001    PWRIT. 00 0010
+  PWRLNFRQ 01 0002    Q$FLIP 02 0002     Q$MAP 02 0009    Q$MASK 02 0003
+    Q$POLL 02 0000    Q$PRTY 02 0008    Q$SERV 02 0004    Q$STAT 02 0006
+     QUIET 02 000e       R$A 00 0001       R$B 00 0002      R$CC 00 0000
+       R$D 00 0001      R$DP 00 0003      R$PC 00 000a    R$SIZE 00 000c
+       R$U 00 0008       R$X 00 0004       R$Y 00 0006  RAMCHECK 00 0001
+  RAMCOUNT 00 0001  RAMINUSE 00 0001     RBF.D 01 0001   RCDLOCK 00 0001
+  RDBUFPTR 02 0000     READ. 00 0001     REENT 00 0080       REV 01 0000
+  REVSMASK 00 000f   REWRITE 02 0010  RIGHTBIT 00 0040  ROMBLOCK 00 003f
+  ROMCHECK 00 0001  ROMCOUNT 00 0001   S$ABORT 02 0002   S$ALARM 02 0005
+     S$HUP 02 0004  S$INTRPT 02 0003    S$KILL 02 0000    S$WAKE 02 0001
+  S$WINDOW 02 0004     SBRTN 00 0020     SCF.D 01 0001    SHARE. 00 0040
+  SHELLSUB 00 0050  SHIFTBIT 00 0001  SHOWHELP 02 0432  SHUTDOWN 02 03d2
+      SIGN 00 0080    SINBUF 00 0002    SINGLE 02 000f      SIZE 02 2357
+  SKIPFILE 02 04fe  SKIPNSPC 02 04d4  SKIPSPCS 02 04c7   SNDERR1 02 058a
+  SPACEBIT 00 0080    SPCDSH 02 00ec   SPCDSHL 00 0003   SRCATTR 02 0022
+    SRCCNT 02 0012  SRCFLSIZ 02 0009  SRCFNAME 02 0016  SRCHFILE 02 04f6
+   SRCMODE 02 0013   SRCPATH 02 0004   SRCPMPT 02 0012  SRCPMPTL 00 0021
+  SS.AAGBF 02 0080  SS.ALFAS 02 001c  SS.ANPAL 02 009a   SS.ARAM 00 00ca
+  SS.ASCRN 02 008b   SS.ATTR 02 001c  SS.BLKRD 02 0014  SS.BLKWR 02 0015
+  SS.BREAK 02 001d  SS.CDREL 02 009b  SS.CDSIG 02 009a  SS.CDSTA 02 0099
+  SS.CLOSE 02 002a  SS.COMST 02 0028  SS.CURSR 02 0025   SS.DCMD 02 000d
+  SS.DEVNM 02 000e  SS.DFPAL 02 0097 SS.DIRENT 02 0020   SS.DRAM 00 00cb
+  SS.DREAD 02 0080  SS.DRVCH 02 0086  SS.DSCRN 02 008c  SS.DSIZE 02 0026
+  SS.DSTAT 02 0012  SS.DWRIT 02 0080    SS.ECC 02 00b0   SS.ELOG 02 0019
+    SS.EOF 02 0006  SS.FBRGS 02 0096   SS.FCLR 00 0081     SS.FD 02 000f
+  SS.FDINF 00 0020   SS.FEED 02 0009   SS.FILL 02 00a0  SS.FNDBF 02 009b
+    SS.FRZ 02 000a  SS.FSCRN 02 008d   SS.FSET 00 00c7   SS.FSIG 02 002c
+    SS.GIP 02 0094   SS.GIP2 02 0099   SS.HIST 02 00a1  SS.HNGUP 02 002b
+    SS.JOY 02 0013   SS.KCLR 00 00c9   SS.KSET 00 00c8  SS.KYSNS 02 0027
+   SS.LINK 02 0007   SS.LOCK 02 0011  SS.MNSEL 02 0087   SS.MOFF 02 0082
+  SS.MONTR 02 0092  SS.MOTIM 02 0083  SS.MOUNT 02 0082  SS.MOUSE 02 0089
+  SS.MPGPB 02 0084  SS.MSSIG 02 008a   SS.OPEN 02 0029    SS.OPT 02 0000
+  SS.PALET 02 0091    SS.POS 02 0005  SS.PSCRN 02 008e  SS.RDNET 02 0083
+  SS.READY 02 0001  SS.RELEA 02 001b  SS.RESET 02 0003  SS.RETEN 02 0016
+    SS.RFM 02 0018  SS.RSBIT 02 001e   SS.SBAR 02 0088  SS.SCINF 02 008f
+  SS.SCSIZ 02 0026  SS.SCTYP 02 0093   SS.SDRD 02 0084  SS.SDWRT 02 0084
+  SS.SETMF 02 0024   SS.SIZE 02 0002  SS.SLEEP 02 0085  SS.SLGBF 02 0081
+  SS.SLOTS 02 0085    SS.SPT 02 000b    SS.SQD 02 000c   SS.SSIG 02 001a
+  SS.TICKS 02 0010   SS.TONE 02 0098  SS.ULINK 02 0008  SS.UMBAR 02 0095
+  SS.UNFRZ 02 0081SS.VARSECT 02 0012   SS.VCTR 00 0080   SS.VSIG 00 0081
+    SS.WFM 02 0017  SS.WNSET 02 0086   SS.WTRK 02 0004   STACKSZ 00 0080
+     START 02 00ef    STDSTR 02 0012     STOP1 00 0000     STOP2 00 0010
+  STP.12MS 00 0002  STP.20MS 00 0001  STP.30MS 00 0000   STP.6MS 00 0003
+    STRCPY 02 04aa    STRLEN 02 048f  STRLENEX 02 04a6  STRLENLP 02 0494
+   SUSPEND 00 0008   SWAPDSK 02 0440  SYSSTATE 00 0080    SYSSTR 02 0010
+   SYSTASK 00 0000     SYSTM 00 00c0    TIMOUT 00 0020  TIMSLEEP 00 0040
+  TKPERSEC 01 003c   TOOMANY 02 0086      TRUE 00 0001    TWOMHZ 00 0002
+  TWOSOVFL 00 0002      TYLG 01 0011   TYP.256 00 0000     TYP.3 00 0001
+     TYP.5 00 0000   TYP.512 00 0004   TYP.CCF 00 0020   TYP.FLP 00 0000
+  TYP.HARD 00 0080  TYP.NCCF 00 0000   TYP.NSF 00 0040   TYP.SBO 00 0002
+   TYP.SOF 00 0000  TYPEMASK 00 00f0 TYPH.1024 00 0002 TYPH.2048 00 0003
+  TYPH.256 00 0000  TYPH.512 00 0001 TYPH.DRSV 00 000c  TYPH.DSQ 00 0010
+  TYPH.SSM 00 0003  UNLIMITD 00 0002  UNLOCKED 00 0000     UPBIT 00 0008
+    UPDAT. 00 0003    V$DESC 02 0004    V$DRIV 02 0000  V$DRIVEX 02 0009
+    V$FMGR 02 0006  V$FMGREX 02 000b    V$STAT 02 0002    V$USRS 02 0008
+  V.BMAPSZ 02 001c     V.BMB 02 0017    V.BUSY 02 0004    V.DEV2 02 0009
+  V.DISKID 02 001a     V.ERR 02 000e  V.FILEHD 02 0018    V.INTR 02 000b
+   V.KANJI 02 0011    V.KBUF 02 0012    V.LINE 02 0007    V.LPRC 02 0003
+  V.MAPSCT 02 001d  V.MODADR 02 0014    V.NDRV 02 0006    V.PAGE 02 0000
+    V.PAUS 02 0008    V.PCHR 02 000d   V.PDLHD 02 0016    V.PORT 02 0001
+    V.QUIT 02 000c  V.RESBIT 02 001e     V.RSV 02 0018     V.SCF 02 001d
+  V.SCOFST 02 0020  V.SCTKOF 02 001f  V.TKOFST 02 0021    V.TRAK 02 0015
+    V.TYPE 02 0006    V.USER 02 0006    V.WAKE 02 0005    V.XOFF 02 0010
+     V.XON 02 000f    VD.OFS 02 0061    VD.STP 02 0060    VFY000 02 055d
+    VFY010 02 0568    VFY020 02 0577   VFYBUFF 02 00d7    VI.CNT 02 0000
+  VI.IFLAG 00 0001   VI.PKSZ 02 0005    VI.RST 02 0002   VI.STAT 02 0004
+    VIDRAM 00 0004      VOPT 02 0015     WDEST 02 0057  WFILELEN 02 001c
+  WFILEPTR 02 001a      WOPT 02 0014     WORD7 00 0020     WORD8 00 0000
+    WRITE. 00 0002  WRITELSB 02 0025  WRITEMSB 02 0023  WRITSOUT 02 03c4
+    WRLINE 02 0436  WRNBYTES 02 043a      ZERO 00 0004

@@ -1,0 +1,4 @@
+053b21e0a11ef5799c1ea3cefc374763add80617
+Shinonome 16 dot fonts (Public Domain, see LICENSE), from https://github.com/code4fukui/shinonome-font
+(a mirror of the /efont/ archive): 16/latin1/font_src.bit and 16/hankaku/font_src_diff.bit, unchanged.
+16/kanjic/font_src.bit (JIS X 0208 16x16, gothic) as vendor/shinonome/kanji-16.bit, unchanged.
