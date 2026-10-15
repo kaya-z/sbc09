@@ -41,7 +41,7 @@ C 言語で書かれた MC6809 シミュレータです。Debian 12 (gcc 12) で
   アセンブラ版 (約 2KB) と、他の CPU への移植用の C 版があります。
 * **サーバ**: TTY、DISK、FS (FAT16、8.3 名)、PM (プロセス管理) が、それぞれ独立したタスクとして動きます。
 * **アプリ**: シェル、`ls` `cat` `cp` `mv` `rm` `mkdir` `date` `df` `ps` `hd` `wc` `stty` など、**日本語ワープロ `jwp`** (SKK 変換、辞書はディスク上)、
-  Dhrystone (`dhry`、約 234 Dhrystones/s)。
+  Dhrystone (`dhry`、約 234 Dhrystones/s)、`more`、`grep` (日本語の `.` に対応した小さな正規表現)、ライフゲーム `life`。
 * **ドキュメント**: 設計書・仕様書・マニュアル → [mk09/docs/](mk09/docs/)
 
 ```sh

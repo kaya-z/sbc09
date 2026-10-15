@@ -103,7 +103,7 @@ $(eval $(call SYSMOD,pm,PM,C8))
 SYSMODS := kernel tty disk fs pm
 
 # ---- programs (MX executables): apps/NAME.c -> build/NAME.mx ----
-APPS      := sh ls cat echo stty cp mv rm mkdir date df ps hd wc spin stk fstest faults ipcbench dhry jwp
+APPS      := sh ls cat echo stty cp mv rm mkdir date df ps hd wc spin stk fstest faults ipcbench dhry more grep life jwp
 BASE_sh   := $(SH_BASE)
 STACK_sh  := 640
 STACK_jwp := 1200

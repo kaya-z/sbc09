@@ -90,6 +90,30 @@ check('Dhrystone checks OK' in out and 'WRONG' not in out, 'dhry: the final valu
 m = re.search(r'Dhrystones per second: (\d+)', out)
 check(m is not None and 100 < int(m.group(1)) < 1000, 'dhry: reports a plausible number of Dhrystones per second', m.group(0) if m else out[-300:])
 
+# ---- grep, more, life
+out, rc = run(disk, BOOT + sh(
+    'echo apple pie >/g1.txt', 'echo banana split >>/g1.txt', 'echo Apple tart >>/g1.txt',
+    'grep apple /g1.txt', 'grep -i -n apple /g1.txt', 'grep -v an /g1.txt', 'grep -c a /g1.txt',
+    'grep ^ban /g1.txt', 'grep a.*t$ /g1.txt', 'grep zzz /g1.txt', 'grep apple /g1.txt /nofile',
+    'grep -c マ.クロ /doc/guide.txt', prompt=P) + OFF)
+check(re.search(r'grep apple /g1.txt\s+apple pie\s+/> ', out) is not None, 'grep finds a fixed string', out[-1500:])
+check('1:apple pie' in out and '3:Apple tart' in out, 'grep -i -n ignores the case and numbers the lines')
+check(re.search(r'grep -v an /g1.txt\s+apple pie\s+Apple tart\s+/> ', out) is not None, 'grep -v prints the lines that do not match')
+check(re.search(r'grep -c a /g1.txt\s+3\s', out) is not None, 'grep -c counts the matching lines')
+check(re.search(r'grep \^ban /g1.txt\s+banana split\s+/> ', out) is not None, 'grep ^ anchors at the start of the line')
+check(re.search(r'banana split\s+Apple tart\s+/> grep zzz', out) is not None, 'grep with . * and $')
+check(re.search(r'grep zzz /g1.txt\s+/> ', out) is not None, 'grep prints nothing when nothing matches')
+check('/g1.txt:apple pie' in out and 'grep: /nofile: not found' in out, 'grep with several files prefixes the file name and reports a missing file')
+check(re.search(r'マ.クロ /doc/guide.txt\s+[1-9]', out) is not None, 'grep: . matches a whole Japanese character')
+
+steps = BOOT + ['send "stty rows=10\\r"', 'expect "%s"' % P, 'send "more /doc/guide.txt\\r"', 'expect "-- more --"', 'send " "',
+                'expect "-- more --"', 'send "\\r"', 'expect "-- more --"', 'send "q"', 'expect "%s"' % P,
+                'send "life -s 7 -d 0 -n 6\\r"', 'expect "gen 6"', 'sleep 300', 'send "stty\\r"', 'expect "echo"'] + OFF
+out, rc = run(disk, steps)
+check(out.count('-- more --') >= 3 and '\x1b[' not in out.split('more /doc/guide.txt')[1].split('life')[0], 'more stops after a screen, goes on with Space and Enter and ends with q', out[-800:])
+check('gen 6  alive' in out and '\x1b[2J' in out, 'life runs 6 generations on the screen and shows the status line')
+check('utf8 cooked' in out.split('gen 6')[1], 'life and more give the console its mode back')
+
 # ---- file system operations
 steps = BOOT + sh(
     'echo hello world >/t1.txt', 'cat /t1.txt', 'echo second >>/t1.txt', 'cat < /t1.txt',
