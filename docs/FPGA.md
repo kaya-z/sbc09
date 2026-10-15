@@ -71,6 +71,8 @@ sudo dd if=os9/WORK.dsk of=/dev/sdX bs=512 seek=262144 conv=fsync
 
 ## OS-9 をカードにだけ置く (FUZIX、MK09 と同じビットストリーム)
 
+(OS-9 の使い方は [OS9_MANUAL.md](OS9_MANUAL.md) にあります。)
+
 **`fuzix` のビットストリームのまま、OS-9 Level 1 が動きます** (2026-10-16)。ROM は FUZIX、MK09 と同じ 256 バイトのブート ROM で、カーネルを含めて、OS-9 はすべてカードにあります。
 カードを `OS9.dsk` のものに替えて電源を入れるだけで OS-9 が、FUZIX のカードなら FUZIX が、MK09 のカードなら MK09 が起動します (フラッシュの書き直しは要りません)。
 

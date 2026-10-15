@@ -247,7 +247,7 @@ fpga/tn9k/  Tang Nano 9K 用の FPGA 設計: rtl/ (SoC、UART、タイマ、SD �
 fuzix/      FUZIX の移植: platform-sim09 (カーネルのプラットフォーム部)、bootrom.s、mkdisk.py、build.sh、images/ (ブート ROM とディスクイメージ)
 tools/      build_gcc6809.sh (FUZIX 用の gcc 4.6.4 を作る)、a09 (OS-9 対応アセンブラ), make9rom, os9mod, mkskkdic.py (SKK 辞書), mkrbf.py (RBF ディスクイメージ), install_cmoc.sh ほか
 tests/      自己テスト一式
-docs/       FPGA.md FUZIX.md CPU.md KANJI.md OS9NET.md JWP.md PORTING.md (jwp の機種依存) DHRYSTONE.md
+docs/       FPGA.md FUZIX.md CPU.md KANJI.md OS9NET.md JWP.md PORTING.md (jwp の機種依存) DHRYSTONE.md OS9_MANUAL.md (OS-9 ユーザマニュアル、初心者向け)
 ```
 
 ## ライセンス
