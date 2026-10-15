@@ -77,7 +77,7 @@ sudo dd if=os9/WORK.dsk of=/dev/sdX bs=512 seek=262144 conv=fsync
 ROM を作り直さなくても、ディスクのファイルを入れ替えれば OS の構成を変えられます。
 `IOMan` と `SCF` (合計 3.8KB) を ROM に置いたのは、起動ファイルが RAM に占める分を減らして、**`jwp` が動くだけの空きメモリ**を残すためです
 (`jwp` は連続した約 174 ページの空きが要ります。`mfree` で、ROM だけの `os9` が 170 ページ、起動ファイルに全部入れると 160 ページで `jwp` は `ERROR #207`、
-`IOMan` と `SCF` を ROM に移すと 175 ページで動きます)。ROM は `$E000` から始まり、I/O のレジスタ (`$E000-$E0FF`) を避けて、最初のモジュールを `$E100` に置きます (`tools/makerom.c`)。
+`IOMan` と `SCF` を ROM に移すと 175 ページで動きます)。実機でも `mfree` が 175 ページで、`jwp` の画面が出ることを確認しました (2026-10-15)。ROM は `$E000` から始まり、I/O のレジスタ (`$E000-$E0FF`) を避けて、最初のモジュールを `$E100` に置きます (`tools/makerom.c`)。
 
 * `Boot` は `os9/level1/boot.asm` (MIT)。LSN 0 の `DD.BT` と `DD.BSZ` から起動ファイルを探して読む部分は NitrOS-9 の `boot_common.asm` をそのまま使い、
   ディスクポート (`$E040`: PDisk と同じ DMA 方式) の読み出しだけを書きました。シミュレータでも同じ ROM で動きます
