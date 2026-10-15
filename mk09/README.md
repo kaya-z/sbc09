@@ -41,5 +41,6 @@ MK09 の著作者は **YUKARI Semiconductor Devices** です (Copyright (c) 2026
 * ビルドしたプログラム (`*.mx`、ブートイメージ) には、CMOC の実行時ライブラリ (GPL v3、Pierre Sarrazin) が入ります。配布するときは GPL v3 の条件に従ってください。
 * `apps/jwp/` は `os9/jwp/` (MIT) からの派生です。辞書は Debian の `skkdic` の SKK-JISYO.L (GPL v2 以降) から作ります。
 * `apps/dhry.c` の手続き部分は Dhrystone 2.1 (Reinhold P. Weicker) で、原作者の著作物です。ライセンス文がないため、扱いは `../LICENSES.md` の 4.2 に従います。時間計測と出力の部分は MIT です。
+* `apps/basic/` は BASIC インタープリタで、ASCII ART (マンデルブロ集合) ベンチマークの計算を実行できるが、そのページ (haserin09.la.coocan.jp) のプログラムのファイルは、このリポジトリには入れていない (`disk/bas/mandel.bas` は仕様から自分で書いたもの)。
 * `boot/bootrom.s` は `fuzix/bootrom.s` と同じ形式の ROM で、同じバイト列を作ります。
 * 全体の一覧はリポジトリの [../LICENSES.md](../LICENSES.md) と [../CREDITS.md](../CREDITS.md) (このディレクトリのファイルは、そこにはまだ載っていません)。

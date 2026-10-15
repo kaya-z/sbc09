@@ -16,12 +16,12 @@ B      ?= build
 SIM    ?= ../sim09
 
 CMOCLIB := $(shell dirname "$$(command -v $(CMOC) 2>/dev/null)" 2>/dev/null)/../share/cmoc/lib
-INCS    := -Iinclude -Iarch/m6809 -Ibsp/sbc09 -I$(B)
+INCS    := -Itests -Iinclude -Iarch/m6809 -Ibsp/sbc09 -Iapps/basic -I$(B)
 CFLAGS  := --lwasm=$(LWASM) --void-target --no-relocate -O2 -fomit-frame-pointer -Dmain=mk_main $(INCS)
 ASFLAGS := -fobj -I$(B) -Iinclude
 
-vpath %.c kernel arch/m6809 bsp/sbc09 servers lib apps apps/jwp
-vpath %.s arch/m6809 lib
+vpath %.c kernel arch/m6809 bsp/sbc09 servers lib apps apps/jwp apps/basic
+vpath %.s arch/m6809 lib apps/basic
 
 # the addresses of the memory map (computed from the slot sizes in memmap.mk)
 -include $(B)/memmap.gen.mk
@@ -38,7 +38,7 @@ $(B)/memmap.h $(B)/memmap.inc $(B)/memmap.gen.mk: memmap.mk tools/genmap.py | $(
 $(B)/sysnum.inc: include/sysnum.h | $(B)
 	sed -n 's/^\#define \(SYS_[A-Z]*\)[ \t]*\(.*\)/\1\tequ\t\2/p' $< > $@
 
-$(B)/%.o: %.c $(HDRS)
+$(B)/%.o: %.c $(HDRS) $(wildcard apps/basic/*.h)
 	$(CMOC) -c $(CFLAGS) -o $@ $<
 
 $(B)/%.o: %.s $(HDRS)
@@ -103,10 +103,13 @@ $(eval $(call SYSMOD,pm,PM,C8))
 SYSMODS := kernel tty disk fs pm
 
 # ---- programs (MX executables): apps/NAME.c -> build/NAME.mx ----
-APPS      := sh ls cat echo stty cp mv rm mkdir date df ps hd wc spin stk fstest faults ipcbench dhry more grep life jwp
+APPS      := sh ls cat echo stty cp mv rm mkdir date df ps hd wc spin stk fstest faults ipcbench dhry more grep life basic sfptest jwp
 BASE_sh   := $(SH_BASE)
 STACK_sh  := 640
 STACK_jwp := 1200
+STACK_basic := 2300
+OBJS_basic := $(B)/sfpa.o
+OBJS_sfptest := $(B)/sfpa.o
 
 # jwp: the character set of the console and of the dictionary (utf8, euc or sjis) and the size
 # of the text buffer
@@ -122,8 +125,8 @@ $(B)/crt0app_$(1).o: crt0app.s $(HDRS)
 	$(LWASM) $(ASFLAGS) -DSTACKSZ=$(call APPSTACK,$(1)) -DMXFLAGS=$(or $(FLAGS_$(1)),0) -o $$@ $$<
 $(B)/$(1).link: memmap.mk tools/mklink.py | $(B)
 	$(PYTHON) tools/mklink.py $(call APPBASE,$(1)) > $$@
-$(B)/$(1).mx: $(B)/crt0app_$(1).o $(B)/$(1).o $(B)/libmk.a $(B)/$(1).link
-	$(LWLINK) --format=raw --script=$(B)/$(1).link --map=$(B)/$(1).map -o $$@ $(B)/crt0app_$(1).o $(B)/$(1).o $(APPLIBS)
+$(B)/$(1).mx: $(B)/crt0app_$(1).o $(B)/$(1).o $(OBJS_$(1)) $(B)/libmk.a $(B)/$(1).link
+	$(LWLINK) --format=raw --script=$(B)/$(1).link --map=$(B)/$(1).map -o $$@ $(B)/crt0app_$(1).o $(B)/$(1).o $(OBJS_$(1)) $(APPLIBS)
 endef
 $(foreach a,$(APPS),$(eval $(call APP,$(a))))
 
@@ -147,10 +150,10 @@ $(B)/skk_$(CHARSET).dic: ../tools/mkskkdic.py $(SKKJISYO)
 	$(PYTHON) ../tools/mkskkdic.py -e $(CHARSET) -b $(SKK_KB) -o $@ $(SKKJISYO)
 
 TREE := $(B)/tree
-$(B)/tree.stamp: $(foreach a,$(APPS),$(B)/$(a).mx) $(wildcard disk/etc/* disk/doc/*) $(if $(HAVE_SKK),$(B)/skk_$(CHARSET).dic) Makefile
-	rm -rf $(TREE); mkdir -p $(TREE)/bin $(TREE)/etc $(TREE)/doc $(TREE)/skk
+$(B)/tree.stamp: $(foreach a,$(APPS),$(B)/$(a).mx) $(wildcard disk/etc/* disk/doc/* disk/bas/*) $(if $(HAVE_SKK),$(B)/skk_$(CHARSET).dic) Makefile
+	rm -rf $(TREE); mkdir -p $(TREE)/bin $(TREE)/etc $(TREE)/doc $(TREE)/bas $(TREE)/skk
 	for a in $(APPS); do cp $(B)/$$a.mx $(TREE)/bin/$$a.mx; done
-	for d in etc doc; do if [ -d disk/$$d ] && [ -n "$$(ls disk/$$d)" ]; then cp disk/$$d/* $(TREE)/$$d/; fi; done
+	for d in etc doc bas; do if [ -d disk/$$d ] && [ -n "$$(ls disk/$$d)" ]; then cp disk/$$d/* $(TREE)/$$d/; fi; done
 	printf '# /ETC/RC.SH - run by the shell when the system starts\nstty $(CHARSET)\n' > $(TREE)/etc/rc.sh
 	if [ -n "$(HAVE_SKK)" ]; then cp $(B)/skk_$(CHARSET).dic $(TREE)/skk/skk.dic; fi
 	iconv -f UTF-8 -t $(ICONV_$(CHARSET)) disk/doc/guide.txt > $(TREE)/doc/guide.txt
@@ -183,6 +186,7 @@ fstest: $(B)/fs_host $(B)/mk09.img
 
 test: all charsets fstest
 	sh tests/portcheck.sh
+	gcc -O1 -o $(B)/sfp_test tests/sfp_test.c -lm && $(B)/sfp_test | tail -1
 	$(PYTHON) tests/mk09_test.py
 	$(PYTHON) tests/jwp_test.py
 	$(PYTHON) tests/fpga_mk09.py

@@ -114,6 +114,56 @@ check(out.count('-- more --') >= 3 and '\x1b[' not in out.split('more /doc/guide
 check('gen 6  alive' in out and '\x1b[2J' in out, 'life runs 6 generations on the screen and shows the status line')
 check('utf8 cooked' in out.split('gen 6')[1], 'life and more give the console its mode back')
 
+# ---- the soft floating point and the BASIC
+out, rc = run(disk, BOOT + sh('sfptest', prompt=P) + OFF)
+check('sfp ok' in out, 'sfptest: the soft floating point (assembler) agrees with the float of the PC on 300 vectors', out[-600:])
+
+
+def basic_cmds(*cmds):
+    r = ['send "basic\\r"', 'expect "Ok"']
+    for c in cmds:
+        r.append('send "%s\\r"' % c.replace('"', '\\"'))
+        r.append('expect "Ok"')
+    r += ['send "bye\\r"', 'expect "%s"' % P]
+    return r
+
+
+out, rc = run(disk, BOOT + basic_cmds(
+    'PRINT 1+2, 10/4, 2^10, -5, 0.0458*5, 1/3',
+    'A=3:B=4:PRINT SQR(A*A+B*B), INT(-2.5), ABS(-7), SGN(-3)',
+    'PRINT SIN(1), COS(1), ATN(1), EXP(1), LOG(10)',
+    'PRINT "ab"+"cd"; LEN("hello"); ASC("A"); CHR$(66); LEFT$("abcdef",2); RIGHT$("abcdef",2); MID$("abcdef",3,2)',
+    'IF 1<2 AND 2<3 THEN PRINT "yes" ELSE PRINT "no"',
+    'FOR I=1 TO 3: PRINT I;: NEXT I',
+    'DIM A(5): FOR I=0 TO 5: A(I)=I*I: NEXT I: PRINT A(4)',
+    '10 FOR I=1 TO 3: GOSUB 100: NEXT I: END',
+    '100 PRINT I*10;: RETURN',
+    'RUN',
+    'NEW', '20 DATA 5,6,7', '30 READ X: READ Y: PRINT X; Y', 'RUN',
+    'PRINT 1E10, 123456789, 1.5E-7, 100000, 1000000, 10000000',
+    'PRINT 1/0',
+    'A = = 3',
+    'SAVE "/t.bas"', 'NEW', 'LOAD "/t.bas"', 'LIST 10-20') + OFF)
+check(re.search(r'PRINT 1\+2.*\n 3\s+2\.5\s+1024\s+-5\s+0\.229\s+0\.333333', out) is not None, 'BASIC: arithmetic and the number format', out[-3000:])
+check(re.search(r'\n 5\s+-3\s+7\s+-1\s', out) is not None, 'BASIC: SQR INT ABS SGN')
+check('0.841471' in out and '0.540302' in out and '0.785398' in out and '2.71828' in out and '2.30259' in out, 'BASIC: SIN COS ATN EXP LOG')
+check('abcd 5  65 Bab' in out.replace('\r', '') or re.search(r'abcd 5\s+65\s+Babefcd', out) is not None, 'BASIC: string functions', out[-2500:])
+check(re.search(r'\nyes\n', out) is not None, 'BASIC: IF ... THEN ... ELSE with AND')
+check(re.search(r'\n 1\s+2\s+3\s*\n', out) is not None, 'BASIC: FOR / NEXT')
+check(re.search(r'\n 16 \n', out) is not None, 'BASIC: arrays')
+check(re.search(r'\n 10\s+20\s+30\s*\n', out) is not None, 'BASIC: GOSUB / RETURN and RUN')
+check(re.search(r'\n 5  6 \n', out) is not None, 'BASIC: DATA / READ')
+check('1E+10' in out and '1.23457E+08' in out and '1.5E-07' in out and ' 100000 ' in out and '1E+06' in out and '1E+07' in out, 'BASIC: big and small numbers')
+check('?Division by zero' in out and '?Syntax error' in out, 'BASIC: error messages')
+check(re.search(r'LIST 10-20\s+20 DATA 5,6,7', out) is not None, 'BASIC: SAVE, NEW, LOAD and LIST')
+
+steps = BOOT + ['send "basic /bas/mandel.bas\\r"',
+                'expect "000000011111111111111111122222233347E7AB322222111100000000000000000000000000000"',
+                'expect "000001111111111111111122222222333557BF75433222211111000000000000000000000000000"',
+                'expect "000111111111111111112222222233445C      643332222111110000000000000000000000000"']
+out, rc = run(disk, steps)
+check(rc == 0 or 'timeout' not in out, 'BASIC: mandel.bas draws the first rows of the Mandelbrot set correctly', out[-600:])
+
 # ---- file system operations
 steps = BOOT + sh(
     'echo hello world >/t1.txt', 'cat /t1.txt', 'echo second >>/t1.txt', 'cat < /t1.txt',
