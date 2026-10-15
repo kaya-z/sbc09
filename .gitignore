@@ -3,3 +3,7 @@ build/
 build_*/
 __pycache__/
 *.pyc
+
+# SKK dictionary disks (built from SKK-JISYO.L, GPL: not distributed; make skk)
+os9/skk/SKK_*.dsk
+os9/skk/skk_*.dic

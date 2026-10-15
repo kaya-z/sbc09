@@ -91,6 +91,30 @@ ROM を作り直さなくても、ディスクのファイルを入れ替えれ�
 * **実機の Tang Nano 9K でも動きます** (2026-10-15。カードに `OS9.dsk` を書いて、電源を入れるだけで `OS9:` まで起動し、`chx /d0/cmds` のあと `mdir` と `dir /d0` を確認。HDMI の画面にも出ます)。
 * `OS9.dsk` の `/d0/cmds` には、標準のコマンドに加えて **`dhry` (Dhrystone) と `jwp`** を入れてあります (FPGA 版には `/v0` がないため)。`chx /d0/cmds` のあと `dhry -t 10` などで動きます。他のコマンドを入れるには、`sim09 -v os9/level1` で `copy /v0/cmds/名前 /d0/cmds/名前` と `attr /d0/cmds/名前 e pe r pr` を実行します (そのあと `python3 tools/mkboot.py` で起動ファイルが残っていることを確かめられます)。
 
+## `jwp` と SKK 辞書 (カード起動の OS-9)
+
+`OS9.dsk` の `/d0/cmds` には `dhry` と `jwp` が入っています。`jwp` は連続した約 174 ページの空きメモリが要るので、**ROM に `IOMan` と `SCF` を持つ `os9boot`** で動かします
+(起動ファイルに全部入れた構成では `ERROR #207`。上の「OS-9 をカードから起動する」)。
+
+```
+OS9:chx /d0/cmds
+OS9:jwp memo.txt           (終了は ^Q、保存は ^S。キー入力は UART、画面は LCD と UART の両方)
+```
+
+**SKK の辞書をドライブ 1 (`/d1`) に入れる** (2026-10-15 に実機で確認):
+
+```sh
+make skk                                    # os9/skk/SKK_utf8.dsk (約 5.7MB)。SKK-JISYO.L が要る (apt install skkdic)。GPL の辞書から作るので、リポジトリには入れていません
+# カードのドライブ 1 の位置 (512 バイトのブロック 262144 = 128MB) へ。/dev/sdX は必ずカードのデバイスを確かめてから!
+sudo dd if=os9/skk/SKK_utf8.dsk of=/dev/sdX bs=512 seek=262144 conv=fsync
+```
+
+ドライブ 0 (`OS9.dsk`、先頭の 180KB) とは重なりません。`dir /d1` で `skk.dic` が見えれば、辞書は読めています。ドライブ 1 に `WORK.dsk` を置いていたときは、辞書で置き換わります
+(同じ位置なので、どちらか一方です)。端末の文字コードが EUC-JP / Shift_JIS のときは、`SKK_euc.dsk` / `SKK_sjis.dsk` を使います。
+
+`jwp` の中で `^J` (かな入力モード)、`Kanji` と打って `Space` で変換、`Enter` で確定です。実機で、`Kanji` + `Space` → 「漢字」、`^S` で保存、`list` で UTF-8 の「漢字」を確認しました
+(辞書はカードから、必要な部分だけを探します)。使い方の全体は [JWP.md](JWP.md)。
+
 ## 使い方
 
 * **コンソール**: ボードの USB を PC につなぐと USB シリアルが 2 つ見えます (BL702)。2 つめ (多くは `/dev/ttyUSB1` か
