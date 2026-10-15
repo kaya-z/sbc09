@@ -22,8 +22,8 @@ MIT の著作権者の表記 `sim09 contributors` は仮のものです。実際
 |---|---|---|
 | `src/*.c` `src/*.h` (`os9names.h` を除く) | シミュレータ (CPU コア、マシン、コンソール、ネットワーク、VRBF、モニタ、逆アセンブラ) | sbc09 の `v09s.c` は**命令仕様の参照**、MAME の `m6809.cpp` は**クロック/サイクル/状態の考え方**を参考にした独自の実装で、両者のコードは複製していません。参考にしたことは各ファイルの先頭と `CREDITS.md` に書いてあります。`diff_v09s.c` が `v09s.c` と挙動を突き合わせるのも、複製ではなく検証です |
 | `tests/*.py` `tests/*.c` `tests/crosscheck/crosscheck.sh` | テスト | `tests/diff_v09s.c` は、実行時に外部の `v09s.c` を `#include` します (そのファイルはリポジトリに入っていません)。そのテストのバイナリは GPL v2 の `v09s.c` を含むため、配布する場合は GPL v2 になります |
-| `tools/mkskkdic.py` `mkrbf.py` `mkboot.py` `dhry_bench.py` `install_cmoc.sh` `fix_org.py` `gen_os9names.py` `trace_cmp.sh` | ツール | `mkskkdic.py` が**生成する辞書**は入力の SKK 辞書 (GPL v2 以降) の派生物です |
-| `os9/jwp/jwp.c` `skk.c` `genmsgs.py` `Makefile` と、生成される `msgs.h` | ワードプロセッサ `jwp` と SKK 入力 | SKK は入力方式に従った独自実装で、SKK のコードは使っていません。**ビルド済みのモジュール `jwp` `jwp-l2` は GPL-3.0 です** (3 章) |
+| `tools/mkskkdic.py` `mkrbf.py` `mkboot.py` `os9edition.py` `dhry_bench.py` `install_cmoc.sh` `fix_org.py` `gen_os9names.py` `trace_cmp.sh` | ツール | `mkskkdic.py` が**生成する辞書**は入力の SKK 辞書 (GPL v2 以降) の派生物です |
+| `os9/jwp/jwp.c` `skk.c` `genmsgs.py` `Makefile` と、生成される `msgs.h` | ワードプロセッサ `jwp` と SKK 入力 (**著作権者は YUKARI Semiconductor Devices**、各ファイルの先頭に Copyright 行) | SKK は入力方式に従った独自実装で、SKK のコードは使っていません。**ビルド済みのモジュール `jwp` `jwp-l2` は GPL-3.0 です** (3 章) |
 | `os9/dhry/Makefile`、`dhry.c` の時間計測と OS-9 呼び出しの部分 | Dhrystone の実行部分 | Dhrystone 本体は原作者の著作物で、ライセンス文がない (4.2) |
 | `os9/skk/Makefile` | 辞書ディスクの作成 | 辞書は同梱していません (手元の `skkdic` から生成) |
 | `os9/misc/shutdown.asm` `os9/net/nc.asm` `os9/kanji/kmode.asm` と、`os9/kanji` `os9/net` `os9/misc` の `defsfile` | OS-9 のコマンド | NitrOS-9 の定義ファイル (`os9/nitros9-code/defs`) を `use` してアセンブルします (定義ファイルの内容は埋め込んでいません) |

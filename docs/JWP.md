@@ -1,5 +1,9 @@
 # jwp — OS-9 用 日本語ワードプロセッサ
 
+**バージョン 1.0** / Copyright (c) 2026 YUKARI Semiconductor Devices (MIT。ビルド済みのモジュールは CMOC の実行時ライブラリを含むので GPL v3、LICENSES.md)。
+バージョンは、中からは `jwp -v`、外からは OS-9 の `ident /d0/cmds/jwp` の `Edition: $0A #10` (= 1.0)で見られます (モジュールの中に文字列としても入っています)。
+バージョンを上げるときは `os9/jwp/jwp.c` の `JWP_VERSION` を変えて `make -C os9/jwp` (edition はそこから決まります。CMOC のモジュールには edition の欄がないので、`tools/os9edition.py` が足します)。
+
 `jwp` は OS-9 (NitrOS-9) の上で動く**全画面の日本語ワードプロセッサ**です。シミュレータ内の 6809 で実行される
 OS-9 コマンドで、Level 1 / Level 2 のどちらでも動きます (C で書き、CMOC でコンパイルしたもの)。
 
@@ -29,6 +33,7 @@ OS9:jwp -w 60 -e 36 手紙.txt     窓幅 60 桁、整形出力の幅 36 桁
 | `-w 桁` | 窓の幅 (20..100、既定 80) |
 | `-h 行` | 窓の高さ (6..50、既定 24。下 2 行はステータス行とメッセージ行) |
 | `-e 桁` | 整形出力 (`^X`) の幅 (10..100、既定 72) |
+| `-v` | バージョンと著作権を表示して終了 (`jwp 1.0 (c) 2026 YUKARI Semiconductor Devices`) |
 | `-d ファイル` | SKK 辞書 (既定 `/d1/skk.dic`) |
 | `-u ファイル` | SKK のユーザ辞書 (既定 `/d1/skkuser.dic`) |
 

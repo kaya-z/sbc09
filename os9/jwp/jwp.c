@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 /*
+ * Copyright (c) 2026 YUKARI Semiconductor Devices
+ *
  * jwp - Japanese word processor for OS-9 (NitrOS-9 Level 1 / Level 2)
  *
  * Part of the MC6809/OS-9 simulator (see README, docs/JWP.md).
@@ -9,7 +11,8 @@
  * Written in C for CMOC (--os9); runs on any NitrOS-9 6809 system, the
  * simulator being the intended host.
  *
- * Usage: jwp [-w cols] [-h rows] [-e width] [file]
+ * Usage: jwp [-v] [-w cols] [-h rows] [-e width] [-d dict] [-u userdict] [file]
+ *        jwp -v prints the version and the copyright and exits
  *
  * A full screen editor with soft word wrap that understands the multibyte
  * Japanese encodings of the console (UTF-8, EUC-JP, Shift_JIS; taken from
@@ -29,6 +32,11 @@
  */
 #include <cmoc.h>
 #include "msgs.h"
+
+/* The version: shown by `jwp -v`, kept in the module as a string (OS-9 `ident` shows the module name and edition,
+ * `strings jwp` or a hex dump shows this line) and written in docs/JWP.md.  Raise it with every change. */
+#define JWP_VERSION   "1.0"
+static const char jwp_ident[] = "jwp " JWP_VERSION " (c) 2026 YUKARI Semiconductor Devices";
 
 #ifndef BUFSZ
 #define BUFSZ   9000       /* text buffer: what fits next to the module in a Level 1 system */
@@ -1600,6 +1608,11 @@ int main(int argc, char **argv)
 
     for (i = 1; i < argc; i++) {
         a = argv[i];
+        if (a[0] == '-' && a[1] == 'v' && !a[2]) {
+            sc_write(1, (uchar *)jwp_ident, sizeof(jwp_ident) - 1);
+            sc_write(1, (uchar *)"\r", 1);          /* OS-9 line end (printf would pull in about 1.6 KB) */
+            return 0;
+        }
         if (a[0] == '-' && (a[1] == 'd' || a[1] == 'u')) {
             const char *v = a + 2;
             if (!*v && i + 1 < argc) v = argv[++i];

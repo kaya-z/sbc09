@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
+# Copyright (c) 2026 YUKARI Semiconductor Devices
 """genmsgs.py > msgs.h : the user interface texts of jwp in UTF-8, EUC-JP and Shift_JIS
 (CP932) as C octal-escaped string literals."""
 import sys

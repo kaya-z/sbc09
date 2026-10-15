@@ -153,7 +153,7 @@ void ident(OS9_MODULE_t *mod)
 
 
 
-  tmp = buffer[i + strlen((const char *)name)];
+  tmp = buffer[INT(mod->name) + strlen((const char *)name)];   /* the byte after the name (i was changed above for programs) */
   printf("Edition    : $%02X  #%d\n", tmp, tmp);
   printf("Ty/La At/Rv: $%02X $%02x\n", mod->tyla, mod->atrv);
   printf("%s mod, ", types[(mod->tyla & TYPE_MASK) >> 4]);

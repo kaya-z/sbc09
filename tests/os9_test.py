@@ -193,6 +193,14 @@ for level in (1, 2):
         s.close()
     check(bad == 0, 'L%d clock IRQ does not corrupt user data (8 timer phases)' % level)
 
+# --- the version of jwp: jwp -v (inside) and the edition of the module (outside: OS-9's ident)
+s = Session(1)
+s.run(cmds('jwp -v', 'ident /v0/cmds/jwp'))
+t = s.text()
+check('jwp 1.0 (c) 2026 YUKARI Semiconductor Devices' in t and re.search(r'Edition:\s+\$0A\s+#10', t) is not None,
+      'jwp -v shows the version and the copyright, ident shows the edition 10', t[-400:])
+s.close()
+
 # --- Level 1 booted from the disk: os9v1boot.rom holds only the kernel, Init and the booter (os9/level1/boot.asm);
 # IOMan, the file managers, the drivers, the shell ... come from the boot file OS9Boot on OS9.dsk (tools/mkboot.py)
 s = Session(1, rom=os.path.join(ROOT, 'os9', 'os9v1boot.rom'))
