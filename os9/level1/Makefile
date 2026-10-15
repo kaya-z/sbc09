@@ -75,12 +75,13 @@ mdir : ${SRCCMD}/mdir.asm
 dir : ../kanji/dir.asm
 	$(A09) ../kanji/dir.asm -o dir $(LST)
 
-os9p1 :
+os9p1 : ${SRCDIR}/kernel/krn.asm
 	cat  ${OS9SRC}//defs/coco.d ${SRCDIR}/kernel/krn.asm > krn.asm
 	$(A09) -I ../nitros9-code/level1/modules/kernel/ krn.asm  -o os9p1 $(LST)
 
 # the kernel for the FPGA board: does not probe the I/O page at $E000 (see krn.asm); used where the RAM reaches it
-os9p1_tn9k : os9p1
+os9p1_tn9k : ${SRCDIR}/kernel/krn.asm
+	cat  ${OS9SRC}//defs/coco.d ${SRCDIR}/kernel/krn.asm > krn.asm
 	$(A09) -D TN9K -I ../nitros9-code/level1/modules/kernel/ krn.asm  -o os9p1_tn9k $(LST)
 
 os9p2 :

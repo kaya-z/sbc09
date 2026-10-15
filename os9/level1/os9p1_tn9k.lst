@@ -406,7 +406,13 @@ FFB0:                   PalAdr         EQU       $FFB0               Palette reg
 004E: 260D                       bne   L00C2                   nope, not RAM here!
 0050: EDA4                       std   ,y                      else restore org contents
 0052: 30A90100                   leax  >$0100,y                check top of next 256 block
-0056: 8CED00                     cmpx  #Bt.Start               stop short of boot track mem
+0056:                   * sim09 / sbc09 addition (a09 -D TN9K): the I/O page of the machine is at $E000: do not probe it (a write there goes to
+0056:                   * the ACIA and shows as a character), the RAM ends below it
+0056:                            IFNE  TN9K
+0056: 8CE000                     cmpx  #$E000
+0059:                            ELSE
+0059:                            cmpx  #Bt.Start               stop short of boot track mem
+0059:                            ENDC
 0059: 25DF                       bcs   ChkRAM
 005B: 3184                       leay  ,x
 005D:                   * Here, Y = end of RAM
@@ -1924,7 +1930,7 @@ FFB0:                   PalAdr         EQU       $FFB0               Palette reg
 080E:                   EOMTop          EQU     *
 080E:                   
 080E:                                   IFEQ    corsham
-080E: 02EB2C                            emod
+080E: CFFFD9                            emod
 0811:                   eom                     equ     *
 0811:                                   ENDC
 0811:                   
