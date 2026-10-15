@@ -199,8 +199,12 @@ s = Session(1, rom=os.path.join(ROOT, 'os9', 'os9v1boot.rom'))
 s.run(cmds('mdir', 'dir /d0'))
 t = s.text()
 check(all(m in t for m in ('Boot', 'IOMan', 'RBF', 'SCF', 'Pdisk', 'Shell', 'SysGo')) and 'Directory of /d0' in t,
-      'L1 boots from the boot file on OS9.dsk (the ROM has only the kernel and the booter)', t[-400:])
-check(os.path.getsize(os.path.join(ROOT, 'os9', 'os9v1boot.rom')) == 4096, 'L1 the disk boot ROM is 4 KB')
+      'L1 boots from the boot file on OS9.dsk (the ROM has the kernel, the booter, IOMan and SCF)', t[-400:])
+check(os.path.getsize(os.path.join(ROOT, 'os9', 'os9v1boot.rom')) == 8192, 'L1 the disk boot ROM is 8 KB')
+# jwp needs about 174 free pages: with the modules of the boot file in RAM it did not start (ERROR #207) until IOMan and SCF moved into the ROM
+s.run(['send "chx /d0/cmds\\r"', 'expect "OS9:"', 'send "jwp /d0/t.txt\\r"', 'sleep 3000', 'send "\\021"', 'sleep 1000'])
+t = s.text()
+check('ERROR #207' not in t and '/d0/t.txt' in t, 'L1 jwp starts with the disk boot ROM (enough free memory)', t[-300:])
 s.close()
 
 print('%d checks, %d failure(s)' % (total, fails))

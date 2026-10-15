@@ -226,6 +226,11 @@ main(int ac, char *av[])
      pos = 0xed00;
  } else {
      pos = start;
+     // a ROM that starts inside the I/O page ($E000, os9v1boot.rom): leave the I/O registers alone, the first module
+     // starts above them
+     if (pos >= IOBASE && pos < IOBASE + IOSIZE) {
+         for (; pos < IOBASE + IOSIZE; pos++) fputc(0xff, romfile);
+     }
  }
  int ofs = 0;
  struct os9module *os9p1 = 0;

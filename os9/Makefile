@@ -38,12 +38,13 @@ os9v2_sjis.rom: CS = _sjis
 os9v1.rom os9v1_euc.rom os9v1_sjis.rom: modules
 	$(MAKE9ROM) -o $@ $(L1MODS)
 
-# Level 1 booting from the disk: the ROM holds only the kernel, Init and the booter; everything else is the boot
+# Level 1 booting from the disk: the ROM (8 KB at $E000) holds the kernel, Init, the booter, IOMan and SCF (they take
+# 15 pages of RAM less than in the boot file: jwp needs the room); everything else is the boot
 # file OS9Boot (OS9Boot.bin: the modules one after the other, written to a disk image by tools/mkboot.py)
-BOOTMODS = level1/ioman level1/rbf level1/scf level1/pdisk level1/d0 level1/d1 level1/vrbf level1/v0 level1/clock \
+BOOTMODS = level1/rbf level1/pdisk level1/d0 level1/d1 level1/vrbf level1/v0 level1/clock \
            level1/term$(CS) level1/pty level1/npty level1/n1$(CS) level1/n2$(CS) level1/n3$(CS) level1/shell level1/sysgo
 os9v1boot.rom: modules
-	$(MAKE9ROM) -o $@ level1/boot level1/init level1/os9p2 level1/os9p1
+	$(MAKE9ROM) -o $@ level1/boot level1/init level1/ioman level1/scf level1/os9p2 level1/os9p1
 
 OS9Boot.bin: modules
 	cat $(BOOTMODS) > $@

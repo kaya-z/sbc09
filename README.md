@@ -65,7 +65,7 @@ OS-9 Level 1:
 ./sim09 -rom os9/os9v1.rom -0 os9/OS9.dsk -1 os9/WORK.dsk -v os9/level1
 ```
 
-OS-9 Level 1 を**ディスクの起動ファイル (`OS9Boot`) から**起動する (ROM はカーネルと `Boot` だけの 4KB。FPGA 版でも使えます → [docs/FPGA.md](docs/FPGA.md)):
+OS-9 Level 1 を**ディスクの起動ファイル (`OS9Boot`) から**起動する (ROM はカーネル、`Boot`、`IOMan`、`SCF` の 8KB。FPGA 版でも使えます → [docs/FPGA.md](docs/FPGA.md)):
 
 ```sh
 ./sim09 -rom os9/os9v1boot.rom -0 os9/OS9.dsk -1 os9/WORK.dsk -v os9/level1

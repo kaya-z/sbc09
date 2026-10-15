@@ -42,7 +42,7 @@ openFPGALoader -b tangnano9k -f fpga/tn9k/build/fuzix/impl/pnr/sbc09_fuzix.fs   
 |---|---|---|---|
 | `fuzix` | `fuzix/images/bootrom.bin` (256 バイト) | `$FF00-$FFFF` | FUZIX (カードの先頭から起動) |
 | `os9` | `os9/os9v1.rom` (16KB) | `$C000-$FFFF` | NitrOS-9 Level 1 |
-| `os9boot` | `os9/os9v1boot.rom` (4KB) | `$F000-$FFFF` | NitrOS-9 Level 1 を**カードから起動**する (下の「OS-9 をカードから起動する」) |
+| `os9boot` | `os9/os9v1boot.rom` (8KB) | `$E000-$FFFF` (`$E000-$E0FF` は I/O が優先) | NitrOS-9 Level 1 を**カードから起動**する (下の「OS-9 をカードから起動する」) |
 | `v09` | `os9/v09.rom` (32KB) | `$8000-$FFFF` | 参考実装のモニタ (FIRQ のタイマ) |
 
 ビルドした日時が時計の初期値になります (電池がないので、電源を入れるたびにその日時から数え始めます)。
@@ -71,15 +71,18 @@ sudo dd if=os9/WORK.dsk of=/dev/sdX bs=512 seek=262144 conv=fsync
 
 ## OS-9 をカードから起動する
 
-`os9` の ROM は OS 全体 (16KB) を持っていますが、`os9boot` の ROM (4KB) は**カーネル (`Krn`、`KrnP2`)、`Init`、ブートモジュール `Boot` だけ**を持ちます。
-本物の OS-9 Level 1 と同じように、`Boot` が**カードのドライブ 0 の起動ファイル `OS9Boot`** を RAM に読み込み、そこにある `IOMan`、`RBF`、`SCF`、
-ドライバ (`PDisk`)、ディスクとコンソールの記述子、`Clock`、`Shell`、`SysGo` などをカーネルが使います (`mdir` で見ると `Boot` が先頭に出ます)。
+`os9` の ROM は OS 全体 (16KB) を持っていますが、`os9boot` の ROM (8KB) は**カーネル (`Krn`、`KrnP2`)、`Init`、ブートモジュール `Boot`、`IOMan`、`SCF`** だけを持ちます。
+本物の OS-9 Level 1 と同じように、`Boot` が**カードのドライブ 0 の起動ファイル `OS9Boot`** を RAM に読み込み、そこにある `RBF`、ドライバ (`PDisk`)、
+ディスクとコンソールの記述子、`Clock`、`Shell`、`SysGo` などをカーネルが使います (`mdir` で見ると `Boot` が先頭に出ます)。
 ROM を作り直さなくても、ディスクのファイルを入れ替えれば OS の構成を変えられます。
+`IOMan` と `SCF` (合計 3.8KB) を ROM に置いたのは、起動ファイルが RAM に占める分を減らして、**`jwp` が動くだけの空きメモリ**を残すためです
+(`jwp` は連続した約 174 ページの空きが要ります。`mfree` で、ROM だけの `os9` が 170 ページ、起動ファイルに全部入れると 160 ページで `jwp` は `ERROR #207`、
+`IOMan` と `SCF` を ROM に移すと 175 ページで動きます)。ROM は `$E000` から始まり、I/O のレジスタ (`$E000-$E0FF`) を避けて、最初のモジュールを `$E100` に置きます (`tools/makerom.c`)。
 
 * `Boot` は `os9/level1/boot.asm` (MIT)。LSN 0 の `DD.BT` と `DD.BSZ` から起動ファイルを探して読む部分は NitrOS-9 の `boot_common.asm` をそのまま使い、
   ディスクポート (`$E040`: PDisk と同じ DMA 方式) の読み出しだけを書きました。シミュレータでも同じ ROM で動きます
   (`./sim09 -rom os9/os9v1boot.rom -0 os9/OS9.dsk -v os9/level1`)。
-* 起動ファイルは `make -C os9` が作り (`os9/OS9Boot.bin`、10.6KB: 上の各モジュールを続けたもの)、`tools/mkboot.py` が `os9/OS9.dsk` の `OS9Boot` ファイルの場所に書いて
+* 起動ファイルは `make -C os9` が作り (`os9/OS9Boot.bin`、6.8KB: ROM にないモジュールを続けたもの)、`tools/mkboot.py` が `os9/OS9.dsk` の `OS9Boot` ファイルの場所に書いて
   `DD.BT`、`DD.BSZ`、ファイルの大きさを更新します (`make -C os9 bootdisk`)。`OS9.dsk` は ROM だけで起動する `os9` でもそのまま使えます (ROM が先に見つかるので、起動ファイルは読まれません)。
 * 端末の文字コードは起動ファイルの `term` で決まります (EUC-JP や Shift_JIS にするには、`os9/Makefile` の `BOOTMODS` の `term` を `term_euc` に変えた起動ファイルを `tools/mkboot.py` で別のディスクに入れます)。
 * カードは `os9` のときと同じ (`dd if=os9/OS9.dsk of=/dev/sdX ...`)。ドライブ 1 は `os9/WORK.dsk`。

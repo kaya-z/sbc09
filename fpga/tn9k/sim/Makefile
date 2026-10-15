@@ -18,8 +18,8 @@ ROMAW   = 14
 FREERUN = 0
 else ifeq ($(ROM),os9boot)
 ROMBIN  = $(ROOT)/os9/os9v1boot.rom
-ROMBASE = 61440
-ROMAW   = 12
+ROMBASE = 57344
+ROMAW   = 13
 FREERUN = 0
 else ifeq ($(ROM),bootcheck)
 ROMBIN  = ../build/bootcheck.bin
