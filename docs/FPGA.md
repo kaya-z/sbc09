@@ -89,7 +89,7 @@ ROM を作り直さなくても、ディスクのファイルを入れ替えれ�
 * `fpga/tn9k/scripts/build.sh os9boot` でビットストリームを作ります (`images/sbc09_os9boot.fs.gz`)。起動ファイルがディスクにないと、OS-9 は何も出さずに止まります。
 * `make test-fpga` の `os9boot` (2 項目) と `tests/os9_test.py` (2 項目) で確かめています。
 * **実機の Tang Nano 9K でも動きます** (2026-10-15。カードに `OS9.dsk` を書いて、電源を入れるだけで `OS9:` まで起動し、`chx /d0/cmds` のあと `mdir` と `dir /d0` を確認。HDMI の画面にも出ます)。
-* `OS9.dsk` の `/d0/cmds` には、標準のコマンドに加えて **`dhry` (Dhrystone) と `jwp`** を入れてあります (FPGA 版には `/v0` がないため)。`chx /d0/cmds` のあと `dhry -t 10` などで動きます。他のコマンドを入れるには、`sim09 -v os9/level1` で `copy /v0/cmds/名前 /d0/cmds/名前` と `attr /d0/cmds/名前 e pe r pr` を実行します (そのあと `python3 tools/mkboot.py` で起動ファイルが残っていることを確かめられます)。
+* `OS9.dsk` の `/d0/cmds` には、標準のコマンドに加えて **`dhry` (Dhrystone)、`jwp`、`shutdown`** を入れてあります (FPGA 版には `/v0` がないため)。`chx /d0/cmds` のあと `dhry -t 10` などで動きます。**止めるときは `shutdown`** (電源制御レジスタ `$E00F` に `$A5` を書いて CPU を止める。LED5 が点く。ディスクへの書き込みは 1 ブロックごとに完了を待つので、その前に特別な操作は要らない)。他のコマンドを入れるには、`sim09 -v os9/level1` で `copy /v0/cmds/名前 /d0/cmds/名前` と `attr /d0/cmds/名前 e pe r pr` を実行します (そのあと `python3 tools/mkboot.py` で起動ファイルが残っていることを確かめられます)。
 
 ## `jwp` と SKK 辞書 (カード起動の OS-9)
 
