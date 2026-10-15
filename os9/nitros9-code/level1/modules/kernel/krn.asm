@@ -145,7 +145,13 @@ ChkRAM   leay  ,x
          bne   L00C2                   nope, not RAM here!
          std   ,y                      else restore org contents
          leax  >$0100,y                check top of next 256 block
+* sim09 / sbc09 addition (a09 -D TN9K): the I/O page of the machine is at $E000: do not probe it (a write there goes to
+* the ACIA and shows as a character), the RAM ends below it
+         IFNE  TN9K
+         cmpx  #$E000
+         ELSE
          cmpx  #Bt.Start               stop short of boot track mem
+         ENDC
          bcs   ChkRAM
          leay  ,x
 * Here, Y = end of RAM

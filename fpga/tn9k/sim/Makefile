@@ -12,7 +12,7 @@ ROMBASE = 65280
 ROMAW   = 8
 FREERUN = 0
 else ifeq ($(ROM),os9)
-ROMBIN  = $(ROOT)/os9/os9v1.rom
+ROMBIN  = $(ROOT)/os9/os9v1_tn9k.rom
 ROMBASE = 49152
 ROMAW   = 14
 FREERUN = 0

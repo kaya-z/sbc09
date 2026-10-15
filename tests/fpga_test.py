@@ -10,6 +10,7 @@ RAM behind the PSRAM controller interface - runs the boot ROMs and the disk imag
           finds the file and a clean file system
   sdsc    the same boot with a byte addressed (SDSC) card
   os9     NitrOS-9 Level 1: the shell, the disk /d0 on the card, the module directory
+  os9k    NitrOS-9 Level 1 with the kernel on the card (LSN 2...), loaded by the 256 byte boot ROM of FUZIX / MK09: the same bitstream
   os9boot NitrOS-9 Level 1 booted from the card (4 KB ROM: kernel, Init and the booter; the rest is the boot file OS9Boot)
   nocard  no card: the boot ROM finds no disk and powers the machine off
   hdmi    FUZIX with the HDMI screen: what the guest writes to the console is on the screen (decoded from the TMDS symbols),
@@ -162,6 +163,21 @@ def t_os9boot(exe):
              'Directory of /d0' in out and all(x in mods for x in ('Boot', 'IOMan', 'RBF', 'SCF', 'Pdisk', 'Clock', 'Shell', 'SysGo')), out[-700:])]
 
 
+def t_os9k(exe):
+    d = tempfile.mkdtemp(prefix='fpgat_os9k_')
+    disk = os.path.join(d, 'OS9.dsk')
+    shutil.copy(OS9_DSK, disk)
+    out, rc = run(exe, ['wait 2000', 'send \\r', 'wait 300', 'send chx /d0/cmds\\r', 'wait 300', 'send mdir\\r', 'wait 3000',
+                        'send mfree\\r', 'wait 3000', 'send shutdown\\r', 'wait 2000', 'quit'], disk)
+    shutil.rmtree(d, ignore_errors=True)
+    mods = out[out.find('Module Directory'):]
+    return [('NitrOS-9 Level 1 boots with the boot ROM of FUZIX / MK09: the kernel comes from the card, the machine is named Tang Nano 9K',
+             'NitrOS-9/6809 Level 1' in out and 'Tang Nano 9K' in out and 'OS9:' in out, out[:600]),
+            ('the modules of the kernel image (Boot, Init, IOMan, SCF, KrnP2, Krn) and of the boot file (RBF, Pdisk, Shell, SysGo) are there, 175 pages are free',
+             all(x in mods for x in ('Boot', 'Init', 'IOMan', 'SCF', 'KrnP2', 'Krn', 'RBF', 'Pdisk', 'Shell', 'SysGo')) and 'Total pages free = 176' in out, out[-500:]),
+            ('shutdown powers the board off', 'System halted' in out, out[-200:])]
+
+
 def t_nocard(exe):
     out, rc = run(exe, ['wait 3000', 'quit'], None, extra=['-nosd'], clks=1500000000)
     return [('without a card the boot ROM gives up and powers off (exit code 0, no kernel banner)',
@@ -201,6 +217,8 @@ if have_os9:
     jobs += [('os9', 'os9', t_os9)]
 if have_os9boot:
     jobs += [('os9boot', 'os9boot', t_os9boot)]
+if have_os9 and have_fuzix:
+    jobs += [('os9k', 'fuzix', t_os9k)]
 else:
     print('SKIP os9 test: os9/os9v1.rom or os9/OS9.dsk is missing (make)')
 

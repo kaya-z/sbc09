@@ -40,8 +40,8 @@ openFPGALoader -b tangnano9k -f fpga/tn9k/build/fuzix/impl/pnr/sbc09_fuzix.fs   
 
 | 引数 | ROM | 置き場所 | 用途 |
 |---|---|---|---|
-| `fuzix` | `fuzix/images/bootrom.bin` (256 バイト) | `$FF00-$FFFF` | FUZIX (カードの先頭から起動) |
-| `os9` | `os9/os9v1.rom` (16KB) | `$C000-$FFFF` | NitrOS-9 Level 1 |
+| `fuzix` | `fuzix/images/bootrom.bin` (256 バイト) | `$FF00-$FFFF` | **FUZIX、MK09、OS-9 Level 1 の、どれでも** (カードの先頭から起動。**カードを替えるだけ**で OS が替わる。下の「OS-9 をカードにだけ置く」) |
+| `os9` | `os9/os9v1_tn9k.rom` (16KB) | `$C000-$FFFF` | NitrOS-9 Level 1 (ROM に OS 全体) |
 | `os9boot` | `os9/os9v1boot.rom` (8KB) | `$E000-$FFFF` (`$E000-$E0FF` は I/O が優先) | NitrOS-9 Level 1 を**カードから起動**する (下の「OS-9 をカードから起動する」) |
 | `v09` | `os9/v09.rom` (32KB) | `$8000-$FFFF` | 参考実装のモニタ (FIRQ のタイマ) |
 
@@ -69,7 +69,34 @@ sudo dd if=os9/WORK.dsk of=/dev/sdX bs=512 seek=262144 conv=fsync
 ただし FUZIX は `shutdown` で止めてください (ファイルシステムを閉じてから `Halted.` を出し、電源制御レジスタ `$E00F` に
 `$A5` を書くと LED5 が点いて CPU が止まります)。
 
-## OS-9 をカードから起動する
+## OS-9 をカードにだけ置く (FUZIX、MK09 と同じビットストリーム)
+
+**`fuzix` のビットストリームのまま、OS-9 Level 1 が動きます** (2026-10-16)。ROM は FUZIX、MK09 と同じ 256 バイトのブート ROM で、カーネルを含めて、OS-9 はすべてカードにあります。
+カードを `OS9.dsk` のものに替えて電源を入れるだけで OS-9 が、FUZIX のカードなら FUZIX が、MK09 のカードなら MK09 が起動します (フラッシュの書き直しは要りません)。
+
+起動の流れ:
+
+1. 256 バイトのブート ROM (`$FF00`) が、カードのドライブ 0 の **LSN 2 から**、256 バイトのセクタを順に読む。各セクタは `[先頭アドレス 2 バイト][n][n バイトのデータ]` で、データを RAM に写す。
+   `[次の LSN 2 バイト][$FF]` のセクタは「続きはそのセクタから」(ブート ROM に足した、FUZIX と MK09 のイメージには出ない形)。`n = 0` のセクタは、そこへジャンプする。
+2. OS-9 のイメージ (`tools/mkkernel.py` が作る) は、**カーネルのモジュール一式** (`Boot`、`Init`、`IOMan`、`SCF`、`KrnP2`、`Krn` の 7.5KB) を RAM の `$E100-$FE39` に置き、`Krn` の開始アドレスにジャンプする。
+   LSN 2-17 (元のディスクのカーネルトラックの場所) と、続きの LSN 720-735 に入っている (ディスクが 16 セクタ大きくなる)。
+3. ブート ROM のベクタは `$0100` のジャンプ表を指す。OS-9 Level 1 のカーネルは、起動時にこの表 (`D.XSWI3` ... `D.XFIRQ`、`$0100-$0111`) を自分で作るので、FUZIX と MK09 と同じ約束でそのまま動く。
+4. カーネルは RAM (`$0500-$DFFF`) を調べ、`$E100-$FEFF` にあるモジュールを登録して、`Init` の指定どおり、`Boot` を呼ぶ。`Boot` は `OS9Boot` (LSN 586 から、`RBF`、ドライバ、記述子、`Shell`、`SysGo` など) を読み込む。
+5. `/Term` を開いてバナーを出し (`NitrOS-9/6809 Level 1 V1.0.1`、`Tang Nano 9K`)、`SysGo` が `Shell` を起動して `OS9:`。
+
+空きメモリは 175 ページ (`jwp` が動く) です。`IOMan` と `SCF` までカーネルのイメージに入れて、`$E100-$FEFF` (カーネルがモジュールを探す領域で、普通の RAM として配らない所) に置いたからです。
+
+* カードの作り方は `os9/OS9.dsk` を `dd` で書くだけです (188,416 バイト)。ドライブ 1 は同じカードの 128MB の位置 (`SKK_utf8.dsk` など)。
+* `make -C os9` が、カーネルのイメージと `OS9Boot` を `OS9.dsk` に書きます (`make -C os9 bootdisk`)。モジュールを替えたら、これで `OS9.dsk` を作り直します。
+* シミュレータでも同じです: `./sim09 -rom fuzix/images/bootrom.bin -0 os9/OS9.dsk`。
+* バナーの機械の名前は、`os9/level1/init_tn9k` が `Tang Nano 9K`、シミュレータ用の `init` が `sim09 simulator` です (`Unknown Machine` ではなくなりました)。
+  カーネルは `os9p1_tn9k` (RAM を調べるとき、`$E000` の I/O ページに書き込まない) を使います。
+
+## OS-9 をカードから起動する (ROM に OS の一部を置く版)
+
+以下の `os9boot` は、ROM に OS の一部を置く、もう 1 つの方式です (上のカードだけの方式ができる前に作りました。ビットストリームが OS-9 専用になります)。
+
+
 
 `os9` の ROM は OS 全体 (16KB) を持っていますが、`os9boot` の ROM (8KB) は**カーネル (`Krn`、`KrnP2`)、`Init`、ブートモジュール `Boot`、`IOMan`、`SCF`** だけを持ちます。
 本物の OS-9 Level 1 と同じように、`Boot` が**カードのドライブ 0 の起動ファイル `OS9Boot`** を RAM に読み込み、そこにある `RBF`、ドライバ (`PDisk`)、
@@ -93,8 +120,8 @@ ROM を作り直さなくても、ディスクのファイルを入れ替えれ�
 
 ## `jwp` と SKK 辞書 (カード起動の OS-9)
 
-`OS9.dsk` の `/d0/cmds` には `dhry` と `jwp` が入っています。`jwp` は連続した約 174 ページの空きメモリが要るので、**ROM に `IOMan` と `SCF` を持つ `os9boot`** で動かします
-(起動ファイルに全部入れた構成では `ERROR #207`。上の「OS-9 をカードから起動する」)。
+`OS9.dsk` の `/d0/cmds` には `dhry` と `jwp` が入っています。`jwp` は連続した約 174 ページの空きメモリが要るので、**`IOMan` と `SCF` をカーネルの側 (ROM または、カードの上のカーネルのイメージ) に置く構成**で動かします
+(起動ファイルに全部入れた構成では `ERROR #207`。上の「OS-9 をカードにだけ置く」「OS-9 をカードから起動する」)。
 
 ```
 OS9:chx /d0/cmds

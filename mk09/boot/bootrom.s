@@ -7,6 +7,8 @@
 *
 *	[dest hi][dest lo][n][n bytes]		copy the n bytes to dest
 *	[entry hi][entry lo][0]			the last sector: jump to the entry
+*	[lsn hi][lsn lo][$FF]			continue with the sector lsn (the image goes on there; the n of a
+*						record is at most 253, so $FF is free: the OS-9 kernel image of tools/mkkernel.py)
 *
 * (tools/mkimage.py).  This is the same protocol as fuzix/bootrom.s, so a machine (or an FPGA
 * bitstream) with that ROM boots MK09 as well.  The hardware vectors go to the jump table
@@ -33,6 +35,9 @@ next	clr	$E042
 	ldy	BUF			destination or entry
 	ldb	BUF+2			byte count
 	beq	run
+	incb
+	beq	goto			$FF: go on at the sector number in the record
+	decb
 	ldu	#BUF+3
 copy	lda	,u+
 	sta	,y+
@@ -40,6 +45,8 @@ copy	lda	,u+
 	bne	copy
 	bra	next
 run	jmp	,y
+goto	ldx	BUF
+	bra	next
 fail	lda	#$A5			no boot disk: power off
 	sta	$E00F
 	bra	fail

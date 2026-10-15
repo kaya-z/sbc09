@@ -123,6 +123,13 @@ OSStr    equ   *
          fcb   0
 
 InstStr  equ   *
+* sim09 / sbc09 additions: the name of the machine, set with a09 -D TN9K or -D SIM09
+         IFNE   TN9K
+         fcc    "Tang Nano 9K"
+         ELSE
+         IFNE   SIM09
+         fcc    "sim09 simulator"
+         ELSE
          IFNE   coco1
          fcc    "Radio Shack Color Computer"
          ELSE
@@ -179,6 +186,8 @@ InstStr  equ   *
          ENDC                             match IFNE coco2
          ENDC                             match IFNE delux
          ENDC                             match IFNE coco1
+         ENDC                             match IFNE SIM09
+         ENDC                             match IFNE TN9K
          fcb   0     null-terminate the name string
          ELSE
 * DragonAlpha

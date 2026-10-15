@@ -5,7 +5,7 @@
 # (tools/a09, from the sbc09 project).
 MAKE9ROM = ../tools/make9rom
 
-all: os9v1.rom os9v1boot.rom OS9Boot.bin bootdisk os9v2.rom os9v1_euc.rom os9v2_euc.rom os9v1_sjis.rom os9v2_sjis.rom cmds
+all: os9v1.rom os9v1_tn9k.rom os9v1boot.rom OS9Boot.bin bootdisk os9v2.rom os9v1_euc.rom os9v2_euc.rom os9v1_sjis.rom os9v2_sjis.rom cmds
 
 modules:
 	$(MAKE) -C level1
@@ -38,19 +38,29 @@ os9v2_sjis.rom: CS = _sjis
 os9v1.rom os9v1_euc.rom os9v1_sjis.rom: modules
 	$(MAKE9ROM) -o $@ $(L1MODS)
 
+# the same for the FPGA board (the boot message names the machine: Tang Nano 9K)
+os9v1_tn9k.rom: CS =
+os9v1_tn9k.rom: modules
+	$(MAKE9ROM) -o $@ $(subst level1/os9p1,level1/os9p1_tn9k,$(subst level1/init,level1/init_tn9k,$(L1MODS)))
+
 # Level 1 booting from the disk: the ROM (8 KB at $E000) holds the kernel, Init, the booter, IOMan and SCF (they take
 # 15 pages of RAM less than in the boot file: jwp needs the room); everything else is the boot
 # file OS9Boot (OS9Boot.bin: the modules one after the other, written to a disk image by tools/mkboot.py)
 BOOTMODS = level1/rbf level1/pdisk level1/d0 level1/d1 level1/vrbf level1/v0 level1/clock \
            level1/term$(CS) level1/pty level1/npty level1/n1$(CS) level1/n2$(CS) level1/n3$(CS) level1/shell level1/sysgo
 os9v1boot.rom: modules
-	$(MAKE9ROM) -o $@ level1/boot level1/init level1/ioman level1/scf level1/os9p2 level1/os9p1
+	$(MAKE9ROM) -o $@ level1/boot level1/init_tn9k level1/ioman level1/scf level1/os9p2 level1/os9p1_tn9k
 
 OS9Boot.bin: modules
 	cat $(BOOTMODS) > $@
 
 # put it on OS9.dsk (the disk also boots the machine of os9v1boot.rom; the ROM images ignore it)
+# and the kernel itself (Boot, Init, IOMan, SCF, KrnP2, Krn) as the image the 256 byte boot ROM of FUZIX / MK09 loads from
+# LSN 2 (tools/mkkernel.py): the machine then boots OS-9 from the card with the same FPGA bitstream as FUZIX and MK09
+# (the rest of the image goes on at LSN 720, which makes the disk a little larger)
+KERNMODS = level1/boot level1/init_tn9k level1/ioman level1/scf level1/os9p2 level1/os9p1_tn9k
 bootdisk: OS9Boot.bin
+	python3 ../tools/mkkernel.py -e 720 OS9.dsk $(KERNMODS)
 	python3 ../tools/mkboot.py OS9.dsk OS9Boot.bin
 
 os9v2.rom os9v2_euc.rom os9v2_sjis.rom: modules

@@ -7,7 +7,7 @@
 # With HDMI=0 the HDMI screen (the console on a monitor, 640x480, 80x25) is left out (result: sbc09_ROM_nohdmi.fs).
 #
 # fuzix  the FUZIX boot ROM (256 bytes at $FF00; the disk is read from the card)       [default]
-# os9    NitrOS-9 Level 1 (os9/os9v1.rom, 16 KB at $C000)
+# os9    NitrOS-9 Level 1 (os9/os9v1_tn9k.rom, 16 KB at $C000)
 # os9boot  NitrOS-9 Level 1 booted from the card: the ROM (8 KB at $E000) holds the kernel, Init, the booter, IOMan and SCF, the rest
 #          comes from the boot file OS9Boot of the card (os9/OS9.dsk has it; make -C os9 bootdisk)
 # ramtest  a RAM test of the PSRAM path for the real board (scripts/ramtest.s); prints its results on the UART
@@ -24,7 +24,7 @@ IDE=${2:-${GOWIN_IDE:-/usr/local/IDE}}
 case $ROM in
 fuzix)  BIN=$ROOT/fuzix/images/bootrom.bin;  BASE="16'hFF00"; AW=8;  FREE=0; CS=1 ;;
 os9boot) BIN=$ROOT/os9/os9v1boot.rom;       BASE="16'hE000"; AW=13; FREE=0; CS=1 ;;
-os9)    BIN=$ROOT/os9/os9v1.rom;             BASE="16'hC000"; AW=14; FREE=0; CS=1 ;;
+os9)    BIN=$ROOT/os9/os9v1_tn9k.rom;             BASE="16'hC000"; AW=14; FREE=0; CS=1 ;;
 os9euc) BIN=$ROOT/os9/os9v1_euc.rom;         BASE="16'hC000"; AW=14; FREE=0; CS=2 ;;
 os9sjis) BIN=$ROOT/os9/os9v1_sjis.rom;       BASE="16'hC000"; AW=14; FREE=0; CS=3 ;;
 cputest) BIN=$HERE/build/cputest.bin;         BASE="16'hF000"; AW=12; FREE=0; CS=0 ;;

@@ -193,6 +193,19 @@ for level in (1, 2):
         s.close()
     check(bad == 0, 'L%d clock IRQ does not corrupt user data (8 timer phases)' % level)
 
+# --- the whole OS-9 Level 1 on the disk: the 256 byte boot ROM of FUZIX / MK09 loads the kernel (Boot, Init, IOMan, SCF, KrnP2, Krn:
+# tools/mkkernel.py, LSN 2-17 and 720-735) into RAM and jumps to it; the same FPGA bitstream as FUZIX and MK09
+s = Session(1, rom=os.path.join(ROOT, 'fuzix', 'images', 'bootrom.bin'))
+s.run(['send "chx /d0/cmds\\r"', 'expect "OS9:"', 'send "mdir\\r"', 'expect "OS9:"', 'send "mfree\\r"', 'expect "OS9:"',
+       'send "jwp /d0/t.txt\\r"', 'sleep 3000', 'send "\\021"', 'sleep 1000'])
+t = s.text()
+check('Tang Nano 9K' in t and 'Unknown Machine' not in t, 'L1 from the disk (boot ROM of FUZIX): the boot message names the machine, Tang Nano 9K', t[:300])
+mods = t[t.find('Module Directory'):]
+check(all(m in mods for m in ('Boot', 'Init', 'IOMan', 'SCF', 'KrnP2', 'Krn', 'RBF', 'Shell', 'SysGo')),
+      'L1 from the disk: the kernel and its modules were loaded from the card', mods[:300])
+check('ERROR #207' not in t and '/d0/t.txt' in t, 'L1 from the disk: jwp starts (175 free pages)', t[-300:])
+s.close()
+
 # --- the version of jwp: jwp -v (inside) and the edition of the module (outside: OS-9's ident)
 s = Session(1)
 s.run(cmds('jwp -v', 'ident /v0/cmds/jwp'))

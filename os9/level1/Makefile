@@ -8,7 +8,7 @@ NETDESC = n1 n2 n3 n1_euc n2_euc n3_euc n1_sjis n2_sjis n3_sjis
 
 A09 = ../../tools/a09 -I $(OS9SRC)/defs/
 
-MOD =  boot pdisk init os9p1 os9p2 ioman pipe piper rbf scf term term_euc term_sjis npty $(NETDESC) pty d0 d1 vrbf v0 clock shell dir mdir sysgo shell
+MOD =  boot pdisk init init_tn9k os9p1 os9p1_tn9k os9p2 ioman pipe piper rbf scf term term_euc term_sjis npty $(NETDESC) pty d0 d1 vrbf v0 clock shell dir mdir sysgo shell
 
 all : ${MOD} 
 	cd cmds; make
@@ -29,8 +29,12 @@ pdisk : pdisk.asm
 boot : boot.asm ${SRCDIR}/boot_common.asm
 	$(A09) -I ${SRCDIR}/ boot.asm -o boot $(LST)
 
-init : init.asm
-	$(A09) ${SRCDIR}/init.asm -o $@ $(LST)
+# the name of the machine in the boot message: init (the simulator), init_tn9k (the Tang Nano 9K FPGA board)
+init : init.asm ${SRCDIR}/init.asm
+	$(A09) -D SIM09 ${SRCDIR}/init.asm -o $@ $(LST)
+
+init_tn9k : init.asm ${SRCDIR}/init.asm
+	$(A09) -D TN9K ${SRCDIR}/init.asm -o $@ $(LST)
 #	$(A09) init.asm -o init $(LST)
 
 pty : pty.asm
@@ -74,6 +78,10 @@ dir : ../kanji/dir.asm
 os9p1 :
 	cat  ${OS9SRC}//defs/coco.d ${SRCDIR}/kernel/krn.asm > krn.asm
 	$(A09) -I ../nitros9-code/level1/modules/kernel/ krn.asm  -o os9p1 $(LST)
+
+# the kernel for the FPGA board: does not probe the I/O page at $E000 (see krn.asm); used where the RAM reaches it
+os9p1_tn9k : os9p1
+	$(A09) -D TN9K -I ../nitros9-code/level1/modules/kernel/ krn.asm  -o os9p1_tn9k $(LST)
 
 os9p2 :
 	$(A09) ${SRCDIR}/kernel/krnp2.asm -o os9p2 $(LST)

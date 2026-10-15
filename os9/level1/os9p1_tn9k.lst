@@ -1,0 +1,2228 @@
+0000:                                  IFNE      COCO.D-1
+0001:                   COCO.D         SET       1
+0000:                   
+0000:                   ********************************************************************
+0000:                   * CoCoDefs - NitrOS-9 System Definitions for the Tandy Color Computer
+0000:                   *
+0000:                   * $Id$
+0000:                   *
+0000:                   * Edt/Rev  YYYY/MM/DD  Modified by
+0000:                   * Comment
+0000:                   * ------------------------------------------------------------------
+0000:                   *          1998/10/13  Boisy G. Pitre
+0000:                   * Added defs by Bruce Isted from his Eliminator archive.
+0000:                   *
+0000:                   *          1998/10/31  Boisy G. Pitre
+0000:                   * Merged cc3global.defs into this file.
+0000:                   *
+0000:                   *          2002/04/30  Boisy G. Pitre
+0000:                   * Merged Level One and Level Two sysdefs.
+0000:                   *
+0000:                   *          2002/06/22  Boisy G. Pitre
+0000:                   * Removed PIA.U4 and PIA.U8, improved comments
+0000:                   *
+0000:                   *          2003/11/05  Robert Gault
+0000:                   * Made changes in window globals and grfdrv memory to handle regW
+0000:                   * in 6809 systems.
+0000:                   *
+0000:                   *          2003/11/30  Boisy G. Pitre
+0000:                   * Statics now are prefaced with V. to identify them easier in source.
+0000:                   *
+0000:                   *          2004/07/18  Boisy G. Pitre
+0000:                   * Moved CoCo 3 Window stuff into cc3iodefs
+0000:                   *
+0000:                   *          2012/02/24  Boisy G. Pitre
+0000:                   * Consolidated all CoCo-specific defs files into here.
+0000:                   
+0000:                                  NAM       CoCoDefs
+0000:                                  IFEQ      Level-1
+0000:                                  TTL       NitrOS-9 System Definitions for the Tandy Color Computer
+0000:                                  ELSE      
+0000:                                  IFEQ      Level-2
+0000:                                  TTL       NitrOS-9 Level 2 System Type Definitions
+0000:                                  ELSE      
+0000:                                  IFEQ      Level-3
+0000:                                  TTL       NitrOS-9 Level 3 System Type Definitions
+0000:                                  ENDC      
+0000:                                  ENDC      
+0000:                                  ENDC      
+0000:                   
+0000:                   
+0000:                   **********************
+0000:                   * CPU Type Definitions
+0000:                   *
+0001:                   Color          SET       1
+0002:                   Color3         SET       2
+0000:                                  IFEQ      Level-1
+0002:                   CPUType        SET       Color
+0000:                                  ELSE      
+0002:                   CPUType        SET       Color3
+0000:                                  ENDC      
+0000:                   
+0000:                   
+0000:                   ******************************
+0000:                   * Clock Speed Type Definitions
+0000:                   *
+0001:                   OneMHz         EQU       1
+0002:                   TwoMHz         EQU       2
+0000:                                  IFEQ      CPUType-Color
+0002:                   CPUSpeed       SET       OneMHz
+0000:                                  ELSE      
+0002:                   CPUSpeed       SET       TwoMHz
+0000:                                  ENDC      
+0000:                   
+0000:                   
+0000:                   **********************************
+0000:                   * Power Line Frequency Definitions
+0000:                   *
+0001:                   Hz50           EQU       1                   Assemble clock for 50 hz power
+0002:                   Hz60           EQU       2                   Assemble clock for 60 hz power
+0000:                                  IFNDEF    PwrLnFrq
+0002:                   PwrLnFrq       SET       Hz60                Set to Appropriate freq
+0000:                                  ENDC
+0000:                   
+0000:                   
+0000:                   **********************************
+0000:                   * Ticks per second
+0000:                   *
+0000:                                  IFNDEF    TkPerSec
+0000:                                  IFEQ      PwrLnFrq-Hz50
+003C:                   TkPerSec       SET       50
+0000:                                  ELSE      
+003C:                   TkPerSec       SET       60
+0000:                                  ENDC      
+0000:                                  ENDC
+0000:                   
+0000:                   
+0000:                   ******************
+0000:                   * ACIA type set up
+0000:                   *
+0000:                                  ORG       1
+0001:                   ACIA6850       RMB       1                   MC6850 acia.
+0002:                   ACIA6551       RMB       1                   SY6551 acia.
+0003:                   ACIA2661       RMB       1                   SC2661 acia.
+0002:                   ACIATYPE       SET       ACIA6551
+0000:                   
+0000:                   
+0000:                   ****************************************
+0000:                   * Special character Bit position equates
+0000:                   *
+0001:                   SHIFTBIT       EQU       %00000001
+0002:                   CNTRLBIT       EQU       %00000010
+0004:                   ALTERBIT       EQU       %00000100
+0008:                   UPBIT          EQU       %00001000
+0010:                   DOWNBIT        EQU       %00010000
+0020:                   LEFTBIT        EQU       %00100000
+0040:                   RIGHTBIT       EQU       %01000000
+0080:                   SPACEBIT       EQU       %10000000
+0000:                   
+0000:                   
+0000:                   ******************
+0000:                   * Device addresses for miscellaneous hardware
+0000:                   *
+FF68:                   A.AciaP        SET       $FF68               Aciapak Address
+FF6C:                   A.ModP         SET       $FF6C               ModPak Address
+FF40:                   DPort          SET       $FF40               Disk controller base address
+FF7F:                   MPI.Slct       SET       $FF7F               Multi-Pak slot select
+0003:                   MPI.Slot       SET       $03                 Multi-Pak default slot
+FF00:                   PIA0Base       EQU       $FF00
+FF20:                   PIA1Base       EQU       $FF20
+0000:                   
+0000:                   
+0000:                   ******************
+0000:                   * VDG Devices
+0000:                   *
+FFC0:                   A.TermV        SET       $FFC0               VDG Term
+FFC1:                   A.V1           SET       $FFC1               Possible additional VDG Devices
+FFC2:                   A.V2           SET       $FFC2
+FFC3:                   A.V3           SET       $FFC3
+FFC4:                   A.V4           SET       $FFC4
+FFC5:                   A.V5           SET       $FFC5
+FFC6:                   A.V6           SET       $FFC6
+FFC7:                   A.V7           SET       $FFC7
+0000:                   
+0000:                   
+0000:                                  IFEQ      Level-1
+0000:                   
+0000:                   ********************************
+0000:                   * Boot defs for NitrOS-9 Level 1
+0000:                   *
+0000:                   * These defs are not strictly for 'Boot', but are for booting the
+0000:                   * system.
+0000:                   *
+ED00:                   Bt.Start       EQU       $EE00               Start address of the boot track in memory
+0000:                   
+0000:                                  ELSE
+0000:                   
+0000:                   ******************************************
+0000:                   * Boot defs for NitrOS-9 Level 2 and above
+0000:                   *
+0000:                   * These defs are not strictly for 'Boot', but are for booting the
+0000:                   * system.
+0000:                   *
+ED00:                   Bt.Start       SET       $ED00               Start address of the boot track in memory
+003B:                   Bt.Block       EQU       $3B                 Block to map in for the 'OS9BOOT' screen
+8A34:                   Bt.Flag        EQU       $8A34               Flag in Bt.Block to verify that it's unchanged
+0002:                   Bt.Offst       EQU       2                   Offset into the screen where the current ptr is
+0000:                   
+0000:                                  ENDC
+0000:                   
+0000:                   * On the CoCo, the boot track is all of track 34
+0000:                   
+0022:                   Bt.Track       EQU       34                  Boot track
+0000:                   Bt.Sec         EQU       0                   Start LSN of boot area on boot track
+0000:                   
+0000:                   
+1080:                   Bt.Size        EQU       $1080               Maximum size of bootfile
+0000:                   
+0000:                   
+0000:                                  IFEQ      Level-1
+0000:                   
+0000:                   *************************************************
+0000:                   *
+0000:                   * NitrOS-9 Level 1 Section
+0000:                   *
+0000:                   *************************************************
+0000:                   
+0007:                   HW.Page        SET       $FF                 Device descriptor hardware page
+0000:                   
+0000:                                  ELSE      
+0000:                   
+0000:                   *************************************************
+0000:                   *
+0000:                   * NitrOS-9 Level 2 Section
+0000:                   *
+0000:                   *************************************************
+0000:                   
+0000:                   ****************************************
+0000:                   * Dynamic Address Translator Definitions
+0000:                   *
+0008:                   DAT.BlCt       EQU       8                   D.A.T. blocks/address space
+2000:                   DAT.BlSz       EQU       (256/DAT.BlCt)*256  D.A.T. block size
+0010:                   DAT.ImSz       EQU       DAT.BlCt*2          D.A.T. Image size
+FFE0:                   DAT.Addr       EQU       -(DAT.BlSz/256)     D.A.T. MSB Address bits
+FF91:                   DAT.Task       EQU       $FF91               Task Register address
+0020:                   DAT.TkCt       EQU       32                  Number of DAT Tasks
+FFA0:                   DAT.Regs       EQU       $FFA0               DAT Block Registers base address
+333E:                   DAT.Free       EQU       $333E               Free Block Number
+003F:                   DAT.BlMx       EQU       $3F                 Maximum Block number
+0040:                   DAT.BMSz       EQU       $40                 Memory Block Map size
+0000:                   DAT.WrPr       EQU       0                   no write protect
+0000:                   DAT.WrEn       EQU       0                   no write enable
+0000:                   SysTask        EQU       0                   Coco System Task number
+003F:                   IOBlock        EQU       $3F
+003F:                   ROMBlock       EQU       $3F
+007F:                   IOAddr         EQU       $7F
+0001:                   ROMCount       EQU       1                   number of blocks of ROM (High RAM Block)
+0001:                   RAMCount       EQU       1                   initial blocks of RAM
+0005:                   MoveBlks       EQU       DAT.BlCt-ROMCount-2 Block numbers used for copies
+0001:                   BlockTyp       EQU       1                   chk only first bytes of RAM block
+0002:                   ByteType       EQU       2                   chk entire block of RAM
+0001:                   Limited        EQU       1                   chk only upper memory for ROM modules
+0002:                   UnLimitd       EQU       2                   chk all NotRAM for modules
+0000:                   * NOTE: this check assumes any NotRAM with a module will
+0000:                   *       always start with $87CD in first two bytes of block
+0001:                   RAMCheck       EQU       BlockTyp            chk only beg bytes of block
+0001:                   ROMCheck       EQU       Limited             chk only upper few blocks for ROM
+003F:                   LastRAM        EQU       IOBlock             maximum RAM block number
+0000:                   
+0000:                   ***************************
+0000:                   * Color Computer 3 Specific
+0000:                   *
+0000:                   MappedIO       EQU       true                (Actually False but it works better this way)
+0000:                   
+0000:                   ********************
+0000:                   * Hardware addresses
+0000:                   *
+FF00:                   GIMERegs       EQU       $FF00               Base address of GIME registers
+FF92:                   IrqEnR         EQU       $FF92               GIME IRQ enable/status register
+FF9A:                   BordReg        EQU       $FF9A               Border color register
+FFB0:                   PalAdr         EQU       $FFB0               Palette registers
+0000:                   
+0007:                   HW.Page        SET       $07                 Device descriptor hardware page
+0000:                   
+0000:                   * KrnBlk defines the block number of the 8K RAM block that is mapped to
+0000:                   * the top of CPU address space ($E000-$FFFF) for the system process, and
+0000:                   * which holds the Kernel. The top 2 pages of this CPU address space ($FFE0-
+0000:                   * $FFFF) has two special properties. Firstly, it contains the I/O space.
+0000:                   * Secondly, the parts that contain RAM map are not affected by the DAT
+0000:                   * mappings but, instead, *always* map that RAM to a fixed RAM block
+0000:                   * (KrnBlk). When a user process is mapped in, and requests enough memory,
+0000:                   * it will end up with its own block assigned for CPU address space $E000-
+0000:                   * $FFFF but the top of the address space is unusable by the user process:
+0000:                   * it still contains the I/O and the bit of RAM that's mapped to KrnBlk.
+0000:                   * Usually, the value of KrnBlk is fixed for a particular hardware design;
+0000:                   * For the COCO GIME, it's always $3F.
+003F:                   KrnBlk         SET       $3F
+0000:                   
+0000:                                  ENDC
+0000:                                  ENDC
+0000:                   
+0000:                   ********************************************************************
+0000:                   * Krn - NitrOS-9 Level 1 Kernel
+0000:                   *
+0000:                   * $Id$
+0000:                   *
+0000:                   * This is how the memory map looks after the kernel has initialized:
+0000:                   *
+0000:                   *     $0000----> ================================== 
+0000:                   *               |                                  |
+0000:                   *               |                                  |
+0000:                   *  $0020-$0111  |  System Globals (D.FMBM-D.XNMI)  |
+0000:                   *               |                                  |
+0000:                   *               |                                  |
+0000:                   *     $0200---->|==================================|
+0000:                   *               |        Free Memory Bitmap        |
+0000:                   *  $0200-$021F  |     (1 bit = 256 byte page)      |
+0000:                   *               |----------------------------------|
+0000:                   *  $0220-$0221  |      IOMan I/O Call Pointer      |
+0000:                   *               |----------------------------------|
+0000:                   *               |      System Dispatch Table       |
+0000:                   *  $0222-$0291  |     (Room for 56 addresses)      |
+0000:                   *               |----------------------------------|
+0000:                   *  $0292-$02FF  |       User Dispatch Table        |
+0000:                   *               |     (Room for 56 addresses)      |
+0000:                   *     $0300---->|==================================|
+0000:                   *               |                                  |
+0000:                   *               |                                  |
+0000:                   *  $0300-$03FF  |     Module Directory Entries     |
+0000:                   *               |      (Room for 64 entries)       |
+0000:                   *               |                                  |
+0000:                   *     $0400---->|==================================|
+0000:                   *               |                                  |
+0000:                   *  $0400-$04FF  |           System Stack           |
+0000:                   *               |                                  |
+0000:                   *     $0500---->|==================================|
+0000:                   *               |                                  |
+0000:                   *               |                                  |
+0000:                   *               |                                  |
+0000:                   *  $0500-$08FF  |    Screen Memory (Atari Only)    |
+0000:                   *               |                                  |
+0000:                   *               |                                  |
+0000:                   *               |                                  |
+0000:                   *     $0900---->|==================================|
+0000:                   *
+0000:                   * Edt/Rev  YYYY/MM/DD  Modified by
+0000:                   * Comment
+0000:                   * ------------------------------------------------------------------
+0000:                   *  14      1985/??/??
+0000:                   * From Tandy OS-9 Level One VR 02.00.00
+0000:                   *
+0000:                   *  15      2002/07/21  Boisy G. Pitre
+0000:                   * Module validation consists only of module header parity check.
+0000:                   * CRC check is not done unless D.CRC is set to 1, which is NOT the
+0000:                   * default case.  By default, D.CRC is set to 0, thus there is no
+0000:                   * CRC checking.  Speeds up module loads quite a bit. The Init module
+0000:                   * has a bit in a compatibility byte that can turn on/off CRC checking
+0000:                   *
+0000:                   *  15r1    2003/12/09  Boisy G. Pitre
+0000:                   * Kernel no longer scans for modules in I/O space.  Also, F$PrsNam now
+0000:                   * allows _ and 0-9 as first chars of a filename.
+0000:                   *
+0000:                   *  15r1    2004/05/23  Boisy G. Pitre
+0000:                   * Renamed to 'krn'
+0000:                   *
+0000:                   *  16      2004/05/23  Boisy G. Pitre
+0000:                   * Added changes for Atari port
+0000:                   
+0000:                            nam   krn
+0000:                            ttl   NitrOS-9 Level 1 Kernel
+0000:                   
+0000:                            ifp1
+0000:                            use   defsfile
+0000:                            endc
+0000:                   
+00C1:                   tylg     set   Systm+Objct
+0080:                   atrv     set   ReEnt+rev
+0000:                   rev      set   $00
+0010:                   edition  set   16
+0000:                   
+0000: 87CD0811000DC180  ModTop   mod   eom,name,tylg,atrv,OS9Cold,size
+0009: 00110000
+0000:                   
+0000:                   size     equ   .
+0000:                   
+000D: 4B72EE            name     fcs   /Krn/
+0010: 10                         fcb   edition
+0011:                   
+0011:                   *
+0011:                   * OS-9 Genesis!
+0011:                   
+0011:                   OS9Cold  equ   *
+0011:                   * clear out system globals from $0000-$0400
+0011:                   *         ldx   #D.FMBM
+0011: 8E0000                     ldx   #$0000
+0014:                            IFNE  H6309
+0014:                   *         ldw   #$400-D.FMBM
+0014:                            ldw   #$400
+0014:                            leay  Zoro,pc
+0014:                            tfm   y,x+
+0014:                            ELSE
+0014:                   *         ldy   #$400-D.FMBM
+0014: 108E0400                   ldy   #$400
+0018: 4F                         clra
+0019: 5F                         clrb
+001A: ED81              L007F    std   ,x++
+001C: 313E                       leay  -2,y
+001E: 26FA                       bne   L007F
+0020:                            ENDC
+0020:                   
+0020:                   * set up system globals
+0020:                            IFNE  H6309
+0020:                            ldd   #$200
+0020:                            ELSE
+0020: 4C                         inca
+0021: 4C                         inca                          D = $200
+0022:                            ENDC
+0022: DD20                       std   <D.FMBM                 $200 = start of free memory bitmap
+0024: CB20                       addb  #$20
+0026: DD22                       std   <D.FMBM+2               $220 = end of free memory bitmap
+0028: CB02                       addb  #$02
+002A: DD46                       std   <D.SysDis               $222 = addr of sys dispatch tbl
+002C: CB70                       addb  #$70
+002E: DD44                       std   <D.UsrDis               $292 = addr of usr dispatch tbl
+0030: 5F                         clrb
+0031: 4C                         inca                          D = $300
+0032: DD26                       std   <D.ModDir               $300 = mod dir start
+0034: 9F28                       stx   <D.ModDir+2             X = $400 = mod dir end
+0036: 32890100                   leas  >$0100,x                S = $500 (system stack?)
+003A:                   
+003A:                   * NOTE: This routine checks for RAM by writing a pattern at an address
+003A:                   * then reading it back for validation.  On the CoCo, we pretty much know
+003A:                   * that we are in all-RAM mode at this point, and the same goes for the
+003A:                   * other supported platforms.  So I am taking this code out for the time being.
+003A:                   
+003A:                            IFNE  CHECK_FOR_VALID_RAM
+003A:                   * Check for valid RAM starting at $400
+003A: 3184              ChkRAM   leay  ,x
+003C: ECA4                       ldd   ,y                      store org contents in D
+003E: 8E00FF                     ldx   #$00FF
+0041: AFA4                       stx   ,y                      write pattern to ,Y
+0043: ACA4                       cmpx  ,y                      same as what we wrote?
+0045: 2616                       bne   L00C2                   nope, not RAM here!
+0047: 8EFF00                     ldx   #$FF00                  try different pattern
+004A: AFA4                       stx   ,y                      write it to ,Y
+004C: ACA4                       cmpx  ,y                      same as what we wrote?
+004E: 260D                       bne   L00C2                   nope, not RAM here!
+0050: EDA4                       std   ,y                      else restore org contents
+0052: 30A90100                   leax  >$0100,y                check top of next 256 block
+0056: 8CED00                     cmpx  #Bt.Start               stop short of boot track mem
+0059: 25DF                       bcs   ChkRAM
+005B: 3184                       leay  ,x
+005D:                   * Here, Y = end of RAM
+005D: 30A4              L00C2    leax  ,y                      X = end of RAM
+005F:                            ELSE
+005F:                            ldx    #Bt.Start
+005F:                            ENDC
+005F: 9F24                       stx   <D.MLIM                 save off memory limit
+0061:                   
+0061:                   * Copy vector code over to address $100
+0061: 3410                       pshs  x
+0063:                            IFNE  H6309
+0063:                            leax  >VectCode,pcr
+0063:                            ldy   #D.XSWI3
+0063:                            ldw   #VectCSz
+0063:                            tfm   x+,y+
+0063:                            ELSE
+0063: 308D0744                   leax  >VectCode,pcr
+0067: 108E0100                   ldy   #D.XSWI3
+006B: C629                       ldb   #VectCSz
+006D: A680              L00D2    lda   ,x+
+006F: A7A0                       sta   ,y+
+0071: 5A                         decb
+0072: 26F9                       bne   L00D2
+0074:                            ENDC
+0074: 3510                       puls  x
+0076:                   
+0076:                   * Atari has bootfile already in memory
+0076:                            IFNE  atari
+0076:                   * flag that we've booted and that Boot Low starts appropriately
+0076:                            ldy   #$D000           Atari: I/O is at $D000-$D7FF
+0076:                            inc   <D.Boot
+0076:                            stx   <D.BTLO
+0076:                            ldx   #$FFFF
+0076:                            stx   <D.BTHI
+0076:                            ELSE
+0076:                            IFNE   corsham
+0076:                            ldx    #Bt.Start
+0076:                            ldy    #Bt.Start+Bt.Size-1
+0076:                            ELSE
+0076:                   * CoCo
+0076: 108EFD80                   ldy    #Bt.Start+Bt.Size
+007A:                            ENDC
+007A:                            ENDC
+007A:                   
+007A: 170715                     lbsr   ValMods
+007D:                   
+007D:                   * Atari: look for more modules at $D800-$F3FF
+007D:                            IFNE  atari
+007D:                            ldx   #$D800                           
+007D:                            ldy   #$F400
+007D:                            lbsr  ValMods
+007D:                            ENDC
+007D:                            
+007D:                   * Copy vectors to system globals
+007D: 318D0790          L00EE    leay  >Vectors,pcr
+0081: 308DFF7B                   leax  >ModTop,pcr
+0085: 3410                       pshs  x
+0087: 8E002C                     ldx   #D.SWI3
+008A: ECA1              L00FB    ldd   ,y++
+008C: E3E4                       addd  ,s
+008E: ED81                       std   ,x++
+0090: 8C0036                     cmpx  #D.NMI
+0093: 23F5                       bls   L00FB
+0095: 3262                       leas  2,s                     restore stack
+0097:                   
+0097:                   * fill in more system globals
+0097: 308D0090                   leax  >URtoSs,pcr
+009B: 9F84                       stx   <D.URtoSs
+009D: 308D0086                   leax  >UsrIRQ,pcr
+00A1: 9F3C                       stx   <D.UsrIRQ
+00A3: 308D0132                   leax  >UsrSvc,pcr
+00A7: 9F40                       stx   <D.UsrSvc
+00A9: 308D00A6                   leax  >SysIRQ,pcr
+00AD: 9F3E                       stx   <D.SysIRQ
+00AF: 9F38                       stx   <D.SvcIRQ
+00B1: 308D014C                   leax  >SysSvc,pcr
+00B5: 9F42                       stx   <D.SysSvc
+00B7: 9F2E                       stx   <D.SWI2
+00B9: 308D00A6                   leax  >Poll,pcr          point to default poll routine
+00BD: 9F3A                       stx   <D.Poll            and save it 
+00BF: 308D00A2                   leax  >Clock,pcr         get default clock routine
+00C3: 9F81                       stx   <D.Clock           and save it to the vector
+00C5: 9F6B                       stx   <D.AltIRQ          and in the alternate IRQ vector
+00C7:                   
+00C7:                   * install system calls
+00C7: 318D0709                   leay  >SysTbl,pcr
+00CB: 1706BD                     lbsr  InstSSvc
+00CE:                   
+00CE:                   * link to init module
+00CE: 86C0                       lda   #Systm+0
+00D0: 308D0731                   leax  >InitNam,pcr
+00D4: 103F00                     os9   F$Link
+00D7: 1025FF36                   lbcs  OS9Cold
+00DB: DF2A                       stu   <D.Init
+00DD: A6C81B                     lda   Feature1,u               get feature byte 1
+00E0: 8501                       bita  #CRCOn                   CRC on?
+00E2: 2702                       beq   GetMem                   branch if not (already cleared earlier)
+00E4: 0C89                       inc   <D.CRC                   else turn on CRC checking
+00E6:                   *GetMem   ldd   MaxMem+1,u              I don't think this exists for Level1 RG
+00E6:                   *         clrb
+00E6:                   *         cmpd  <D.MLIM                 starts as $EE00
+00E6:                   *         bcc   L0158
+00E6:                   *         std   <D.MLIM
+00E6:                   GetMem   equ   *                        Initially I tried GetMem clra
+00E6:                   *                                       that is redundant. See last line. RG
+00E6: 9E20              L0158    ldx   <D.FMBM
+00E8:                   * Free-memory bitmap. Bit7 of 0,x corresponds to page 0, bit6 to page 1 etc.
+00E8:                   * Bit7 of 1,x corresponds to page 8, bit6 to page 9 etc, etc.
+00E8:                   
+00E8:                            IFNE  atari
+00E8:                   * Atari needs $0000-$08FF and $D000-$D7FF reserved
+00E8:                            ldb   #%11111111
+00E8:                            stb   ,x                       mark $0000-$07FF as allocated
+00E8:                            stb   $1A,x                    mark $D000-$D7FF I/O area as allocated
+00E8:                            ldb   #%10000000
+00E8:                            stb   1,x                      mark $0800-$08FF as allocated
+00E8:                            ELSE
+00E8:                            IFNE  corsham
+00E8:                   * Corsham needs $0000-$04FF and $E000-$EFFF reserved
+00E8:                            ldb   #%11111000
+00E8:                            stb   ,x                       mark $0000-$04FF as allocated
+00E8:                            ldb   #%11111111
+00E8:                            stb   $1C,x                    mark $E000-$E7FF I/O area as allocated
+00E8:                            stb   $1D,x                    mark $E800-$EFFF I/O area as allocated
+00E8:                            ELSE
+00E8:                   * CoCo needs $0000-$04FF reserved
+00E8: C6F8                       ldb   #%11111000
+00EA: E784                       stb   ,x                       mark $0000-$04FF as allocated
+00EC:                            ENDC
+00EC:                            ENDC
+00EC:                   
+00EC:                   * For all platforms exclude high memory as defined (earlier) by D.MLIM
+00EC: 4F                         clra
+00ED: D624                       ldb   <D.MLIM
+00EF: 50                         negb
+00F0: 1F02                       tfr   d,y
+00F2: 50                         negb
+00F3: 1704FE                     lbsr  L065A                    in included fallbit.asm
+00F6:                   
+00F6:                   * jump into krnp2 here
+00F6: 308D070F                   leax  >P2Nam,pcr
+00FA: 86C1                       lda   #Systm+Objct
+00FC: 103F00                     os9   F$Link
+00FF: 1025FF0E                   lbcs  OS9Cold
+0103: 6EA4                       jmp   ,y
+0105:                   
+0105: 3494              SWI3     pshs  pc,x,b
+0107: C618                       ldb   #P$SWI3
+0109: 2013                       bra   L018C
+010B: 3494              SWI2     pshs  pc,x,b
+010D: C616                       ldb   #P$SWI2
+010F: 200D                       bra   L018C
+0111: 6E9F0036          SVCNMI   jmp    [>D.NMI]
+0115: 3B                DUMMY    rti
+0116: 6E9F0038          SVCIRQ   jmp   [>D.SvcIRQ]
+011A: 3494              SWI      pshs  pc,x,b
+011C: C614                       ldb   #P$SWI
+011E: BE004B            L018C    ldx   >D.Proc
+0121: AE85                       ldx   b,x                     get SWI entry
+0123: AF63                       stx   3,s                     put in PC on stack
+0125: 3594                       puls  pc,x,b
+0127:                   
+0127: 318D0019          UsrIRQ   leay  <DoIRQPoll,pcr
+012B:                   * transition from user to system state
+012B: 4F                URtoSs   clra
+012C: 1F8B                       tfr   a,dp                    clear direct page
+012E: 9E4B                       ldx   <D.Proc                 get current process desc
+0130:                   * Note that we are putting the system state service routine address into
+0130:                   * the D.SWI2 vector.  If a system call is made while we are in system state,
+0130:                   * D.SWI2 will be vectored to the system state service routine vector.
+0130: DC42                       ldd   <D.SysSvc               get system state system call vector
+0132: DD2E                       std   <D.SWI2                 store in D.SWI2
+0134:                   * The same comment above applies to the IRQ service vector.
+0134: DC3E                       ldd   <D.SysIRQ               get system IRQ vector
+0136: DD38                       std   <D.SvcIRQ               store in D.SvcIRQ
+0138: 33E4                       leau  ,s                      point U to S
+013A: EF04                       stu   P$SP,x                  and save in process P$SP
+013C: A60D                       lda   P$State,x               get state field in proc desc
+013E: 8A80                       ora   #SysState               mark process to be in system state
+0140: A70D                       sta   P$State,x               store it
+0142: 6EA4                       jmp   ,y                      jump to ,y
+0144:                   
+0144:                   DoIRQPoll
+0144: AD9F003A                   jsr   [>D.Poll]               call vectored polling routine
+0148: 2406                       bcc   L01BD                   branch if carry clear
+014A: E6E4                       ldb   ,s                      get the CC on the stack
+014C: CA10                       orb   #IRQMask                mask IRQs
+014E: E7E4                       stb   ,s                      and save it back
+0150: 160096            L01BD    lbra  ActivateProc
+0153:                   
+0153:                   
+0153:                   
+0153: 4F                SysIRQ   clra
+0154: 1F8B                       tfr   a,dp                    make DP be 0
+0156: AD9F003A                   jsr   [>D.Poll]               call the vectored IRQ polling routine
+015A: 2406                       bcc   L01CF                   branch if carry is clear
+015C: E6E4                       ldb   ,s                      get the CC on the stack
+015E: CA10                       orb   #IRQMask                mask IRQs
+0160: E7E4                       stb   ,s                      and save it back
+0162: 3B                L01CF    rti
+0163:                   
+0163: 53                Poll     comb
+0164: 39                         rts
+0165:                   
+0165:                   * Default clock routine - executed 60 times/sec
+0165: 9E51              Clock    ldx   <D.SProcQ               get pointer to sleeping proc queue
+0167: 2727                       beq   L01FD                   branch if no process sleeping
+0169: A60D                       lda   P$State,x               get state of that process
+016B: 8540                       bita  #TimSleep               timed sleep?
+016D: 2721                       beq   L01FD                   branch if clear
+016F: EE04                       ldu   P$SP,x                  else get process stack pointer
+0171: EC44                       ldd   R$X,u                   get the value of the process X reg
+0173: 830001                     subd  #$0001                  subtract one from it
+0176: ED44                       std   R$X,u                   and store it back
+0178: 2616                       bne   L01FD                   branch if not zero (still will sleep)
+017A: EE0E              L01E7    ldu   P$Queue,x               get process current queue pointer
+017C: 8D2F                       bsr   L021A 
+017E: 30C4                       leax  ,u
+0180: 270C                       beq   L01FB
+0182: A60D                       lda   P$State,x               get process state byte
+0184: 8540                       bita  #TimSleep               bit set?
+0186: 2706                       beq   L01FB                   branch if not
+0188: EE04                       ldu   P$SP,x                  get process stack pointer
+018A: EC44                       ldd   R$X,u                   then get process X register
+018C: 27EC                       beq   L01E7                   branch if zero
+018E: 9F51              L01FB    stx   <D.SProcQ
+0190: 0A48              L01FD    dec   <D.Slice                decrement slice
+0192: 2610                       bne   ClockRTI                if not 0, exit ISR
+0194: 965B                       lda   <D.TSlice               else get default time slice
+0196: 9748                       sta   <D.Slice                and save it as slice
+0198: 9E4B                       ldx   <D.Proc                 get proc desc of current proc
+019A: 2708                       beq   ClockRTI                if none, exit ISR
+019C: A60D                       lda   P$State,x               get process state
+019E: 8A20                       ora   #TimOut                 set timeout bit
+01A0: A70D                       sta   P$State,x               and store back
+01A2: 2A01                       bpl   L0212                   branch if not system state
+01A4: 3B                ClockRTI rti
+01A5:                   
+01A5: 318D0040          L0212    leay  >ActivateProc,pcr
+01A9: 2080                       bra   URtoSs
+01AB:                   
+01AB:                   
+01AB:                   *FAProc   ldx   R$X,u        Get ptr to process to activate
+01AB:                   *L0D11    clrb  
+01AB:                   *         pshs  cc,b,x,y,u
+01AB:                   *         lda   P$Prior,x    Get process priority
+01AB:                   *         sta   P$Age,x      Save it as age (How long it's been around)
+01AB:                   *         orcc  #IntMasks    Shut down IRQ's
+01AB:                   *         ldu   #(D.AProcQ-P$Queue)  Get ptr to active process queue
+01AB:                   *         bra   L0D29        Go through the chain
+01AB:                   ** Update active process queue
+01AB:                   **  X=Process to activate
+01AB:                   **  U=Current process in queue links
+01AB:                   *L0D1F    inc   P$Age,u      update current process age
+01AB:                   *         bne   L0D25        wrap?
+01AB:                   *         dec   P$Age,u      yes, reset it to max.
+01AB:                   *L0D25    cmpa  P$Age,u      match process ages??
+01AB:                   *         bhi   L0D2B        no, skip update
+01AB:                   *L0D29    leay  ,u           point Y to current process
+01AB:                   *L0D2B    ldu   P$Queue,u    get pointer to next process in chain
+01AB:                   *         bne   L0D1F        Still more in chain, keep going
+01AB:                   *         ldd   P$Queue,y    
+01AB:                   *         stx   P$Queue,y    save new process to chain
+01AB:                   *         std   P$Queue,x
+01AB:                   *         puls  cc,b,x,y,u,pc
+01AB:                   
+01AB:                   
+01AB:                   **************************************************
+01AB:                   * System Call: F$AProc
+01AB:                   *
+01AB:                   * Function: Insert process into active process queue
+01AB:                   *
+01AB:                   * Input:  X = Address of process descriptor
+01AB:                   *
+01AB:                   * Output: None (U and Y are preserved)
+01AB:                   *
+01AB:                   * Error:  CC = C bit set; B = error code
+01AB:                   *
+01AB:                   *              "An Ode to Dr. Lee"
+01AB:                   *             (1:27PM, Feb 23, 2006)
+01AB:                   *
+01AB:                   *   Sitting in CMPS 455, I listen to Dr. Lee,
+01AB:                   *   His teaching style is as awful as any can be.
+01AB:                   *   Operating System Principles I have seen many times before,
+01AB:                   *   And as a result, this class is a major bore.
+01AB:                   *   As he talks about file systems, I work on NitrOS-9,
+01AB:                   *   even though I pay no attention, I do not fall behind.
+01AB:                   *
+01AB:                   *                                  - Anonymous Student who returned
+01AB:                   *                                    to university to complete his
+01AB:                   *                                    computer science degree while working
+01AB:                   *                                    on The NitrOS-9 Project.
+01AB:                   *
+01AB: AE44              FAProc   ldx   R$X,u                            get ptr to process to activate
+01AD: 3460              L021A    pshs  u,y                                      save U/Y on stack
+01AF: CE003F                     ldu   #(D.AProcQ-P$Queue)
+01B2: 2007                       bra   L0228
+01B4: E64C              L0221    ldb   P$Age,u                          get process age
+01B6: 5C                         incb                                           update it
+01B7: 2702                       beq   L0228                            branch if wrap
+01B9: E74C                       stb   P$Age,u                          save it back to proc desc
+01BB: EE4E              L0228    ldu   P$Queue,u                        get pointer to queue this process queue
+01BD: 26F5                       bne   L0221                            branch if process is in active queue
+01BF: CE003F                     ldu   #(D.AProcQ-P$Queue)
+01C2: A60B                       lda   P$Prior,x                        get process priority
+01C4: A70C                       sta   P$Age,x                          save it as age (How long its been around)
+01C6: 1A50                       orcc  #IntMasks                        mask interrupts
+01C8: 31C4              L0235    leay  ,u                                       point Y to current process
+01CA: EE4E                       ldu   P$Queue,u                        get pointer to queue
+01CC: 2704                       beq   L023F
+01CE: A14C                       cmpa  P$Age,u                          match process ages?
+01D0: 23F6                       bls   L0235                            no, skip update
+01D2: EF0E              L023F    stu   P$Queue,x
+01D4: AF2E                       stx   P$Queue,y
+01D6: 5F                         clrb
+01D7: 35E0                       puls  pc,u,y                           restore U/Y and return
+01D9:                   
+01D9:                   
+01D9:                            
+01D9:                   * User-State system call entry point
+01D9:                   *
+01D9:                   * All system calls made from user-state will go through this code.
+01D9: 318D0005          UsrSvc   leay  <MakeSysCall,pcr
+01DD: 1A50                       orcc  #IntMasks
+01DF: 16FF49                     lbra  URtoSs
+01E2:                   
+01E2:                   MakeSysCall
+01E2: 1CAF                       andcc #^IntMasks              unmask IRQ/FIRQ
+01E4: 109E44                     ldy   <D.UsrDis               get pointer to user syscall dispatch table
+01E7: 8D23                       bsr   DoSysCall               go do the system call
+01E9:                   ActivateProc
+01E9: 9E4B                       ldx   <D.Proc                 get current proc desc
+01EB: 2761                       beq   FNProc                  branch to FNProc if none
+01ED: 1A50                       orcc  #IntMasks               mask interrupts
+01EF: E60D                       ldb   P$State,x               get state value in proc desc
+01F1: C47F                       andb  #^SysState              turn off system state flag
+01F3: E70D                       stb   P$State,x               save state value
+01F5: C520                       bitb  #TimOut                 timeout bit set?
+01F7: 276C                       beq   L02D1                   branch if not
+01F9: C4DF                       andb  #^TimOut                else turn off bit
+01FB: E70D                       stb   P$State,x               in state value
+01FD: 8DAE                       bsr   L021A
+01FF: 204D                       bra   FNProc
+0201:                   
+0201:                   * System-State system call entry point
+0201: 4F                SysSvc   clra
+0202: 1F8B                       tfr   a,dp                    set direct page to 0
+0204: 33E4                       leau  ,s                      point U to SP
+0206: 109E46                     ldy   <D.SysDis               get system state dispatch table ptr
+0209: 8D01                       bsr   DoSysCall
+020B: 3B                         rti
+020C:                   
+020C:                   * Entry: Y = Dispatch table (user or system)
+020C:                   DoSysCall
+020C: 3440                       pshs  u
+020E: AE4A                       ldx   R$PC,u                  point X to PC
+0210: E680                       ldb   ,x+                     get func code at X
+0212: AF4A                       stx   R$PC,u                  restore updated PC
+0214: 58                         lslb                          high bit set?
+0215: 2405                       bcc   L0288                   branch if not (non I/O call)
+0217: 56                         rorb                          else restore B (its an I/O call)
+0218: AE3E                       ldx   -2,y                    grab IOMan vector
+021A:                   * Note: should check if X is zero in case IOMan was not installed.
+021A: 2008                       bra   L0290
+021C: C16E              L0288    cmpb  #$37*2
+021E: 241B                       bcc   L02A7
+0220: AEA5                       ldx   b,y                     X = addr of system call
+0222: 2717                       beq   L02A7
+0224: AD84              L0290    jsr   ,x                      jsr into system call
+0226: 3540              L0292    puls  u
+0228: 1FA8                       tfr   cc,a
+022A: 2402                       bcc   FixCC                   branch if no error
+022C: E742                       stb   R$B,u                   store error code
+022E: E640              FixCC    ldb   R$CC,u                  get caller's CC
+0230: C4F0                       andb  #^(Negative+Zero+TwosOvfl+Carry)
+0232: E740                       stb   R$CC,u
+0234: 840F                       anda  #Negative+Zero+TwosOvfl+Carry
+0236: AA40                       ora   R$CC,u
+0238: A740                       sta   R$CC,u
+023A: 39                         rts
+023B: 53                L02A7    comb
+023C: C6D0                       ldb   #E$UnkSvc
+023E: 20E6                       bra   L0292
+0240:                   
+0240:                   * no signal handler, exit with signal value as exit code
+0240: E60D              L02AC    ldb   P$State,x
+0242: CA80                       orb   #SysState
+0244: E70D                       stb   P$State,x
+0246: E68836                     ldb   <P$Signal,x
+0249: 1CAF                       andcc #^(IntMasks)
+024B: 103F06                     os9   F$Exit
+024E:                   
+024E: 4F                FNProc   clra
+024F: 5F                         clrb
+0250: DD4B                       std   <D.Proc
+0252: 2002                       bra   L02C2
+0254:                   * execution goes here when there are no active processes
+0254: 3CAF              L02C0    cwai  #^(IntMasks)
+0256: 1A50              L02C2    orcc  #IntMasks
+0258: 9E4D                       ldx   <D.AProcQ               get next active process
+025A: 27F8                       beq   L02C0                   CWAI if none
+025C: EC0E                       ldd   P$Queue,x               get queue ptr
+025E: DD4D                       std   <D.AProcQ               store in Active Q
+0260: 9F4B                       stx   <D.Proc                 store in current process
+0262: 10EE04                     lds   P$SP,x                  get process' stack ptr
+0265: E60D              L02D1    ldb   P$State,x               get state
+0267: 2B33                       bmi   L0308                   branch if system state
+0269: C502                       bitb  #Condem                 process condemned?
+026B: 26D3                       bne   L02AC                   branch if so...
+026D: E68836                     ldb   <P$Signal,x             get signal no
+0270: 2721                       beq   L02FF                   branch if none
+0272: 5A                         decb                          decrement
+0273: 271B                       beq   L02FC                   branch if wake up
+0275: EE8837                     ldu   <P$SigVec,x             get signal handler addr
+0278: 27C6                       beq   L02AC                   branch if none
+027A: 10AE8839                   ldy   <P$SigDat,x             get data addr
+027E: EC66                       ldd   R$Y,s
+0280:                   * set up new return stack for RTI
+0280: 3466                       pshs  u,y,d            new PC (sigvec), new U (sigdat), same Y
+0282: EE6A                       ldu   6+R$X,s          old X via U
+0284: A68836                     lda   <P$Signal,x      signal ...
+0287: E669                       ldb   6+R$DP,s         and old DP ...
+0289:                            IFEQ  H6309
+0289: 1F02                       tfr   d,y              via Y
+028B: EC66                       ldd   6+R$CC,s         old CC and A via D
+028D: 3466                       pshs  u,y,d            same X, same DP / new B (signal), same A / CC
+028F:                            ELSE
+028F:                            pshs  u,b              same X, same DP
+028F:                            pshsw                  same W
+028F:                            pshs  a                new B (signal)
+028F:                            ldd   6+6+R$CC,s
+028F:                            pshs  d                same A / CC
+028F:                            ENDC
+028F: 5F                         clrb
+0290: E78836            L02FC    stb   <P$Signal,x
+0293: EC8816            L02FF    ldd   <P$SWI2,x
+0296: DD2E                       std   <D.SWI2
+0298: DC3C                       ldd   <D.UsrIRQ
+029A: DD38                       std   <D.SvcIRQ
+029C: 3B                L0308    rti
+029D:                   
+029D: 3440              FLink    pshs  u                       save caller regs
+029F: EC41                       ldd   R$A,u
+02A1: AE44                       ldx   R$X,u
+02A3: 170137                     lbsr  L0443
+02A6: 2404                       bcc   FLinkOK
+02A8: C6DD                       ldb   #E$MNF
+02AA: 2025                       bra   L033D
+02AC:                   * U = module dir entry
+02AC: 10AEC4            FLinkOK  ldy   ,u                      get module ptr
+02AF: E627                       ldb   M$Revs,y
+02B1: C580                       bitb  #ReEnt                  reentrant?
+02B3: 2609                       bne   L032A                   branch if so
+02B5: 6D42                       tst   $02,u                   link count zero?
+02B7: 2705                       beq   L032A                   yep, ok to link to nonreent
+02B9: 53                         comb                          else module is busy
+02BA: C6D1                       ldb   #E$ModBsy
+02BC: 2013                       bra   L033D
+02BE: 6C42              L032A    inc   $02,u                   increment link count
+02C0: EEE4                       ldu   ,s                      get caller regs from stack
+02C2: AF44                       stx   R$X,u
+02C4: 10AF48                     sty   R$U,u
+02C7: EC26                       ldd   M$Type,y
+02C9: ED41                       std   R$D,u
+02CB: EC29                       ldd   M$IDSize,y
+02CD: 30AB                       leax  d,y
+02CF: AF46                       stx   R$Y,u
+02D1: 35C0              L033D    puls  pc,u
+02D3:                   
+02D3: 3440              FVModul  pshs  u
+02D5: AE44                       ldx   R$X,u
+02D7: 8D05                       bsr   ValMod
+02D9: 3520                       puls  y
+02DB: EF28                       stu   R$U,y
+02DD: 39                         rts
+02DE:                   
+02DE:                   * X = address of module to validate
+02DE: 8D57              ValMod   bsr   ChkMHCRC
+02E0: 254C                       bcs   ValModEx
+02E2: A606                       lda   M$Type,x
+02E4: 3412                       pshs  x,a
+02E6: EC04                       ldd   M$Name,x
+02E8: 308B                       leax  d,x                     X = addr of name in mod
+02EA:                            IFNE  atari
+02EA:                   * jsr [>$FFE8]
+02EA:                   * lda   #$20
+02EA:                   * jsr [>$FFE4]
+02EA:                            ENDC
+02EA: 3502                       puls  a
+02EC: 1700EE                     lbsr  L0443
+02EF: 3510                       puls  x
+02F1: 253C                       bcs   ValLea
+02F3: C6E7                       ldb   #E$KwnMod
+02F5: ACC4                       cmpx  ,u
+02F7: 273C                       beq   errex@
+02F9: A607                       lda   M$Revs,x
+02FB: 840F                       anda  #RevsMask
+02FD: 3402                       pshs  a
+02FF: 10AEC4                     ldy   ,u
+0302: A627                       lda   M$Revs,y
+0304: 840F                       anda  #RevsMask
+0306: A1E0                       cmpa  ,s+                     same revision as other mod?
+0308: 242B                       bcc   errex@
+030A: 3430                       pshs  y,x
+030C: E642                       ldb   M$Size,u
+030E: 2619                       bne   ValPul
+0310: AEC4                       ldx   ,u
+0312: 9C66                       cmpx  <D.BTLO
+0314: 2413                       bcc   ValPul
+0316: EC02                       ldd   $02,x
+0318: C300FF                     addd  #$00FF
+031B: 1F89                       tfr   a,b
+031D: 4F                         clra
+031E: 1F02                       tfr   d,y
+0320: E6C4                       ldb   ,u
+0322: 9E20                       ldx   <D.FMBM
+0324: 103F14                     os9   F$DelBit
+0327: 6F42                       clr   $02,u
+0329: 3530              ValPul   puls  y,x
+032B: AFC4              ValSto   stx   ,u
+032D: 5F                         clrb
+032E: 39                ValModEx rts
+032F: 31C4              ValLea   leay  ,u
+0331: 26F8                       bne   ValSto
+0333: C6CE                       ldb   #E$DirFul
+0335: 43                errex@   coma
+0336: 39                         rts
+0337:                   
+0337:                   * check module header and CRC
+0337:                   * X = address of potential module
+0337: EC84              ChkMHCRC ldd   ,x
+0339: 108387CD                   cmpd  #M$ID12                 sync bytes?
+033D: 2606                       bne   ChkMHEx                nope, not a module here
+033F: 3108                       leay  M$Parity,x
+0341: 8D15                       bsr   ChkMHPar                check header parity
+0343: 2404                       bcc   Chk4CRC                 branch if ok
+0345: 53                ChkMHEx  comb
+0346: C6CD                       ldb   #E$BMID
+0348: 39                         rts
+0349:                   
+0349:                   Chk4CRC
+0349:                   * Following 4 lines added to support no CRC checks - 2002/07/21
+0349: 9689                       lda   <D.CRC                   is CRC checking on?
+034B: 2602                       bne   DoCRCCk                  branch if so
+034D: 5F                         clrb
+034E: 39                         rts
+034F:                   
+034F: 3410              DoCRCCk  pshs  x
+0351: 10AE02                     ldy   M$Size,x
+0354: 8D0F                       bsr   ChkMCRC                 checkm module CRC
+0356: 3590                       puls  pc,x
+0358:                            
+0358:                   * check module header parity
+0358:                   * Y = pointer to parity byte
+0358: 3430              ChkMHPar pshs  y,x
+035A: 4F                         clra
+035B: A880              ChkM010  eora  ,x+
+035D: AC62                       cmpx  2,s                     compare to addr of M$Parity
+035F: 23FA                       bls   ChkM010
+0361: 81FF                       cmpa  #$FF
+0363: 35B0                       puls  pc,y,x
+0365:                   * X = address of potential module
+0365:                   * Y = size of module
+0365: CCFFFF            ChkMCRC  ldd   #$FFFF
+0368: 3406                       pshs  b,a
+036A: 3406                       pshs  b,a
+036C: 3361                       leau  1,s
+036E: A680              L03D4    lda   ,x+
+0370: 8D2C                       bsr   CRCAlgo
+0372: 313F                       leay  -1,y                    dec Y (size of module)
+0374: 26F8                       bne   L03D4                   continue
+0376: 6F5F                       clr   -1,u
+0378: A6C4                       lda   ,u
+037A: 8180                       cmpa  #CRCCon1
+037C: 2608                       bne   L03EC
+037E: EC41                       ldd   1,u
+0380: 10830FE3                   cmpd  #CRCCon23
+0384: 2703                       beq   L03EF
+0386: 53                L03EC    comb
+0387: C6E8                       ldb   #E$BMCRC
+0389: 35B0              L03EF    puls  pc,y,x
+038B:                   
+038B:                   * F$CRC
+038B: AE44              FCRC     ldx   R$X,u
+038D: 10AE46                     ldy   R$Y,u
+0390: 270A                       beq   L0402
+0392: EE48                       ldu   R$U,u
+0394: A680              L03FA    lda   ,x+
+0396: 8D06                       bsr   CRCAlgo
+0398: 313F                       leay  -1,y
+039A: 26F8                       bne   L03FA
+039C: 5F                L0402    clrb
+039D: 39                         rts
+039E:                   
+039E: A8C4              CRCAlgo  eora  ,u
+03A0: 3402                       pshs  a
+03A2: EC41                       ldd   $01,u
+03A4: EDC4                       std   ,u
+03A6: 4F                         clra
+03A7: E6E4                       ldb   ,s
+03A9: 58                         lslb
+03AA: 49                         rola
+03AB: A841                       eora  1,u
+03AD: ED41                       std   1,u
+03AF: 5F                         clrb
+03B0: A6E4                       lda   ,s
+03B2: 44                         lsra
+03B3: 56                         rorb
+03B4: 44                         lsra
+03B5: 56                         rorb
+03B6: A841                       eora  1,u
+03B8: E842                       eorb  2,u
+03BA: ED41                       std   1,u
+03BC: A6E4                       lda   ,s
+03BE: 48                         lsla
+03BF: A8E4                       eora  ,s
+03C1: A7E4                       sta   ,s
+03C3: 48                         lsla
+03C4: 48                         lsla
+03C5: A8E4                       eora  ,s
+03C7: A7E4                       sta   ,s
+03C9: 48                         lsla
+03CA: 48                         lsla
+03CB: 48                         lsla
+03CC: 48                         lsla
+03CD: A8E0                       eora  ,s+
+03CF: 2A0B                       bpl   L0442
+03D1: CC8021                     ldd   #$8021
+03D4: A8C4                       eora  ,u
+03D6: A7C4                       sta   ,u
+03D8: E842                       eorb  2,u
+03DA: E742                       stb   2,u
+03DC: 39                L0442    rts
+03DC:                   
+03DD:                   
+03DD:                   L0443
+03DD: CE0000                     ldu   #$0000
+03E0: 1F89                       tfr   a,b
+03E2: 84F0                       anda  #TypeMask
+03E4: C40F                       andb  #LangMask
+03E6: 3476                       pshs  u,y,x,b,a
+03E8: 8D4F                       bsr   EatSpace
+03EA: 812F                       cmpa  #PDELIM                 pathlist char?
+03EC: 2748                       beq   L049C                   branch if so
+03EE: 1702F6                     lbsr  ParseNam                parse name
+03F1: 2544                       bcs   L049D                   return if error
+03F3: DE26                       ldu   <D.ModDir
+03F5: 3464              L045B    pshs  u,y,b
+03F7: EEC4                       ldu   ,u
+03F9: 272A                       beq   L048B
+03FB: EC44                       ldd   $04,u
+03FD: 31CB                       leay  d,u
+03FF: E6E4                       ldb   ,s
+0401: 170341                     lbsr  L07AB
+0404: 2527                       bcs   L0493
+0406: A665                       lda   $05,s
+0408: 2706                       beq   L0476
+040A: A846                       eora  $06,u
+040C: 84F0                       anda  #$F0
+040E: 261D                       bne   L0493
+0410: A666              L0476    lda   $06,s
+0412: 2706                       beq   L0480
+0414: A846                       eora  $06,u
+0416: 840F                       anda  #$0F
+0418: 2613                       bne   L0493
+041A: 3554              L0480    puls  u,x,b
+041C: EF66                       stu   $06,s
+041E: 8D19                       bsr   EatSpace
+0420: AF62                       stx   $02,s
+0422: 4F                         clra
+0423: 2012                       bra   L049D
+0425: EC6B              L048B    ldd   $0B,s
+0427: 2604                       bne   L0493
+0429: EC63                       ldd   $03,s
+042B: ED6B                       std   $0B,s
+042D: 3564              L0493    puls  u,y,b
+042F: 3344                       leau  $04,u
+0431: 119328                     cmpu  <D.ModDir+2
+0434: 25BF                       bcs   L045B
+0436: 53                L049C    comb
+0437: 35F6              L049D    puls  pc,u,y,x,b,a
+0439:                   
+0439: 8620              EatSpace lda   #C$SPAC
+043B: A180              EatSpc10 cmpa  ,x+
+043D: 27FC                       beq   EatSpc10
+043F: A682                       lda   ,-x
+0441: 39                         rts
+0442:                   
+0442: 9E49              FFork    ldx   <D.PrcDBT
+0444: 103F30                     os9   F$All64
+0447: 2568                       bcs   L0517
+0449: 9E4B                       ldx   <D.Proc
+044B: 3410                       pshs  x                       save calling proc desc on stack
+044D: EC09                       ldd   P$User,x
+044F: ED29                       std   P$User,y
+0451: A60B                       lda   P$Prior,x
+0453: 5F                         clrb
+0454: ED2B                       std   P$Prior,y
+0456: C680                       ldb   #SysState
+0458: E72D                       stb   P$State,y
+045A: 109F4B                     sty   <D.Proc
+045D: EC883B                     ldd   <P$NIO,x
+0460: EDA83B                     std   <P$NIO,y
+0463: EC883D                     ldd   <P$NIO+2,x
+0466: EDA83D                     std   <P$NIO+2,y
+0469: 30881A                     leax  <P$DIO,x
+046C: 31A81A                     leay  <P$DIO,y
+046F: C60C                       ldb   #DefIOSiz
+0471:                   * copy I/O stuff from parent to child
+0471: A680              L04D7    lda   ,x+
+0473: A7A0                       sta   ,y+
+0475: 5A                         decb
+0476: 26F9                       bne   L04D7
+0478:                   * X/Y = address of path table in respective proc desc
+0478:                   * Dup stdin/stdout/stderr
+0478: C603                       ldb   #$03
+047A: A680              L04E0    lda   ,x+
+047C: 103F82                     os9   I$Dup
+047F: 2401                       bcc   L04E8
+0481: 4F                         clra
+0482: A7A0              L04E8    sta   ,y+
+0484: 5A                         decb
+0485: 26F3                       bne   L04E0
+0487: 8D64                       bsr   L0553
+0489: 251B                       bcs   L050C
+048B: 3520                       puls  y                       get parent proc desc
+048D: 109F4B                     sty   <D.Proc
+0490: A600                       lda   P$ID,x                  get ID of new process
+0492: A741                       sta   R$A,u                   store in caller's A
+0494: E623                       ldb   P$CID,y                 get child id of parent
+0496: A723                       sta   P$CID,y                 store new proc in parent's CID
+0498: A620                       lda   P$ID,y                  get ID of parent
+049A: ED01                       std   P$PID,x                 store in child proc desc
+049C: E60D                       ldb   P$State,x               update state of child
+049E: C47F                       andb  #^SysState
+04A0: E70D                       stb   P$State,x
+04A2: 103F2C                     os9   F$AProc                 insert child in active Q
+04A5: 39                         rts
+04A6: 3404              L050C    pshs  b
+04A8: 103F06                     os9   F$Exit
+04AB: 53                         comb
+04AC: 3514                       puls  x,b
+04AE: 9F4B                       stx   <D.Proc
+04B0: 39                         rts
+04B1: 53                L0517    comb
+04B2: C6E5                       ldb   #E$PrcFul
+04B4: 39                         rts
+04B5:                   
+04B5: 8D26              FChain   bsr   L0543
+04B7: 2512                       bcs   L0531
+04B9: 1A50                       orcc  #IntMasks
+04BB: E60D                       ldb   $0D,x
+04BD: C47F                       andb  #$7F
+04BF: E70D                       stb   $0D,x
+04C1: 103F2C            L0527    os9   F$AProc
+04C4: 103F2D                     os9   F$NProc
+04C7:                   
+04C7: 8D14              SFChain  bsr   L0543
+04C9: 24F6                       bcc   L0527
+04CB: 3404              L0531    pshs  b
+04CD: E78836                     stb   <P$Signal,x
+04D0: E60D                       ldb   P$State,x
+04D2: CA02                       orb   #Condem
+04D4: E70D                       stb   P$State,x
+04D6: C6FF                       ldb   #$FF
+04D8: E70B                       stb   P$Prior,x
+04DA: 53                         comb
+04DB: 3584                       puls  pc,b
+04DD: 3440              L0543    pshs  u
+04DF: 9E4B                       ldx   <D.Proc
+04E1: EE8812                     ldu   <P$PModul,x
+04E4: 103F02                     os9   F$UnLink
+04E7: EEE4                       ldu   ,s
+04E9: 8D02                       bsr   L0553
+04EB: 35C0                       puls  pc,u
+04ED: 9E4B              L0553    ldx   <D.Proc
+04EF: 3450                       pshs  u,x
+04F1: DC40                       ldd   <D.UsrSvc
+04F3: ED8814                     std   <P$SWI,x
+04F6: ED8816                     std   <P$SWI2,x
+04F9: ED8818                     std   <P$SWI3,x
+04FC: 4F                         clra
+04FD: 5F                         clrb
+04FE: A78836                     sta   <P$Signal,x
+0501: ED8837                     std   <P$SigVec,x
+0504: A641                       lda   R$A,u
+0506: AE44                       ldx   R$X,u
+0508: 103F00                     os9   F$Link
+050B: 2405                       bcc   L0578
+050D: 103F01                     os9   F$Load
+0510: 256F                       bcs   L05E7
+0512: 109E4B            L0578    ldy   <D.Proc
+0515: EFA812                     stu   <P$PModul,y
+0518: 8111                       cmpa  #Prgrm+Objct
+051A: 2709                       beq   L058B
+051C: 81C1                       cmpa  #Systm+Objct
+051E: 2705                       beq   L058B
+0520: 53                         comb
+0521: C6EA                       ldb   #E$NEMod
+0523: 205C                       bra   L05E7
+0525: 31C4              L058B    leay  ,u                      Y = addr of module
+0527: EE62                       ldu   2,s                     get U off stack (caller regs)
+0529: AF44                       stx   R$X,u
+052B: A642                       lda   R$B,u
+052D: 5F                         clrb
+052E: 10A32B                     cmpd  M$Mem,y                 compare passed mem to module's
+0531: 2402                       bcc   L059B                   branch if less than
+0533: EC2B                       ldd   M$Mem,y
+0535: C30000            L059B    addd  #$0000
+0538: 2600                       bne   L05A0
+053A: 103F07            L05A0    os9   F$Mem
+053D: 2542                       bcs   L05E7
+053F: 83000C                     subd  #R$Size                 subtract registers
+0542: A346                       subd  R$Y,u                   subtract parameter area
+0544: 2539                       bcs   L05E5
+0546: AE48                       ldx   R$U,u                   get parameter area
+0548: EC46                       ldd   R$Y,u                   get parameter size
+054A: 3406                       pshs  b,a
+054C: 270A                       beq   L05BE
+054E: 308B                       leax  d,x                     point to end of param area
+0550: A682              L05B6    lda   ,-x                     get byte, dec X
+0552: A7A2                       sta   ,-y                     save byte in data area, dec X
+0554: AC48                       cmpx  R$U,u                   at top of param area?
+0556: 22F8                       bhi   L05B6
+0558:                   * set up registers for return of F$Fork/F$Chain
+0558: 9E4B              L05BE    ldx   <D.Proc
+055A: 10AF38                     sty   -R$Size+R$X,y           put in X on caller stack
+055D: 3134                       leay  -R$Size,y               back up register size
+055F: 10AF04                     sty   P$SP,x
+0562: A607                       lda   P$ADDR,x
+0564: 5F                         clrb
+0565: ED28                       std   R$U,y                   lowest address
+0567: A723                       sta   R$DP,y                  set direct page
+0569: AB08                       adda  P$PagCnt,x
+056B: ED26                       std   R$Y,y
+056D: 3506                       puls  b,a
+056F: ED21                       std   R$D,y                   size of param area
+0571: C680                       ldb   #Entire
+0573: E720                       stb   R$CC,y
+0575: EE8812                     ldu   <P$PModul,x             get addr of prim. mod
+0578: EC49                       ldd   M$Exec,u
+057A: 33CB                       leau  d,u
+057C: EF2A                       stu   R$PC,y                  put in PC on caller reg
+057E: 5F                         clrb
+057F: C6E6              L05E5    ldb   #E$IForkP
+0581: 35D0              L05E7    puls  pc,u,x
+0583:                   
+0583:                   **************************************************
+0583:                   * System Call: F$SRqMem
+0583:                   *
+0583:                   * Function: Request memory
+0583:                   *
+0583:                   * F$SRqMem allocates memory from the system in 256 byte 'pages.'
+0583:                   * There are 256 of these '256 byte pages' in RAM (256*256=64K).
+0583:                   * The allocation map, pointed to by D.FMBM holds 8 pages per byte, making the
+0583:                   * allocation map itself 32 bytes in size.
+0583:                   *
+0583:                   * Memory is allocated from the top of the system RAM map downwards.  Rel/Boot/Krn
+0583:                   * also reside in this area, and are loaded from $EE00-$FFFF.  Since this area is
+0583:                   * always allocated, we start searching for free pages from page $ED downward.
+0583:                   *
+0583:                   * Input:  D = Byte count
+0583:                   *
+0583:                   * Output: U = Address of allocated memory area
+0583:                   *
+0583:                   * Error:  CC = C bit set; B = error code
+0583:                   *
+0583: EC41              FSRqMem  ldd   R$D,u        get memory allocation size requested
+0585: C300FF                     addd  #$00FF       round it up to nearest 256 byte page (e.g. $1FF = $2FE)
+0588: 5F                         clrb               just keep # of pages (e.g. $2FE = $200)
+0589: ED41                       std   R$D,u        save rounded version back to user
+058B: 9E22                       ldx   <D.FMBM+2    get ptr to end of free memory bitmap
+058D: CC01FF                     ldd   #$01FF           A = $01 (RAM IN USE flag), B = $FF (counter)
+0590: 3406                       pshs  b,a                      save onto stack
+0592: 200A                       bra   L0604            start the search
+0594: 6A61              L05FA    dec   $01,s
+0596: E661                       ldb   $01,s
+0598: 68E4              L05FE    lsl   ,s
+059A: 2408                       bcc   L060A
+059C: 69E4                       rol   ,s
+059E: 301F              L0604    leax  -1,x                     backup into free memory bitmap
+05A0: 9C20                       cmpx  <D.FMBM          did we move past the begining?
+05A2: 2516                       bcs   L0620            branch if so
+05A4: A684              L060A    lda   ,x                       get byte in current location in free memory bitmap
+05A6: A4E4                       anda  ,s                       AND with $01 on stack
+05A8: 26EA                       bne   L05FA            branch if not free
+05AA: 6A61                       dec   1,s                      decrement counter on stack
+05AC: E061                       subb  1,s
+05AE: E141                       cmpb  R$A,u
+05B0: 46                         rora
+05B1: EB61                       addb  1,s
+05B3: 49                         rola
+05B4: 25E2                       bcs   L05FE
+05B6: E661                       ldb   1,s
+05B8: 4F                         clra
+05B9: 5C                         incb
+05BA: 3262              L0620    leas  2,s
+05BC: 2511                       bcs   L0635
+05BE: 9E20                       ldx   <D.FMBM          get pointer to start of free memory bitmap
+05C0: 1F02                       tfr   d,y
+05C2: E641                       ldb   R$A,u            get MSB into B (this will be bit count)
+05C4: 4F                         clra                           clear A
+05C5: 1E02                       exg   d,y
+05C7:                   * X = address of allocation bitmap
+05C7:                   * D = Number of first bit to set
+05C7:                   * Y = Bit count (number of bits to set)
+05C7: 8D2B                       bsr   L065A            call into F$AllBit to allocate bits
+05C9: 1E89                       exg   a,b
+05CB: ED48                       std   R$U,u            put allocated addres into caller's U
+05CD: 4F                L0633    clra
+05CE: 39                         rts
+05CF: 53                L0635    comb
+05D0: C6CF                       ldb   #E$MemFul
+05D2: 39                         rts
+05D3:                   
+05D3:                   
+05D3:                   
+05D3:                   **************************************************
+05D3:                   * System Call: F$SRtMem
+05D3:                   *
+05D3:                   * Function: Return memory
+05D3:                   *
+05D3:                   * Input:  U = Address of memory to return
+05D3:                   *         D = Number of bytes to return
+05D3:                   *
+05D3:                   * Output: None
+05D3:                   *
+05D3:                   * Error:  CC = C bit set; B = error code
+05D3:                   *
+05D3: EC41              FSRtMem  ldd   R$D,u        get memory allocation size requested
+05D5: C300FF                     addd  #$00FF       round it up to nearest 256 byte page (e.g. $1FF = $2FE)
+05D8: 1F89                       tfr   a,b                      put MSB into B
+05DA: 4F                         clra                           now D reflects number of pages (not bytes)
+05DB: 1F02                       tfr   d,y                      put 16 bit page count into Y
+05DD: EC48                       ldd   R$U,u            get address of memory to free
+05DF: 27EC                       beq   L0633            if user passed 0, ignore
+05E1: 5D                         tstb                           check for B = 0 (it should!)
+05E2: 2704                       beq   L064E
+05E4: 53                         comb                           the user has passed B<>0 for the address, so return bad page error
+05E5: C6D2                       ldb   #E$BPAddr
+05E7: 39                         rts
+05E8: 1E89              L064E    exg   a,b                      swap A/B
+05EA: 9E20                       ldx   <D.FMBM          get pointer to free memory bitmap
+05EC: 2059                       bra   L06AD            call into FDelBit to delete bits
+05EC:                   
+05EE:                            
+05EE:                   **************************************************
+05EE:                   * System Call: F$AllBit
+05EE:                   *
+05EE:                   * Function: Sets bits in an allocation bitmap
+05EE:                   *
+05EE:                   * Input:  X = Address of allocation bitmap
+05EE:                   *         D = Number of first bit to set
+05EE:                   *         Y = Bit count (number of bits to set)
+05EE:                   *
+05EE:                   * Output: None
+05EE:                   *
+05EE:                   * Error:  CC = C bit set; B = error code
+05EE:                   *
+05EE: EC41              FAllBit  ldd   R$D,u        get bit # to start with
+05F0: 3344                       leau  R$X,u        get address of allocation bit map
+05F2: 3730                       pulu  y,x
+05F4: 3436              L065A    pshs  y,x,b,a
+05F6: 8D32                       bsr   CalcBit      calculate byte & position & get first bit mask
+05F8: 4D                         tsta
+05F9: 3402                       pshs  a
+05FB: 2B0E                       bmi   L0671
+05FD: A684                       lda   ,x
+05FF: AAE4              L0665    ora   ,s
+0601: 313F                       leay  -1,y
+0603: 271E                       beq   L0689
+0605: 64E4                       lsr   ,s
+0607: 24F6                       bcc   L0665
+0609: A780                       sta   ,x+
+060B: 1F20              L0671    tfr   y,d
+060D: A7E4                       sta   ,s
+060F: 86FF                       lda   #$FF
+0611: 2002                       bra   L067B
+0613: A780              L0679    sta   ,x+
+0615: C008              L067B    subb  #$08
+0617: 24FA                       bcc   L0679
+0619: 6AE4                       dec   ,s
+061B: 2AF6                       bpl   L0679
+061D: 48                L0683    lsla
+061E: 5C                         incb
+061F: 26FC                       bne   L0683
+0621: AA84                       ora   ,x
+0623: A784              L0689    sta   ,x
+0625: 4F                         clra
+0626: 3261                       leas  1,s
+0628: 35B6                       puls  pc,y,x,b,a
+062A:                   
+062A:                   * Calculate address of first byte we want, and which bit in that byte, from
+062A:                   *   a bit allocation map given the address of the map & the bit # we want to
+062A:                   *   point to
+062A:                   * Entry: D=Bit #
+062A:                   *        X=Ptr to bit mask table
+062A:                   * Exit:  A=Mask to point to bit # within byte we are starting on
+062A:                   *        X=Ptr in allocation map to first byte we are starting on
+062A: 3404              CalcBit  pshs  b
+062C:                            IFNE  H6309
+062C:                            lsrd               divide bit # by 8 to calculate byte # to start
+062C:                            lsrd               allocating at
+062C:                            lsrd
+062C:                            addr  d,x          offset that far into the map
+062C:                            ELSE
+062C: 44                         lsra
+062D: 56                         rorb
+062E: 44                         lsra
+062F: 56                         rorb
+0630: 44                         lsra
+0631: 56                         rorb
+0632: 308B                       leax  d,x
+0634:                            ENDC
+0634: 3504                       puls  b
+0636: 8680                       lda   #$80
+0638: C407                       andb  #$07           round it down to nearest bit
+063A: 2704                       beq   L06A6
+063C: 44                L06A2    lsra
+063D: 5A                         decb
+063E: 26FC                       bne   L06A2
+0640: 39                L06A6    rts
+0641:                   
+0641:                   
+0641:                   **************************************************
+0641:                   * System Call: F$DelBit
+0641:                   *
+0641:                   * Function: Clears bits in an allocation bitmap
+0641:                   *
+0641:                   * Input:  X = Address of allocation bitmap
+0641:                   *         D = Number of first bit to clear
+0641:                   *         Y = Bit count (number of bits to clear)
+0641:                   *
+0641:                   * Output: None
+0641:                   *
+0641:                   * Error:  CC = C bit set; B = error code
+0641:                   *
+0641: EC41              FDelBit  ldd   R$D,u        get bit # to start with
+0643: 3344                       leau  R$X,u        get addr. of bit allocation map
+0645: 3730                       pulu  y,x
+0647: 3436              L06AD    pshs  y,x,b,a
+0649: 8DDF                       bsr   CalcBit
+064B: 43                         coma
+064C: 3402                       pshs  a
+064E: 2A0E                       bpl   L06C4
+0650: A684                       lda   ,x
+0652: A4E4              L06B8    anda  ,s
+0654: 313F                       leay  -1,y
+0656: 271A                       beq   L06D8
+0658: 67E4                       asr   ,s
+065A: 25F6                       bcs   L06B8
+065C: A780                       sta   ,x+
+065E: 1F20              L06C4    tfr   y,d
+0660: 2002                       bra   L06CA
+0662: 6F80              L06C8    clr   ,x+
+0664: 830008            L06CA    subd  #$0008
+0667: 22F9                       bhi   L06C8
+0669: 2707                       beq   L06D8
+066B: 48                L06D1    lsla
+066C: 5C                         incb
+066D: 26FC                       bne   L06D1
+066F: 43                         coma
+0670: A484                       anda  ,x
+0672: A784              L06D8    sta   ,x
+0674: 6FE0                       clr   ,s+
+0676: 35B6                       puls  pc,y,x,b,a
+0678:                   
+0678:                   
+0678:                   **************************************************
+0678:                   * System Call: F$SchBit
+0678:                   *
+0678:                   * Function: Search bitmap for a free area
+0678:                   *
+0678:                   * Input:  X = Address of allocation bitmap
+0678:                   *         D = Starting bit number
+0678:                   *         Y = Bit count (free bit block size)
+0678:                   *         U = Address of end of allocation bitmap
+0678:                   *
+0678:                   * Output: D = Beginning bit number
+0678:                   *         Y = Bit count
+0678:                   *
+0678:                   * Error:  CC = C bit set; B = error code
+0678:                   *
+0678: 3440              FSchBit  pshs  u
+067A: EC41                       ldd   R$D,u        get start bit #
+067C: AE44                       ldx   R$X,u        get addr. of allocation bitmap
+067E: 10AE46                     ldy   R$Y,u        get bit count
+0681: EE48                       ldu   R$U,u        get address of end of allocation bitmap
+0683: 8D08                       bsr   L06F3
+0685: 3540                       puls  u
+0687: ED41                       std   R$D,u
+0689: 10AF46                     sty   R$Y,u
+068C: 39                         rts
+068D: 3476              L06F3    pshs  u,y,x,b,a
+068F: 3426                       pshs  y,b,a
+0691: 6F68                       clr   8,s
+0693: 6F69                       clr   9,s
+0695: 1F02                       tfr   d,y
+0697: 8D91                       bsr   CalcBit
+0699: 3402                       pshs  a
+069B: 200D                       bra   L0710
+069D: 3121              L0703    leay  $01,y
+069F: 10AF65                     sty   $05,s
+06A2: 64E4              L0708    lsr   ,s
+06A4: 2408                       bcc   L0714
+06A6: 66E4                       ror   ,s
+06A8: 3001                       leax  $01,x
+06AA: AC6B              L0710    cmpx  $0B,s
+06AC: 241E                       bcc   L0732
+06AE: A684              L0714    lda   ,x
+06B0: A4E4                       anda  ,s
+06B2: 26E9                       bne   L0703
+06B4: 3121                       leay  $01,y
+06B6: 1F20                       tfr   y,d
+06B8: A365                       subd  $05,s
+06BA: 10A363                     cmpd  $03,s
+06BD: 2414                       bcc   L0739
+06BF: 10A369                     cmpd  $09,s
+06C2: 23DE                       bls   L0708
+06C4: ED69                       std   $09,s
+06C6: EC65                       ldd   $05,s
+06C8: ED61                       std   $01,s
+06CA: 20D6                       bra   L0708
+06CC: EC61              L0732    ldd   $01,s
+06CE: ED65                       std   $05,s
+06D0: 43                         coma
+06D1: 2002                       bra   L073B
+06D3: ED69              L0739    std   $09,s
+06D5: 3265              L073B    leas  $05,s
+06D7: 35F6                       puls  pc,u,y,x,b,a
+06D7:                   
+06D9:                            
+06D9:                   **************************************************
+06D9:                   * System Call: F$PrsNam
+06D9:                   *
+06D9:                   * Function: Parse a path name
+06D9:                   *
+06D9:                   * Modification to allow '-' in filenames by WG
+06D9:                   *
+06D9:                   * Input:  X = Address of pathlist
+06D9:                   *
+06D9:                   * Output: X = Updated past optional "/" character
+06D9:                   *         Y = Address of last character of pathlist + 1
+06D9:                   *         B = Length of pathlist
+06D9:                   *
+06D9:                   * Error:  CC = C bit set; B = error code
+06D9:                   *
+06D9:                            IFGT  Level-1
+06D9:                   
+06D9:                   FPrsNam  ldx   <D.Proc          proc desc
+06D9:                            leay  <P$DATImg,x      Y=DAT image ptr
+06D9:                            ldx   R$X,u            X=name string
+06D9:                            bsr   ParseNam         get it and length
+06D9:                            std   R$D,u            return length in D
+06D9:                            bcs   L073E            ..err
+06D9:                            stx   R$X,u            and X at name begin
+06D9:                            abx                    plus len
+0000:                   L073E    stx   R$Y,u            return Y=end of name ptr
+06D9:                            rts                    end.
+06D9:                   
+06D9:                   * Parse name
+06E7:                   ParseNam equ   *
+06D9:                            pshs  y                save DAT image pointer
+06D9:                            lbsr  AdjBlk0          go find map block...
+06D9:                            pshs  x,y              save X offset within block and Y block pointer
+06D9:                            bsr   GoGetAXY         go get byte at X in block Y...
+06D9:                            cmpa  #'.              is the first character a period?
+06D9:                            bne   IsSlash          no, do proper first character checking
+06D9:                            lbsr  L0AC8            do a LDAXY, without changing X or Y
+06D9:                            bsr   ChkFirst         is the next character non-period?
+06D9:                            lda   #'.              restore the period character the LDAXY destroyed
+06D9:                            bcc   Do.Loop          if NON-period character, skip 1st char checks
+06D9:                   
+0017:                   IsSlash  cmpa  #PDELIM          is it a slash?
+06D9:                            bne   NotSlash         no, go keep X offset and block Y...
+06D9:                            bsr   GetChar          go get character...
+0010:                   NotSlash bsr   ChkFirst         go check if valid first character...
+06D9:                            bcs   NotValid         not valid, go get next name start offset in X...
+034F:                   Do.Loop  clrb                   initialize character counter
+003F:                   LastLoop incb                   add one character
+06D9:                            tsta                   last character in name string?
+06D9:                            bmi   LastChar         yes, go return valid...
+06D9:                            bsr   GoGetAXY         go get next character...
+06D9:                            bsr   ChkValid         go check if valid character...
+06D9:                            bcc   LastLoop         valid, go check if last character...
+003F:                   LastChar andcc #^Carry
+06D9:                            bra   RtnValid
+06D9:                   
+00E6:                   GetChar
+06D9:                            stx   2,s          save current offset over old offset
+06D9:                            sty   4,s          save current block pointer over old block pointer
+0000:                   GoGetAXY lbra  LDAXY        go get byte at X in block Y in A,  & return
+06D9:                   
+0000:                   NextLoop bsr   GetChar      go get character...
+0010:                   NotValid cmpa  #',          comma?
+06D9:                            beq   NextLoop     yes, go get next character...
+06D9:                            cmpa  #C$SPAC      space?
+06D9:                            beq   NextLoop     yes, go get next character...
+06D9:                            comb               error, set Carry
+06D9:                            ldb   #E$BNam      'Bad Name' error
+0002:                   RtnValid equ   *
+06D9:                            puls  x,y          recover offset & pointer
+06D9:                            bra   L0720        go do a similar exit routine
+06D9:                   
+071C:                   ChkFirst pshs  a            save character
+06D9:                            anda  #$7F         drop msbit
+06D9:                            bra   ChkRst       skip dash for first character check
+06D9:                   
+06D9:                   * Determine if character in A is a valid filename character
+0165:                   ChkValid pshs  a            save character
+06D9:                            anda  #$7F         drop msbit
+06D9:                            cmpa  #'.          period?
+06D9:                            beq   ValidChr     yes, go return valid character...
+0720:                   ChkRest  cmpa  #'-          is it a dash?
+06D9:                            beq   ValidChr     yes, it's valid      
+0165:                   ChkRst   cmpa  #'z          greater than "z"?
+06D9:                            bhi   InvalidC     yes, go return invalid character...
+06D9:                            cmpa  #'a          greater than or equal to "a"?
+06D9:                            bhs   ValidChr     yes, go return valid character...
+06D9:                            cmpa  #'_          underscore?
+06D9:                            beq   ValidChr     yes, go return valid character...
+06D9:                            cmpa  #'Z          greater than "Z"?
+06D9:                            bhi   InvalidC     yes, go return invalid character...
+06D9:                            cmpa  #'A          greater than or equal to "A"?
+06D9:                            bhs   ValidChr     yes, go return valid character...
+06D9:                            cmpa  #'9          greater than "9"?
+06D9:                            bhi   InvalidC     yes, go return invalid character...
+06D9:                            cmpa  #'0          greater than or equal to "0"?
+06D9:                            bhs   ValidChr     yes, go return valid character...
+06D9:                            cmpa  #'$          dollar symbol?
+06D9:                            beq   ValidChr     yes, go return valid character...
+007F:                   InvalidC coma               invalid character, set carry
+032F:                   ValidChr puls  a,pc
+06D9:                   
+06D9:                            ELSE
+06D9:                   
+06D9: AE44              FPrsNam  ldx   R$X,u
+06DB: 8D0A                       bsr   ParseNam
+06DD: ED41                       std   R$D,u
+06DF: 2502                       bcs   L0749
+06E1: AF44                       stx   R$X,u
+06E3: 10AF46            L0749    sty   R$Y,u
+06E6: 39                         rts
+06E7: A684              ParseNam lda   ,x
+06E9: 812F                       cmpa  #PDELIM                 pathlist char?
+06EB: 2602                       bne   L0755                   branch if not
+06ED: 3001                       leax  1,x                     go past pathlist char
+06EF: 3184              L0755    leay  ,x
+06F1: 5F                         clrb
+06F2: A6A0                       lda   ,y+
+06F4: 847F                       anda  #$7F
+06F6: 8D28                       bsr   ChkRest
+06F8: 2512                       bcs   L0772
+06FA: 5C                L0760    incb
+06FB: A63F                       lda   -1,y
+06FD: 2B0A                       bmi   L076F                   hi bit set on this char, done
+06FF: A6A0                       lda   ,y+
+0701: 847F                       anda  #$7F
+0703: 8D17                       bsr   ChkFirst
+0705: 24F3                       bcc   L0760
+0707: A6A2                       lda   ,-y
+0709: 1CFE              L076F    andcc #^Carry
+070B: 39                         rts
+070C: 812C              L0772    cmpa  #C$COMA                 comma?
+070E: 2602                       bne   L0778
+0710: A6A0              L0776    lda   ,y+
+0712: 8120              L0778    cmpa  #C$SPAC                 space?
+0714: 27FA                       beq   L0776
+0716: A6A2                       lda   ,-y
+0718: 53                         comb
+0719: C6EB                       ldb   #E$BNam
+071B: 39                         rts
+071C:                   
+071C:                   * check for illegal characters in a pathlist
+071C: 812E              ChkFirst cmpa  #C$PERD                 period?
+071E: 2743                       beq   L07C9                   branch if so
+0720: 8130              ChkRest  cmpa  #'0                     zero?
+0722: 2518                       bcs   L07A2                   branch if less than
+0724: 8139                       cmpa  #'9                     number?
+0726: 233B                       bls   L07C9                   branch if lower/same
+0728: 815F                       cmpa  #'_                     underscore?
+072A: 2737                       beq   L07C9                   branch if so
+072C: 8141                       cmpa  #'A                     A?
+072E: 250C                       bcs   L07A2                   branch if less than
+0730: 815A                       cmpa  #'Z                     Z?
+0732: 232F                       bls   L07C9                   branch if less or equal
+0734: 8161                       cmpa  #'a                     a?
+0736: 2504                       bcs   L07A2                   branch if lower
+0738: 817A                       cmpa  #'z                     z?
+073A: 2327                       bls   L07C9                   branch if less or equal
+073C: 1A01              L07A2    orcc  #Carry
+073E: 39                         rts
+073F:                   
+073F:                            ENDC
+073F:                   
+073F:                   
+073F:                   **************************************************
+073F:                   * System Call: F$CmpNam
+073F:                   *
+073F:                   * Function: Compare two names
+073F:                   *
+073F:                   * Input:  X = Address of first name
+073F:                   *         Y = Address of second name
+073F:                   *         B = length of first name
+073F:                   *
+073F:                   * Output: None
+073F:                   *
+073F:                   * Error:  CC = C bit set; B = error code
+073F:                   *
+073F:                   
+073F:                            IFGT  Level-1
+073F:                   
+073F:                   FCmpNam  ldx   <D.Proc      get current process ptr
+073F:                            leay  P$DATImg,x   Point to the DAT image
+073F:                            ldx   R$X,u        Get pointer to string #1
+073F:                            pshs  y,x          preserve 'em
+073F:                            bra   L07CF
+073F:                   
+073F:                   * F$CmpNam entry point for system state
+0583:                   FSCmpNam ldx   <D.Proc      Get current proc. dsc. ptr
+073F:                            leay  P$DATImg,x   Point to it's DAT image
+073F:                            ldx   R$X,u        get pointer to string #1
+073F:                            pshs  x,y
+073F:                            ldy   <D.SysDAT    get pointer to system DAT
+000F:                   L07CF    ldx   R$Y,u        get pointer to string #2
+073F:                            pshs  y,x          Preserve them
+073F:                            ldd   R$D,u        get length
+073F:                            leax  4,s          point to string #1 info packet
+073F:                            leay  ,s           point to string #2 info packet
+073F:                            bsr   L07DE        go compare 'em
+073F:                            leas  8,s          purge stack
+073F:                            rts                return
+073F:                   
+073F:                   * Compare 2 strings
+073F:                   *
+073F:                   * Input:  D = Length of string #1 (only requires B)
+073F:                   *         X = Ptr to string #1 info packet
+073F:                   *             0,X = DAT image pointer
+073F:                   *             2,X = Pointer to string
+073F:                   *         Y = Ptr to string #2 info packet
+073F:                   *             0,Y = DAT image pointer
+073F:                   *             2,Y = Pointer to string
+073F:                   *         U = Register stack ptr
+000F:                   L07DE    pshs  d,x,y,u      preserve registers
+073F:                            tfr   x,u          U=ptr to string #1 packet
+073F:                            pulu  x,y          get DAT ptr to Y and string ptr to X
+073F:                            lbsr  AdjBlk0      adjust X to use block 0
+073F:                            pshu  x,y          put them back
+073F:                            ldu   4,s          get pointer to string #2 packet
+073F:                            pulu  x,y          get DAT ptr to Y and string ptr to X
+073F:                            lbsr  AdjBlk0      Adjust X to block 0
+073F:                            bra   L07F6        go compare the strings
+073F:                   
+000F:                   L07F2    ldu   4,s          get pointer to string #2 packet
+073F:                            pulu  x,y          get DAT ptr to Y and string ptr to X
+000F:                   L07F6    lbsr  LDAXY        Map in the block & grab a byte from string
+073F:                            pshu  x,y          Put updated DAT & string ptr back
+073F:                            pshs  a            Save the character
+073F:                            ldu   3,s          pointer to string #1 packet
+073F:                            pulu  x,y          get DAT ptr to Y and string ptr to X
+073F:                            lbsr  LDAXY        get byte from string #1
+073F:                            pshu  y,x          put pointers back
+073F:                            eora  ,s
+073F:                            tst   ,s+          was it high bit?
+073F:                            bmi   L0816        yes, check if last character in string #2
+073F:                            decb  
+073F:                            beq   L0813
+073F:                            anda  #$DF         match?
+073F:                            beq   L07F2        yes, check next character
+000F:                   L0813    comb               set carry
+073F:                            puls  d,x,y,u,pc
+073F:                   
+000F:                   L0816    decb               done whole string?
+073F:                            bne   L0813        no, exit with no match
+073F:                            anda  #$5F         match?
+073F:                            bne   L0813        yes, keep checking
+073F:                            clrb               strings match, clear carry
+073F:                            puls  d,x,y,u,pc   restore & return
+073F:                   
+073F:                            ELSE
+073F:                   
+073F: E642              FCmpNam  ldb   R$B,u
+0741: 3344                       leau  R$X,u
+0743: 3730                       pulu  y,x
+0745: 3436              L07AB    pshs  y,x,b,a
+0747: A6A0              L07AD    lda   ,y+
+0749: 2B0D                       bmi   L07BE
+074B: 5A                         decb
+074C: 2706                       beq   L07BA
+074E: A880                       eora  ,x+
+0750: 84DF                       anda  #$DF
+0752: 27F3                       beq   L07AD
+0754: 1A01              L07BA    orcc  #Carry
+0756: 35B6                       puls  pc,y,x,b,a
+0758: 5A                L07BE    decb
+0759: 26F9                       bne   L07BA
+075B: A884                       eora  ,x
+075D: 845F                       anda  #$5F
+075F: 26F3                       bne   L07BA
+0761: 3536                       puls  y,x,b,a
+0763: 1CFE              L07C9    andcc #^Carry
+0765: 39                         rts
+0766:                   
+0766:                            ENDC
+0766:                   
+0766:                   
+0766: 10AE46            FSSvc    ldy   R$Y,u                   get caller's Y
+0769: 2020                       bra   InstSSvc                install the service
+076B: 1F98              SSvcLoop tfr   b,a                     put syscall code in A
+076D: 847F                       anda  #$7F                    kill hi bit
+076F: 817F                       cmpa  #$7F                    is code $7F?
+0771: 2708                       beq   SSvcOK
+0773: 8137                       cmpa  #$37                    compare against highest call allowed
+0775: 2504                       bcs   SSvcOK                  branch if A less than highest call
+0777: 53                         comb
+0778: C6E3                       ldb   #E$ISWI
+077A: 39                         rts
+077B: 58                SSvcOK   lslb
+077C: DE46                       ldu   <D.SysDis
+077E: 33C5                       leau  b,u                     U points to entry in table
+0780: ECA1                       ldd   ,y++                    get addr of func
+0782: 30AB                       leax  d,y                     get absolute addr
+0784: AFC4                       stx   ,u                      store in system table
+0786: 2503                       bcs   InstSSvc                branch if system only
+0788: AFC870                     stx   <$70,u                  else store in user table too
+078B: E6A0              InstSSvc ldb   ,y+                     get system call code in B
+078D: C180                       cmpb  #$80                    end of table?
+078F: 26DA                       bne   SSvcLoop                branch if not
+0791: 39                         rts
+0791:                   
+0792:                   
+0792:                   * Validate modules subroutine
+0792:                   * Entry: X = address to start searching
+0792:                   *           Y = address to stop (actually stops at Y-1)
+0792: 3420              ValMods pshs    y
+0794: 17FB47            valloop@        lbsr    ValMod
+0797: 2506                              bcs     valerr
+0799: EC02                              ldd     M$Size,x
+079B: 308B                              leax    d,x                     go past module
+079D: 2006                              bra     valcheck
+079F: C1E7              valerr  cmpb    #E$KwnMod
+07A1: 2706                              beq     valret
+07A3: 3001                              leax    1,x
+07A5: ACE4              valcheck        cmpx    ,s
+07A7: 25EB                              bcs     valloop@
+07A9: 35A0              valret  puls  y,pc
+07AB:                   
+07AB:                                   
+07AB: 200F              VectCode bra   SWI3Jmp          $0100
+07AD: 12                         nop
+07AE: 2010                       bra   SWI2Jmp          $0103
+07B0: 12                         nop
+07B1: 2011                       bra   SWIJmp           $0106
+07B3: 12                         nop
+07B4: 2012                       bra   NMIJmp           $0109
+07B6: 12                         nop
+07B7: 2013                       bra   IRQJmp           $010C
+07B9: 12                         nop
+07BA: 2014                       bra   FIRQJmp          $010F
+07BC:                   
+07BC: 6E9F002C          SWI3Jmp  jmp   [>D.SWI3]
+07C0: 6E9F002E          SWI2Jmp  jmp   [>D.SWI2]
+07C4: 6E9F0034          SWIJmp   jmp   [>D.SWI]
+07C8: 6E9F0036          NMIJmp   jmp   [>D.NMI]
+07CC: 6E9F0032          IRQJmp   jmp   [>D.IRQ]
+07D0: 6E9F0030          FIRQJmp  jmp   [>D.FIRQ]
+0029:                   VectCSz  equ   *-VectCode
+07D4:                   
+07D4:                   
+07D4: 00                SysTbl   fcb   F$Link
+07D5: FAC6                       fdb   FLink-*-2
+07D7: 03                         fcb   F$Fork
+07D8: FC68                       fdb   FFork-*-2
+07DA: 05                         fcb   F$Chain
+07DB: FCD8                       fdb   FChain-*-2
+07DD: 85                         fcb   F$Chain+SysState
+07DE: FCE7                       fdb   SFChain-*-2
+07E0: 10                         fcb   F$PrsNam
+07E1: FEF6                       fdb   FPrsNam-*-2
+07E3: 11                         fcb   F$CmpNam
+07E4: FF59                       fdb   FCmpNam-*-2
+07E6: 12                         fcb   F$SchBit
+07E7: FE8F                       fdb   FSchBit-*-2
+07E9: 13                         fcb   F$AllBit
+07EA: FE02                       fdb   FAllBit-*-2
+07EC: 14                         fcb   F$DelBit
+07ED: FE52                       fdb   FDelBit-*-2
+07EF: 17                         fcb   F$CRC
+07F0: FB99                       fdb   FCRC-*-2
+07F2: A8                         fcb   F$SRqMem+SysState
+07F3: FD8E                       fdb   FSRqMem-*-2
+07F5: A9                         fcb   F$SRtMem+SysState
+07F6: FDDB                       fdb   FSRtMem-*-2
+07F8: AC                         fcb   F$AProc+SysState
+07F9: F9B0                       fdb   FAProc-*-2
+07FB: AD                         fcb   F$NProc+SysState
+07FC: FA50                       fdb   FNProc-*-2
+07FE: AE                         fcb   F$VModul+SysState
+07FF: FAD2                       fdb   FVModul-*-2
+0801: 32                         fcb   F$SSvc
+0802: FF62                       fdb   FSSvc-*-2
+0804: 80                         fcb   $80
+0805:                   
+0805:                            IFNE  H6309
+0000:                   Zoro     fcb   $00
+0805:                            ENDC
+0805:                   
+0805: 496E69F4          InitNam  fcs   /Init/
+0809:                   
+0809: 6B726E70B2        P2Nam    fcs   /krnp2/
+080E:                   
+080E:                            
+080E:                            
+080E:                   EOMTop          EQU     *
+080E:                   
+080E:                                   IFEQ    corsham
+080E: 02EB2C                            emod
+0811:                   eom                     equ     *
+0811:                                   ENDC
+0811:                   
+0811:                                   IFNE    atari
+0811:                                   fdb     $F3FE-(*-OS9Cold)
+0811:                                   ENDC
+0811:                   
+0811: 0105              Vectors         fdb     SWI3            SWI3
+0813: 010B                              fdb     SWI2            SWI2
+0815: 0115                              fdb     DUMMY           FIRQ
+0817: 0116                              fdb     SVCIRQ          IRQ
+0819: 011A                              fdb     SWI             SWI
+081B: 0111                              fdb     SVCNMI          NMI
+081D:                   
+081D:                                   IFNE    corsham
+081D:                                   emod
+0811:                   eom                     equ     *
+081D:                                   ENDC
+000F:                   EOMSize         equ     *-EOMTop
+081D:                   
+081D:                                   end
+0 Pass 2 errors.
+
+SYMBOL TABLE
+   A.ACIAP 01 ff68    A.MODP 01 ff6c   A.TERMV 01 ffc0      A.V1 01 ffc1
+      A.V2 01 ffc2      A.V3 01 ffc3      A.V4 01 ffc4      A.V5 01 ffc5
+      A.V6 01 ffc6      A.V7 01 ffc7  ACIA2661 02 0003  ACIA6551 02 0002
+  ACIA6850 02 0001  ACIATYPE 03 0002ACTIVATEPROC 02 01e9  ALTERBIT 00 0004
+     ATARI 06 0000      ATRV 01 0080  ATTRMASK 00 00f0      B110 00 0000
+   B115200 00 000a     B1200 00 0003    B19200 00 0007     B2400 00 0004
+      B300 00 0001    B38400 00 0008     B4800 00 0005    B57600 00 0009
+      B600 00 0002     B9600 00 0006  BADINSTR 00 0040  BLOCKTYP 00 0001
+    BMAPSZ 00 0020   BOOTSTR 02 0014   BORDREG 00 ff9a  BT.BLOCK 00 003b
+   BT.FLAG 00 8a34  BT.OFFST 00 0002    BT.SEC 00 0000   BT.SIZE 00 1080
+  BT.START 01 ed00  BT.TRACK 00 0022   BUFBUSY 00 0040    BUFMOD 00 0001
+  BYTETYPE 00 0002    C$BELL 01 0007     C$BSP 01 0008  C$CLSALL 01 0016
+   C$CLSGR 01 0015    C$COMA 01 002c      C$CR 01 000d     C$DEL 01 0018
+  C$DELETE 01 0010     C$DWN 01 001f      C$EL 01 0005     C$EOF 01 001b
+    C$FORM 01 000c    C$HOME 01 000b  C$INSERT 01 0011    C$INTR 01 0003
+      C$LF 01 000a     C$LFT 01 001d    C$NULL 01 0000    C$PAUS 01 0017
+    C$PERD 01 002e   C$PLINE 01 0013    C$QUIT 01 0005    C$RARR 01 0009
+     C$RGT 01 001c    C$RPET 01 0001    C$RPRT 01 0004  C$SHRARR 01 0019
+      C$SI 01 000f      C$SO 01 000e    C$SPAC 01 0020      C$UP 01 001e
+    C$XOFF 01 0013     C$XON 01 0011   CALCBIT 02 062a     CARRY 00 0001
+   CBLCODE 00 0005     CCODE 00 0004CHECK_FOR_VALID_ 00 0001   CHK4CRC 02 0349
+  CHKFIRST 02 071c   CHKM010 02 035b   CHKMCRC 02 0365  CHKMHCRC 02 0337
+   CHKMHEX 02 0345  CHKMHPAR 02 0358    CHKRAM 02 003a   CHKREST 02 0720
+     CLOCK 02 0165  CLOCKRTI 02 01a4  CNTRLBIT 00 0002    COCO.D 01 0001
+     COLOR 01 0001    COLOR3 01 0002    CONDEM 00 0002   CORSHAM 06 0000
+  CPUSPEED 01 0002   CPUTYPE 01 0002   CRCALGO 02 039e   CRCCON1 00 0080
+  CRCCON23 00 0fe3    CRCOFF 00 0000     CRCON 00 0001    D$GSTA 02 0009
+    D$INIT 02 0000    D$PSTA 02 000c    D$READ 02 0003    D$TERM 02 000f
+    D$WRIT 02 0006  D.ALTIRQ 02 006b  D.APROCQ 02 004d    D.BOOT 02 0083
+    D.BTHI 02 0068    D.BTLO 02 0066  D.CBSTRT 02 0071   D.CLOCK 02 0081
+  D.CLOCK2 02 008a    D.CLTB 02 0086  D.COCOXT 02 0009     D.CRC 02 0089
+     D.DAY 02 0055  D.DBGMEM 02 000a  D.DEVTBL 02 0060  D.DMAREQ 02 006a
+  D.DSKTMR 02 006f D.DWSRVID 02 0010  D.DWSTAT 02 000eD.DWSUBADDR 02 000c
+    D.FIRQ 02 0030    D.FMBM 02 0020    D.HOUR 02 0056    D.INIT 02 002a
+    D.IOMH 02 005e    D.IOML 02 005c     D.IRQ 02 0032  D.KBDSTA 02 006d
+   D.MDREG 02 0088     D.MIN 02 0057    D.MLIM 02 0024  D.MODDIR 02 0026
+   D.MONTH 02 0054     D.NMI 02 0036    D.POLL 02 003a  D.POLTBL 02 0062
+  D.PRCDBT 02 0049    D.PROC 02 004b  D.PTHDBT 02 0064     D.SEC 02 0058
+   D.SLICE 02 0048  D.SPROCQ 02 0051  D.SVCIRQ 02 0038     D.SWI 02 0034
+    D.SWI2 02 002e    D.SWI3 02 002c  D.SWPAGE 02 0003  D.SYSDIS 02 0046
+  D.SYSIRQ 02 003e  D.SYSSVC 02 0042    D.TICK 02 0059    D.TIME 02 0053
+    D.TSEC 02 005a  D.TSLICE 02 005b  D.URTOSS 02 0084  D.USRDIS 02 0044
+  D.USRIRQ 02 003c  D.USRSVC 02 0040  D.WDADDR 02 0000  D.WDBTDR 02 0002
+  D.WPROCQ 02 004f   D.XFIRQ 02 010f    D.XIRQ 02 010c    D.XNMI 02 0109
+    D.XSWI 02 0106   D.XSWI2 02 0103   D.XSWI3 02 0100    D.YEAR 02 0053
+  DAT.ADDR 00 ffe0  DAT.BLCT 00 0008  DAT.BLMX 00 003f  DAT.BLSZ 00 2000
+  DAT.BMSZ 00 0040  DAT.FREE 00 333e  DAT.IMSZ 00 0010  DAT.REGS 00 ffa0
+  DAT.TASK 00 ff91  DAT.TKCT 00 0020  DAT.WREN 00 0000  DAT.WRPR 00 0000
+      DATA 00 0040    DD.ATT 02 000d    DD.BIT 02 0006    DD.BSZ 02 0018
+     DD.BT 02 0015    DD.DAT 02 001a    DD.DIR 02 0008    DD.DSK 02 000e
+    DD.FMT 02 0010    DD.MAP 02 0004    DD.NAM 02 001f    DD.OPT 02 003f
+    DD.OWN 02 000b    DD.RES 02 0013    DD.SIZ 02 0015    DD.SPT 02 0011
+    DD.TKS 02 0003    DD.TOT 02 0000      DEAD 00 0001  DEFIOSIZ 00 000c
+    DEVCNT 02 000d     DEVIC 00 00f0    DEVSIZ 02 0009      DIR. 00 0080
+    DIR.FD 02 001d    DIR.NM 02 0000    DIR.SZ 02 0020      DIV0 00 0080
+   DNS.DTD 00 0002    DNS.FM 00 0000   DNS.FM0 00 0000   DNS.MFM 00 0001
+  DNS.MFM0 00 0004   DNS.STD 00 0000   DOCRCCK 02 034f DOIRQPOLL 02 0144
+ DOSYSCALL 02 020c   DOWNBIT 00 0010     DPORT 01 ff40     DRIVR 00 00e0
+    DRVBEG 02 000f    DRVMEM 02 0026   DT.CDFM 00 0005    DT.NFM 00 0004
+   DT.PIPE 00 0002    DT.RBF 00 0001    DT.RFM 00 0006    DT.SBF 00 0003
+    DT.SCF 00 0000     DUMMY 02 0115   E$ALIAS 02 00c7  E$ARROVF 02 0049
+  E$BADBUF 02 00c2   E$BMCRC 02 00e8    E$BMHP 02 00ec    E$BMID 02 00cd
+   E$BMODE 02 00cb    E$BNAM 02 00eb  E$BPADDR 02 00d2   E$BPNAM 02 00d7
+   E$BPNUM 02 00c9  E$BPRCID 02 00e0    E$BTYP 02 00f9  E$BUFSIZ 02 00bf
+     E$BUG 02 00be     E$CEF 02 00da     E$CRC 02 00f3  E$DEADLK 02 00fe
+   E$DELSP 02 00df  E$DEVBSY 02 00fa  E$DEVOVF 02 00cc    E$DIDC 02 00fb
+  E$DIMLRG 02 0019  E$DIRFUL 02 00ce  E$DIVZER 02 002d      E$DN 02 00c6
+     E$DNE 02 00ee  E$ENDQOU 02 0029     E$EOF 02 00d3  E$EXCVRB 02 000b
+  E$FLTOVF 02 0032     E$FNA 02 00d6    E$FULL 02 00f8  E$HANGUP 02 00dc
+     E$IBA 02 00db  E$ICHREF 02 000e  E$ICOORD 02 00bd   E$ICOVF 02 000d
+  E$IFORKP 02 00e6    E$ILLA 02 0043  E$ILLARG 02 00bb  E$ILLCMD 02 00c0
+  E$ILLCNT 02 0044  E$ILLDEC 02 0048  E$ILLDIM 02 0015  E$ILLEXP 02 0047
+  E$ILLFOR 02 0046  E$ILLINP 02 003d  E$ILLIVR 02 004d  E$ILLLIT 02 0016
+  E$ILLMOD 02 000f  E$ILLNUM 02 0010  E$ILLOPD 02 0012  E$ILLOPR 02 0013
+  E$ILLPNM 02 0040  E$ILLPRF 02 0011  E$ILLRET 02 0017  E$ILLRFN 02 0014
+  E$ILLSFX 02 0018  E$ILLSTC 02 000c  E$IOCONV 02 003c  E$IOFRPT 02 003e
+  E$IOFSYN 02 003f  E$IOMISM 02 003a   E$IONUM 02 003b  E$IPRCID 02 00e0
+    E$ISWI 02 00e3   E$IWDEF 02 00c3   E$IWTYP 02 00b7  E$KWNMOD 02 00e7
+  E$LINLRG 02 001a  E$LNCOMP 02 0033    E$LOCK 02 00fc  E$MEMFUL 02 00cf
+   E$MFULL 02 0020  E$MLTLIN 02 004b  E$MLTVAR 02 004c     E$MNF 02 00dd
+  E$MODBSY 02 00d1  E$MULPRC 02 002c   E$NEMOD 02 00ea     E$NES 02 00d5
+   E$NFONT 02 00b9  E$NOASSG 02 001b  E$NOCHLD 02 00e2  E$NOCOMA 02 001d
+  E$NODATA 02 004f   E$NODIM 02 001e    E$NODO 02 001f  E$NOGOTO 02 0021
+  E$NOLPAR 02 0022  E$NOLREF 02 0023  E$NONRCO 02 0042  E$NOOPRD 02 0024
+  E$NOPATH 02 001c   E$NORAM 02 00ed  E$NOROUT 02 0030  E$NORPAR 02 0025
+  E$NOTASK 02 00ef  E$NOTHEN 02 0026    E$NOTO 02 0027  E$NOTRDY 02 00f6
+  E$NOVREF 02 0028  E$PARMER 02 0038    E$PNNF 02 00d8    E$POLL 02 00ca
+  E$PRCABT 02 00e4  E$PRCFUL 02 00e5  E$PTHFUL 02 00c8    E$READ 02 00f4
+    E$SECT 02 00f1    E$SEEK 02 00f7  E$SEEKRG 02 004e   E$SHARE 02 00fd
+     E$SLF 02 00d9  E$STKOVF 02 00ba  E$STROVF 02 002f  E$SUBLRG 02 002a
+  E$SUBOVF 02 0035  E$SUBRNG 02 0037  E$SUBUND 02 0036  E$SYSOVF 02 0039
+  E$TBLFUL 02 00c1  E$TYPMIS 02 002e  E$UNDLIN 02 004a  E$UNDVAR 02 0031
+    E$UNIT 02 00f0  E$UNKPRC 02 002b  E$UNKSVC 02 00d0  E$UNKSYM 02 000a
+  E$UNMCNT 02 0045      E$UP 02 00c5   E$USIGP 02 00e9  E$VALRNG 02 0034
+   E$WADEF 02 00b8      E$WP 02 00f2   E$WRITE 02 00f5   E$WRSUB 02 0041
+  E$WUNDEF 02 00c4  EATSPACE 02 0439  EATSPC10 02 043b   EDITION 01 0010
+    ENTIRE 00 0080       EOM 02 0811   EOMSIZE 00 000f    EOMTOP 02 080e
+    ERREX@ 02 0335     EXEC. 00 0004   F$ALL64 02 0030  F$ALLBIT 02 0013
+   F$APROC 02 002c   F$CHAIN 02 0005  F$CMPNAM 02 0011     F$CRC 02 0017
+   F$DEBUG 02 0023  F$DELBIT 02 0014    F$EXIT 02 0006  F$FIND64 02 002f
+    F$FORK 02 0003    F$ICPT 02 0009      F$ID 02 000c   F$IODEL 02 0033
+    F$IOQU 02 002b     F$IRQ 02 002a    F$LINK 02 0000    F$LOAD 02 0001
+     F$MEM 02 0007   F$NPROC 02 002d    F$PERR 02 000f  F$PRSNAM 02 0010
+   F$RET64 02 0031  F$SCHBIT 02 0012    F$SEND 02 0008   F$SLEEP 02 000a
+  F$SPRIOR 02 000d  F$SRQMEM 02 0028  F$SRTMEM 02 0029    F$SSPD 02 000b
+    F$SSVC 02 0032    F$SSWI 02 000e   F$STIME 02 0016    F$TIME 02 0015
+  F$UNLINK 02 0002    F$VIRQ 02 0027  F$VMODUL 02 002e    F$WAIT 02 0004
+   FALLBIT 02 05ee     FALSE 00 0000    FAPROC 02 01ab    FCHAIN 02 04b5
+   FCMPNAM 02 073f      FCRC 02 038b    FD.ATT 02 0000  FD.CREAT 02 000d
+    FD.DAT 02 0003    FD.LNK 02 0008    FD.LS1 00 00fb    FD.LS2 00 00fa
+    FD.OWN 02 0001    FD.SEG 02 0010    FD.SIZ 02 0009     FDBUF 00 0004
+   FDELBIT 02 0641    FDSL.A 02 0000    FDSL.B 02 0003    FDSL.S 02 0005
+  FEATURE1 02 001b  FEATURE2 02 001c     FFORK 02 0442   FIRQJMP 02 07d0
+  FIRQMASK 00 0040     FIXCC 02 022e     FLINK 02 029d   FLINKOK 02 02ac
+     FLMGR 00 00d0    FMCDIR 02 0009    FMCLOS 02 0024    FMCREA 02 0000
+    FMDLET 02 000c    FMGSTA 02 001e    FMMDIR 02 0006    FMOPEN 02 0003
+    FMRDLN 02 0018    FMREAD 02 0012    FMSEEK 02 000f    FMSSTA 02 0021
+   FMT.DNS 00 0002  FMT.SIDE 00 0001  FMT.T0DN 00 0020  FMT.TDNS 00 0004
+    FMWRIT 02 0015    FMWRLN 02 001b    FNPROC 02 024e   FPRSNAM 02 06d9
+  FRTNCODE 00 0006   FSCHBIT 02 0678   FSRQMEM 02 0583   FSRTMEM 02 05d3
+     FSSVC 02 0766   FVMODUL 02 02d3    GETMEM 02 00e6  GIMEREGS 00 ff00
+     H6309 06 0000  HALFCRRY 00 0020   HW.PAGE 01 0007      HZ50 00 0001
+      HZ60 00 0002  I$ATTACH 02 0080  I$CHGDIR 02 0086   I$CLOSE 02 008f
+  I$CREATE 02 0083  I$DELETE 02 0087  I$DELETX 02 0090  I$DETACH 02 0081
+     I$DUP 02 0082  I$GETSTT 02 008d  I$MAKDIR 02 0085    I$OPEN 02 0084
+    I$READ 02 0089  I$READLN 02 008b    I$SEEK 02 0088  I$SETSTT 02 008e
+   I$WRITE 02 008a  I$WRITLN 02 008c     ICODE 00 0002    IMGCHG 00 0010
+  INDRIVER 00 0020   INITNAM 02 0805   INITSTR 02 000eINSTALLNAME 02 001f
+  INSTSSVC 02 078b  INTMASKS 00 0050    IOADDR 00 007f   IOBLOCK 00 003f
+    IRQENR 00 ff92    IRQJMP 02 07cc   IRQMASK 00 0010     ISIZ. 00 0020
+    IT.ALF 02 0017    IT.BAU 02 0027    IT.BSE 02 0024    IT.BSO 02 0014
+    IT.BSP 02 001b    IT.COL 02 002c    IT.CYL 02 0017    IT.D2P 02 0028
+    IT.DEL 02 001c    IT.DLO 02 0015    IT.DNS 02 0016    IT.DRV 02 0013
+    IT.DTP 02 0012    IT.DUP 02 0020    IT.DVC 02 0012    IT.EKO 02 0016
+    IT.EOF 02 001e    IT.EOR 02 001d  IT.EXTEN 02 0022    IT.ILV 02 001f
+    IT.INT 02 0022  IT.LLDRV 02 0028    IT.MPI 02 002a    IT.NUL 02 0018
+    IT.OFS 02 0026    IT.OVF 02 0025    IT.PAG 02 001a    IT.PAR 02 0026
+    IT.PAU 02 0019    IT.PSC 02 0021    IT.QUT 02 0023    IT.ROW 02 002d
+    IT.RPR 02 001f    IT.RWC 02 0028    IT.SAS 02 0020    IT.SCT 02 001b
+    IT.SID 02 0019  IT.SOFF1 02 0025  IT.SOFF2 02 0026  IT.SOFF3 02 0027
+  IT.STOFF 02 0024    IT.STP 02 0014    IT.T0S 02 001d    IT.TFM 02 0021
+    IT.TYP 02 0015    IT.UPC 02 0013    IT.VFY 02 001a    IT.WPC 02 0025
+   IT.XOFF 02 002b    IT.XON 02 002a   IT.XTYP 02 002e    KRNBLK 01 003f
+     L007F 02 001a     L00C2 02 005d     L00D2 02 006d     L00EE 02 007d
+     L00FB 02 008a     L0158 02 00e6     L018C 02 011e     L01BD 02 0150
+     L01CF 02 0162     L01E7 02 017a     L01FB 02 018e     L01FD 02 0190
+     L0212 02 01a5     L021A 02 01ad     L0221 02 01b4     L0228 02 01bb
+     L0235 02 01c8     L023F 02 01d2     L0288 02 021c     L0290 02 0224
+     L0292 02 0226     L02A7 02 023b     L02AC 02 0240     L02C0 02 0254
+     L02C2 02 0256     L02D1 02 0265     L02FC 02 0290     L02FF 02 0293
+     L0308 02 029c     L032A 02 02be     L033D 02 02d1     L03D4 02 036e
+     L03EC 02 0386     L03EF 02 0389     L03FA 02 0394     L0402 02 039c
+     L0442 02 03dc     L0443 02 03dd     L045B 02 03f5     L0476 02 0410
+     L0480 02 041a     L048B 02 0425     L0493 02 042d     L049C 02 0436
+     L049D 02 0437     L04D7 02 0471     L04E0 02 047a     L04E8 02 0482
+     L050C 02 04a6     L0517 02 04b1     L0527 02 04c1     L0531 02 04cb
+     L0543 02 04dd     L0553 02 04ed     L0578 02 0512     L058B 02 0525
+     L059B 02 0535     L05A0 02 053a     L05B6 02 0550     L05BE 02 0558
+     L05E5 02 057f     L05E7 02 0581     L05FA 02 0594     L05FE 02 0598
+     L0604 02 059e     L060A 02 05a4     L0620 02 05ba     L0633 02 05cd
+     L0635 02 05cf     L064E 02 05e8     L065A 02 05f4     L0665 02 05ff
+     L0671 02 060b     L0679 02 0613     L067B 02 0615     L0683 02 061d
+     L0689 02 0623     L06A2 02 063c     L06A6 02 0640     L06AD 02 0647
+     L06B8 02 0652     L06C4 02 065e     L06C8 02 0662     L06CA 02 0664
+     L06D1 02 066b     L06D8 02 0672     L06F3 02 068d     L0703 02 069d
+     L0708 02 06a2     L0710 02 06aa     L0714 02 06ae     L0732 02 06cc
+     L0739 02 06d3     L073B 02 06d5     L0749 02 06e3     L0755 02 06ef
+     L0760 02 06fa     L076F 02 0709     L0772 02 070c     L0776 02 0710
+     L0778 02 0712     L07A2 02 073c     L07AB 02 0745     L07AD 02 0747
+     L07BA 02 0754     L07BE 02 0758     L07C9 02 0763  LANGMASK 00 000f
+   LASTRAM 00 003f   LEFTBIT 00 0020     LEVEL 00 0001   LIMITED 00 0001
+    M$DTYP 02 0012    M$EXEC 02 0009    M$FMGR 02 0009      M$ID 02 0000
+     M$ID1 00 0087    M$ID12 00 87cd     M$ID2 00 00cd  M$IDSIZE 02 0009
+     M$MEM 02 000b    M$MODE 02 000d    M$NAME 02 0004     M$OPT 02 0011
+  M$PARITY 02 0008    M$PDEV 02 000b    M$PORT 02 000e    M$REVS 02 0007
+    M$SIZE 02 0002    M$TYPE 02 0006MAKESYSCALL 02 01e2  MAPPEDIO 02 0000
+    MAXMEM 02 0009  MD$ESIZE 02 0004   MD$LINK 02 0002   MD$MPTR 02 0000
+    MINSEC 01 0010    MODNAT 00 0020   MODPROT 00 0040    MODTOP 02 0000
+  MOVEBLKS 00 0005  MPI.SLCT 01 ff7f  MPI.SLOT 01 0003     MULTI 00 0030
+      NAME 02 000d  NEGATIVE 00 0008    NMIJMP 02 07c8   NOS9MAJ 00 0000
+   NOS9MIN 00 0001   NOS9VER 00 0001  NUMPATHS 00 0010   OBJ6309 00 0007
+     OBJCT 00 0001    ONEMHZ 00 0001    OPTCNT 00 001a     OS9.D 01 0001
+   OS9COLD 02 0011  OS9MAJOR 00 0000  OS9MINOR 00 0001   OS9VRSN 00 0001
+   OSLEVEL 02 0017   OSMAJOR 02 0019   OSMINOR 02 001a    OSNAME 02 001d
+     OSVER 02 0018    P$ADDR 02 0007     P$AGE 02 000c    P$CHAP 02 0006
+     P$CID 02 0003     P$DIO 02 001a      P$ID 02 0000    P$IOQN 02 0011
+    P$IOQP 02 0010     P$NIO 02 003b  P$PAGCNT 02 0008    P$PATH 02 0026
+     P$PID 02 0001  P$PMODUL 02 0012   P$PRIOR 02 000b   P$QUEUE 02 000e
+     P$SID 02 0002  P$SIGDAT 02 0039  P$SIGNAL 02 0036  P$SIGVEC 02 0037
+    P$SIZE 02 0040      P$SP 02 0004   P$STATE 02 000d     P$SWI 02 0014
+    P$SWI2 02 0016    P$SWI3 02 0018    P$USER 02 0009     P2NAM 02 0809
+    PALADR 00 ffb0   PAREVEN 00 0060   PARMARK 00 00a0   PARMASK 00 00e0
+   PARNONE 00 0000    PARODD 00 0020  PARSENAM 02 06e7  PARSPACE 00 00e0
+     PCODE 00 0003    PD.ALF 02 0025    PD.ATT 02 0033    PD.BAU 02 0035
+    PD.BSE 02 0032    PD.BSO 02 0022    PD.BSP 02 0029    PD.BUF 02 0008
+    PD.CNT 02 0002     PD.CP 02 000b    PD.CPR 02 0005    PD.CYL 02 0025
+    PD.D2P 02 0036    PD.DCP 02 003a    PD.DEL 02 002a    PD.DEV 02 0003
+    PD.DFD 02 0037    PD.DLO 02 0023    PD.DNS 02 0024    PD.DRV 02 0021
+    PD.DSK 02 001c    PD.DTB 02 001e    PD.DTP 02 0020    PD.DUP 02 002e
+    PD.DV2 02 000a    PD.DVT 02 003e    PD.EKO 02 0024    PD.EOF 02 002c
+    PD.EOR 02 002b    PD.ERR 02 003a  PD.EXTEN 02 0030     PD.FD 02 0034
+    PD.FST 02 000a    PD.ILV 02 002d    PD.INT 02 0030    PD.MAX 02 000d
+    PD.MIN 02 000f    PD.MOD 02 0001    PD.NUL 02 0026    PD.OPT 02 0020
+    PD.OVF 02 0033    PD.PAG 02 0028    PD.PAR 02 0034    PD.PAU 02 0027
+     PD.PD 02 0000    PD.PLP 02 003d    PD.PSC 02 002f    PD.PST 02 003f
+    PD.QUT 02 0031    PD.RAW 02 000c    PD.RGS 02 0006    PD.RPR 02 002d
+    PD.SAS 02 002e    PD.SBL 02 0013    PD.SBP 02 0016    PD.SCT 02 0029
+    PD.SID 02 0027    PD.SIZ 02 000f    PD.SMF 02 000a    PD.SSZ 02 0019
+    PD.STM 02 0012  PD.STOFF 02 0032    PD.STP 02 0022    PD.STS 02 0010
+    PD.T0S 02 002b    PD.TBL 02 003b    PD.TFM 02 002f    PD.TYP 02 0023
+    PD.UPC 02 0021    PD.VFY 02 0028   PD.XOFF 02 0039    PD.XON 02 0038
+    PDELIM 00 002f      PDIR 00 002e    PDSIZE 02 0040    PENTIR 00 0040
+    PEXEC. 00 0020  PIA0BASE 00 ff00  PIA1BASE 00 ff20      POLL 02 0163
+   POLLCNT 02 000c    POLSIZ 02 0009    PREAD. 00 0008     PRGRM 00 0010
+  PROC6309 00 0002  PROC6809 00 0000  PROTFLAG 02 0016   PST.DCD 00 0001
+    PWRIT. 00 0010  PWRLNFRQ 01 0002    Q$FLIP 02 0002    Q$MASK 02 0003
+    Q$POLL 02 0000    Q$PRTY 02 0008    Q$SERV 02 0004    Q$STAT 02 0006
+       R$A 00 0001       R$B 00 0002      R$CC 00 0000       R$D 00 0001
+      R$DP 00 0003      R$PC 00 000a    R$SIZE 00 000c       R$U 00 0008
+       R$X 00 0004       R$Y 00 0006  RAMCHECK 00 0001  RAMCOUNT 00 0001
+     RBF.D 01 0001     READ. 00 0001     REENT 00 0080       REV 01 0000
+  REVSMASK 00 000f  RIGHTBIT 00 0040  ROMBLOCK 00 003f  ROMCHECK 00 0001
+  ROMCOUNT 00 0001   S$ABORT 02 0002   S$ALARM 02 0005     S$HUP 02 0004
+  S$INTRPT 02 0003    S$KILL 02 0000    S$WAKE 02 0001  S$WINDOW 02 0004
+     SBRTN 00 0020     SCF.D 01 0001   SFCHAIN 02 04c7    SHARE. 00 0040
+  SHELLSUB 00 0050  SHIFTBIT 00 0001      SIGN 00 0080    SINBUF 00 0002
+      SIZE 02 0000  SPACEBIT 00 0080  SS.AAGBF 02 0080  SS.ALFAS 02 001c
+  SS.ANPAL 02 009a  SS.ASCRN 02 008b   SS.ATTR 02 001c  SS.BLKRD 02 0014
+  SS.BLKWR 02 0015  SS.BREAK 02 001d  SS.CDREL 02 009b  SS.CDSIG 02 009a
+  SS.CDSTA 02 0099  SS.CLOSE 02 002a  SS.COMST 02 0028  SS.CURSR 02 0025
+   SS.DCMD 02 000d  SS.DEVNM 02 000e  SS.DFPAL 02 0097 SS.DIRENT 02 0020
+  SS.DSCRN 02 008c  SS.DSIZE 02 0026  SS.DSTAT 02 0012    SS.ECC 02 00b0
+   SS.ELOG 02 0019    SS.EOF 02 0006  SS.FBRGS 02 0096     SS.FD 02 000f
+  SS.FDINF 00 0020   SS.FEED 02 0009   SS.FILL 02 00a0  SS.FNDBF 02 009b
+    SS.FRZ 02 000a  SS.FSCRN 02 008d   SS.FSIG 02 002c    SS.GIP 02 0094
+   SS.GIP2 02 0099   SS.HIST 02 00a1  SS.HNGUP 02 002b    SS.JOY 02 0013
+  SS.KYSNS 02 0027   SS.LINK 02 0007   SS.LOCK 02 0011  SS.MNSEL 02 0087
+  SS.MONTR 02 0092  SS.MOUNT 02 0082  SS.MOUSE 02 0089  SS.MPGPB 02 0084
+  SS.MSSIG 02 008a   SS.OPEN 02 0029    SS.OPT 02 0000  SS.PALET 02 0091
+    SS.POS 02 0005  SS.PSCRN 02 008e  SS.RDNET 02 0083  SS.READY 02 0001
+  SS.RELEA 02 001b  SS.RESET 02 0003  SS.RETEN 02 0016    SS.RFM 02 0018
+  SS.RSBIT 02 001e   SS.SBAR 02 0088  SS.SCINF 02 008f  SS.SCSIZ 02 0026
+  SS.SCTYP 02 0093  SS.SETMF 02 0024   SS.SIZE 02 0002  SS.SLGBF 02 0081
+  SS.SLOTS 02 0085    SS.SPT 02 000b    SS.SQD 02 000c   SS.SSIG 02 001a
+  SS.TICKS 02 0010   SS.TONE 02 0098  SS.ULINK 02 0008  SS.UMBAR 02 0095
+SS.VARSECT 02 0012    SS.WFM 02 0017  SS.WNSET 02 0086   SS.WTRK 02 0004
+  SSVCLOOP 02 076b    SSVCOK 02 077b    STDSTR 02 0012     STOP1 00 0000
+     STOP2 00 0010  STP.12MS 00 0002  STP.20MS 00 0001  STP.30MS 00 0000
+   STP.6MS 00 0003    SVCIRQ 02 0116    SVCNMI 02 0111    SVCTNM 00 0002
+    SVCTSZ 00 006e       SWI 02 011a      SWI2 02 010b   SWI2JMP 02 07c0
+      SWI3 02 0105   SWI3JMP 02 07bc    SWIJMP 02 07c4    SYSIRQ 02 0153
+  SYSSTATE 00 0080    SYSSTR 02 0010    SYSSVC 02 0201   SYSTASK 00 0000
+    SYSTBL 02 07d4     SYSTM 00 00c0    TIMOUT 00 0020  TIMSLEEP 00 0040
+  TKPERSEC 01 003c      TN9K 00 0001      TRUE 00 0001    TWOMHZ 00 0002
+  TWOSOVFL 00 0002      TYLG 01 00c1   TYP.256 00 0000     TYP.3 00 0001
+     TYP.5 00 0000   TYP.512 00 0004   TYP.CCF 00 0020   TYP.FLP 00 0000
+  TYP.HARD 00 0080  TYP.NCCF 00 0000   TYP.NSF 00 0040   TYP.SBO 00 0002
+   TYP.SOF 00 0000  TYPEMASK 00 00f0 TYPH.1024 00 0002 TYPH.2048 00 0003
+  TYPH.256 00 0000  TYPH.512 00 0001 TYPH.DRSV 00 000c  TYPH.DSQ 00 0010
+  TYPH.SSM 00 0003  UNLIMITD 00 0002     UPBIT 00 0008    UPDAT. 00 0003
+    URTOSS 02 012b    USRIRQ 02 0127    USRSVC 02 01d9    V$DESC 02 0004
+    V$DRIV 02 0000    V$FMGR 02 0006    V$STAT 02 0002    V$USRS 02 0008
+  V.BMAPSZ 02 001c     V.BMB 02 0017    V.BUSY 02 0004    V.DEV2 02 0009
+  V.DISKID 02 001a     V.ERR 02 000e  V.FILEHD 02 0018    V.INTR 02 000b
+   V.KANJI 02 0011    V.KBUF 02 0012    V.LINE 02 0007    V.LPRC 02 0003
+  V.MAPSCT 02 001d  V.MODADR 02 0014    V.NDRV 02 0006    V.PAGE 02 0000
+    V.PAUS 02 0008    V.PCHR 02 000d   V.PDLHD 02 0016    V.PORT 02 0001
+    V.QUIT 02 000c  V.RESBIT 02 001e     V.RSV 02 0018     V.SCF 02 001d
+  V.SCOFST 02 0020  V.SCTKOF 02 001f  V.TKOFST 02 0021    V.TRAK 02 0015
+    V.TYPE 02 0006    V.USER 02 0006    V.WAKE 02 0005    V.XOFF 02 0010
+     V.XON 02 000f  VALCHECK 02 07a5    VALERR 02 079f    VALLEA 02 032f
+  VALLOOP@ 02 0794    VALMOD 02 02de  VALMODEX 02 032e   VALMODS 02 0792
+    VALPUL 02 0329    VALRET 02 07a9    VALSTO 02 032b    VD.OFS 02 0061
+    VD.STP 02 0060  VECTCODE 02 07ab   VECTCSZ 00 0029   VECTORS 02 0811
+    VI.CNT 02 0000  VI.IFLAG 00 0001   VI.PKSZ 02 0005    VI.RST 02 0002
+   VI.STAT 02 0004     WORD7 00 0020     WORD8 00 0000    WRITE. 00 0002
+      ZERO 00 0004
