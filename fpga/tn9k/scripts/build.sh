@@ -67,6 +67,7 @@ EOF
 if [ "$HDMI" != 0 ]; then echo '`define HDMI 1' >> "$B/tn9k_cfg.vh"; fi
 if [ "${DEBUG:-0}" != 0 ]; then echo '`define DEBUG_TX 1' >> "$B/tn9k_cfg.vh"; fi
 if [ "${DEBUG:-0}" = 3 ]; then echo '`define DEBUG_FLASH0 1' >> "$B/tn9k_cfg.vh"; fi    # DEBUG=3: DEBUG=2, and the loader reads the flash at offset 0x16
+if [ "${DEBUG:-0}" = 5 ]; then echo '`define DEBUG_DISK 1' >> "$B/tn9k_cfg.vh"; fi    # DEBUG=5: the status field shows the number of disk commands and the low byte of the last sector
 if [ "${DEBUG:-0}" = 4 ]; then echo '`define DEBUG_X1 1' >> "$B/tn9k_cfg.vh"; fi    # DEBUG=4: the status field shows the last word of a kanji lookup
 if [ "${DEBUG:-0}" = 2 ] || [ "${DEBUG:-0}" = 3 ]; then echo '`define DEBUG_KANJI 1' >> "$B/tn9k_cfg.vh"; fi   # DEBUG=2: the status field shows the kanji loader (ok, done, failed attempts, first byte read)
 

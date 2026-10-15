@@ -50,7 +50,7 @@ module sim_top #(
         .sd_clk(sd_clk), .sd_mosi(sd_mosi), .sd_miso(sd_miso), .sd_cs(sd_cs),
         .ps_rd(ps_rd), .ps_wr(ps_wr), .ps_addr(ps_addr), .ps_din(ps_din), .ps_bw(ps_bw),
         .ps_dout(ps_dout), .ps_busy(ps_busy),
-        .led(led), .dbg_status(), .dbg_kanji(), .term_busy(term_busy),
+        .led(led), .dbg_status(), .dbg_kanji(), .dbg_disk(), .term_busy(term_busy),
         .fl_cs(fl_cs), .fl_clk(fl_clk), .fl_mosi(fl_mosi), .fl_miso(fl_miso),
         .x1_req(x1_req), .x1_addr(x1_addr), .x1_ack(x1_ack), .x1_rdata(x1_rdata),
         .x2_req(x2_req), .x2_addr(x2_addr), .x2_ack(x2_ack), .x2_rdata(x2_rdata), .kanji_ok(kanji_ok),

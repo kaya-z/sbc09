@@ -76,6 +76,7 @@ module sbc09_soc #(
     output wire        dbg_acc,
     output wire [15:0] dbg_status,
     output wire [15:0] dbg_kanji,
+    output wire [15:0] dbg_disk,
     output wire [7:0]  dbg_din,
     output wire        dbg_rnw,
     output wire        dbg_vma
@@ -104,6 +105,11 @@ module sbc09_soc #(
         .nHALT(1'b1), .nRESET(nreset_cpu), .nDMABREQ(1'b1),
         .RegData(dbg_regs)
     );
+    // DEBUG=5: the number of disk commands since the reset, and the low byte of the sector number of the last one
+    reg [7:0] dsk_cnt = 8'd0;
+    reg [7:0] dsk_lsn = 8'd0;
+    always @(posedge clk) if (dgo) begin dsk_cnt <= dsk_cnt + 1'b1; dsk_lsn <= d_lsn0; end
+    assign dbg_disk = {dsk_cnt, dsk_lsn};
     assign dbg_lic = cpu_lic;
     assign dbg_addr = cpu_a;
     assign dbg_acc = acc2;
