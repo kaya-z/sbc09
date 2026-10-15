@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 /*
+ * Copyright (c) 2026 YUKARI Semiconductor Devices
+ *
  * skk.c - SKK style kana-kanji conversion for jwp (included by jwp.c)
  *
  * Input in the manner of SKK (Sasaki / Sato et al., the Simple Kana to Kanji conversion

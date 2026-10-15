@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
+# Copyright (c) 2026 YUKARI Semiconductor Devices
 """genmsgs.py ENC > msgs.h : the user interface texts and the character tables of jwp for ONE
 character set (ENC = utf8, euc or sjis; this is the MK09 version: the program is built for the
 character set of the disk), as C byte arrays.  The texts are one blob of NUL separated strings,
