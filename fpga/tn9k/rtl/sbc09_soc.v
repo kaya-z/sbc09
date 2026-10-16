@@ -15,10 +15,18 @@
 //
 // The memory map and the registers are those of the simulator (see docs/FPGA.md and README.md).
 //
+// LEVEL2 = 1 builds the other machine of the simulator (sim09 -2): CoCo 3 style, 2 MB of physical memory in the PSRAM
+// behind a MMU (two tasks of eight 8 KB blocks: the system map at $FFA0-A7, the user map at $FFA8-AF, the task register
+// at $FF91), the I/O registers at $FF80 (the same offsets as at $E000) and a fixed page $FE00-$FFFF = physical $7FE00.
+// All of it is RAM; the ROM image of the machine (os9/os9v2.rom) is copied from the SPI flash to the PSRAM at $7E000
+// (and on, over $80000 the "extended ROM") after the reset, like the simulator puts it there.
+//
 // Bus timing: one bus cycle of the CPU is four phases of PH_DIV clocks (E falls, Q rises, E rises, Q falls).
 // Shortly after E has risen, the address, the direction, the data and the "valid" flag of the cycle are
 // stable and the access is made.  The CPU's clock is held (before E falls) while a memory access or the
 // disk is still busy, so the access time of the PSRAM or of the card never matters for the result.
+
+`include "kanji.vh"
 
 module sbc09_soc #(
     parameter CLK_HZ     = 67500000,
@@ -35,7 +43,11 @@ module sbc09_soc #(
     parameter RTC_HOUR   = 0,
     parameter RTC_MIN    = 0,
     parameter RTC_SEC    = 0,
-    parameter KANJI      = 1                        // copy the kanji image from the SPI flash to the PSRAM after the reset (HDMI screen)
+    parameter KANJI      = 1,                       // copy the kanji image from the SPI flash to the PSRAM after the reset (HDMI screen)
+    parameter LEVEL2     = 0,                       // 1: the Level 2 machine (MMU, 2 MB, I/O at $FF80)
+    parameter [23:0] IMG_FLASH = 24'h140000,        // LEVEL2: the ROM image in the SPI flash,
+    parameter [21:0] IMG_PSRAM = 22'h07E000,        //         where it goes in the PSRAM
+    parameter [18:0] IMG_SIZE  = 19'd27648          //         and its size in bytes
 ) (
     input  wire        clk,
     input  wire        resetn,
@@ -159,11 +171,14 @@ module sbc09_soc #(
     end
 
     // ---------------------------------------------------------------- start-up: PSRAM, clear, reset of the CPU
-    localparam [2:0] C_WAIT = 3'd0, C_CLR = 3'd1, C_WAIT2 = 3'd2, C_RUN = 3'd3, C_LOAD = 3'd4, C_LOADW = 3'd5;
+    localparam [2:0] C_WAIT = 3'd0, C_CLR = 3'd1, C_WAIT2 = 3'd2, C_RUN = 3'd3, C_LOAD = 3'd4, C_LOADW = 3'd5,
+                     C_LOAD2 = 3'd6, C_LOADW2 = 3'd7;
+    localparam [21:0] CLR_LAST = LEVEL2 ? 22'h1fffff : 22'h00ffff;       // the last byte to clear: 2 MB or 64 KB
     reg [2:0]  cs_;
-    reg [15:0] cw;
+    reg [21:0] cw;
     reg        c_wr;
     reg        ld_start;
+    reg        job = 1'b1;                  // the loader's job: 0 = the ROM image (Level 2), 1 = the kanji image
     wire       ld_done, ld_wr;
     reg [3:0]  rcnt;
     reg [3:0]  bsy_d;               // busy low for a while: the PSRAM is up
@@ -177,16 +192,18 @@ module sbc09_soc #(
             bsy_d <= {bsy_d[2:0], ps_busy_m};
             case (cs_)
                 C_WAIT:  if (bsy_d == 4'b0000 && !ps_busy) cs_ <= C_CLR;
-                C_CLR: begin                            // write zero bytes 0, 1, 2 ... 65535 (the access the controller was tested with)
+                C_CLR: begin                            // write zero bytes 0, 1, 2 ... 65535 (2 MB - 1 for Level 2; the access the controller was tested with)
                     c_wr <= 1'b1;
                     cs_  <= C_WAIT2;
                 end
                 C_WAIT2: if (!c_wr && !ps_busy_m && !bsy_d[0] && !bsy_d[1]) begin
-                    if (cw == 16'hffff) cs_ <= C_LOAD;
+                    if (cw == CLR_LAST) cs_ <= C_LOAD;
                     else begin cw <= cw + 1'b1; cs_ <= C_CLR; end
                 end
-                C_LOAD:  if (KANJI) begin ld_start <= 1'b1; cs_ <= C_LOADW; end else cs_ <= C_RUN;
-                C_LOADW: if (ld_done) cs_ <= C_RUN;
+                C_LOAD:  if (LEVEL2) begin job <= 1'b0; ld_start <= 1'b1; cs_ <= C_LOADW; end else cs_ <= C_LOAD2;     // the ROM image of the Level 2 machine
+                C_LOADW: if (ld_done) cs_ <= C_LOAD2;
+                C_LOAD2: if (KANJI) begin job <= 1'b1; ld_start <= 1'b1; cs_ <= C_LOADW2; end else cs_ <= C_RUN;     // the kanji image
+                C_LOADW2: if (ld_done) cs_ <= C_RUN;
                 C_RUN: if (ecyc) begin
                     if (rcnt == 4'd15) nreset_cpu <= 1'b1;
                     else rcnt <= rcnt + 1'b1;
@@ -201,6 +218,8 @@ module sbc09_soc #(
     wire [7:0]  ld_data;
     kanji_loader loader (
         .clk(clk), .rst(rst), .start(ld_start), .done(ld_done), .ok(kanji_ok),
+        .j_flash(job ? `KJ_FLASH : IMG_FLASH), .j_psram(job ? `KJ_PSRAM : IMG_PSRAM),
+        .j_size(job ? `KJ_SIZE : IMG_SIZE), .j_magic(job),
         .fl_cs(fl_cs), .fl_clk(fl_clk), .fl_mosi(fl_mosi), .fl_miso(fl_miso),
         .wr(ld_wr), .wr_addr(ld_addr), .wr_data(ld_data), .busy(ps_busy_m), .dbg(dbg_kanji)
     );
@@ -217,19 +236,39 @@ module sbc09_soc #(
 
     // I/O page decode
     wire [15:0] a      = cpu_a;
+    wire [21:0] pa;
     // The address is stable for two phases before it is used, so its decoding is registered (one clock late).
-    wire        in_io  = (a[15:9] == 7'b1110000);
-    wire [8:0]  off    = a[8:0];
-    reg io_acia, io_power, io_timer, io_disk, io_hit, io_quiet, rom_sel;
+    // Level 1: the registers are at $E000 (the page $E000-$E1FF); Level 2: at $FF80 (the same offsets), in the fixed page.
+    wire        in_io  = LEVEL2 ? (a[15:7] == 9'h1ff) : (a[15:9] == 7'b1110000);
+    wire [8:0]  off    = LEVEL2 ? {2'b00, a[6:0]} : a[8:0];
+    reg io_acia, io_power, io_timer, io_disk, io_hit, io_quiet, rom_sel, io_mmu, io_map, io_ta;
+    // Level 2: the registers of the clock are in the fixed page, and the OS reads the time with F$Move, i.e. through another
+    // window of the same physical page ($7FFB1-B6).  In the simulator the registers live in that RAM; here a read of that
+    // physical address gives the registers of the clock too.  (pa is declared below: it is the physical address of a.)
+    wire        ta     = LEVEL2 && !in_io && (pa[21:3] == 19'h0fff6) && (pa[2:0] <= 3'd6);
     always @(posedge clk) begin
+        io_ta    <= ta;
         io_acia  <= in_io && off[8:1] == 8'd0;                   // $E000, $E001
         io_power <= in_io && off == 9'h00f;
         io_timer <= in_io && off >= 9'h030 && off <= 9'h036;
         io_disk  <= in_io && off >= 9'h040 && off <= 9'h047;
-        io_hit   <= in_io && ((off[8:1] == 8'd0) || off == 9'h00f || (off >= 9'h030 && off <= 9'h036) || (off >= 9'h040 && off <= 9'h047));
-        io_quiet <= in_io && off < 9'h080 && !((off[8:1] == 8'd0) || off == 9'h00f || (off >= 9'h030 && off <= 9'h036) || (off >= 9'h040 && off <= 9'h047));
-        rom_sel  <= (a >= ROM_BASE);
+        io_mmu   <= LEVEL2 && in_io && off == 9'h011;            // the task register
+        io_map   <= LEVEL2 && in_io && off >= 9'h020 && off <= 9'h02f;   // the system map, the user map
+        io_hit   <= (in_io && ((off[8:1] == 8'd0) || off == 9'h00f || (off >= 9'h030 && off <= 9'h036) || (off >= 9'h040 && off <= 9'h047)
+                              || (LEVEL2 && (off == 9'h011 || (off >= 9'h020 && off <= 9'h02f))))) || ta;
+        io_quiet <= !LEVEL2 && in_io && off < 9'h080 && !((off[8:1] == 8'd0) || off == 9'h00f || (off >= 9'h030 && off <= 9'h036) || (off >= 9'h040 && off <= 9'h047));
+        rom_sel  <= !LEVEL2 && (a >= ROM_BASE);
     end
+
+    // The MMU of the Level 2 machine: eight 8 KB blocks per task, the block numbers (up to 2 MB); the fixed page $FE00-$FFFF
+    // is always physical $7FE00.  After the reset the system map is the one of the simulator: blocks 0-6 = $FF, block 7 = $3F.
+    reg [7:0] map_s [0:7];
+    reg [7:0] map_u [0:7];
+    reg       tr;                                                // the task: 0 = the system map, 1 = the user map
+    reg [7:0] tr_raw;                                            // what the guest wrote to $FF91
+    wire [7:0]  blk    = (a[15:9] == 7'b1111111) ? 8'h3f : (tr ? map_u[a[15:13]] : map_s[a[15:13]]);
+    assign      pa     = {1'b0, blk, a[12:0]};                   // the physical address of the CPU's address
+    integer     mk;
 
     // ROM
     reg [7:0] rom [0:(1 << ROM_AW) - 1];
@@ -292,7 +331,9 @@ module sbc09_soc #(
     always @(*) begin
         io_rdata = 8'h00;
         if (io_acia)       io_rdata = off[0] ? acia_rdata : acia_status;
-        else if (io_timer) io_rdata = timer_rdata;
+        else if (io_timer || io_ta) io_rdata = timer_rdata;
+        else if (io_mmu)   io_rdata = tr_raw;
+        else if (io_map)   io_rdata = off[3] ? map_u[off[2:0]] : map_s[off[2:0]];
         else if (io_disk)
             case (off[2:0])
                 3'd0: io_rdata = e040;
@@ -322,10 +363,12 @@ module sbc09_soc #(
         if (disk_busy_d && !disk_busy) e040 <= disk_result;
         if (rst) begin
             mem_pend <= 1'b0; mp_wait <= 1'b0; vma_pend <= 1'b1; pwroff <= 1'b0; acia_pend <= 1'b0;
+            for (mk = 0; mk < 8; mk = mk + 1) begin map_s[mk] <= 8'hff; map_u[mk] <= 8'hff; end
+            map_s[7] <= 8'h3f; tr <= 1'b0; tr_raw <= 8'hff;
             rd_reg <= 8'h00; e040 <= 8'h00; d_drive <= 0; d_lsn2 <= 0; d_lsn1 <= 0; d_lsn0 <= 0;
             d_bufh <= 0; d_bufl <= 0; d_47 <= 0;
         end else begin
-            c_addr  <= {6'd0, a};
+            c_addr  <= LEVEL2 ? pa : {6'd0, a};
             c_wdata <= cpu_d_out;
             c_rsel  <= a[0];
             if (acc2) begin
@@ -335,6 +378,8 @@ module sbc09_soc #(
                         if (cpu_rnw) rd_reg <= io_rdata;
                         else begin
                             if (io_power && cpu_d_out == 8'ha5) pwroff <= 1'b1;
+                            if (io_mmu) begin tr_raw <= cpu_d_out; tr <= cpu_d_out[0]; end
+                            if (io_map) begin if (off[3]) map_u[off[2:0]] <= cpu_d_out; else map_s[off[2:0]] <= cpu_d_out; end
                             if (io_acia && off[0]) begin
                                 acia_pend <= 1'b1;                  // the guest does not look at TDRE: wait for it here
                                 acia_byte <= cpu_d_out;
@@ -382,6 +427,10 @@ module sbc09_soc #(
     // master 0 of the PSRAM arbiter: the start-up (clear, kanji loader), the disk and the CPU.  Their pulses
     // become a request that is held until the arbiter has done it; ps_busy_m is high from the clock of the pulse
     // until then (so no master has to count clocks).
+    // the buffer address of the disk port is a logical address: it goes through the map that is active (like the simulator)
+    wire [15:0] dl     = d_addr[15:0];
+    wire [7:0]  dblk   = (dl[15:9] == 7'b1111111) ? 8'h3f : (tr ? map_u[dl[15:13]] : map_s[dl[15:13]]);
+    wire [21:0] d_pa   = {1'b0, dblk, dl[12:0]};
     wire use_clr  = !run;
     reg  disk_sel = 1'b0;                       // the disk owns the port (a clock late: the CPU is waiting at both ends)
     always @(posedge clk) disk_sel <= disk_busy;
@@ -397,7 +446,7 @@ module sbc09_soc #(
         if (m0_pulse) begin
             m0_req  <= 1'b1;
             m0_wrr  <= m_wr_s;
-            m0_addr <= use_clr ? (ld_wr ? ld_addr : {6'd0, cw}) : disk_sel ? d_addr : c_addr;
+            m0_addr <= use_clr ? (ld_wr ? ld_addr : cw) : disk_sel ? (LEVEL2 ? d_pa : d_addr) : c_addr;
             m0_din  <= use_clr ? (ld_wr ? ld_data : 8'h00) : disk_sel ? d_din : c_wdata;
         end
     end

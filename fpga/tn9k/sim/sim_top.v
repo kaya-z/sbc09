@@ -7,7 +7,9 @@ module sim_top #(
     parameter [15:0] ROM_BASE = 16'hFF00,
     parameter ROM_AW = 8,
     parameter ROM_FILE = "rom.hex",
-    parameter FREERUN = 0
+    parameter FREERUN = 0,
+    parameter LEVEL2 = 0,
+    parameter IMG_SIZE = 0
 ) (
     input  wire        clk,
     input  wire        resetn,
@@ -35,7 +37,10 @@ module sim_top #(
     output wire        dbg_acc,
     output wire [7:0]  dbg_din,
     output wire        dbg_rnw,
-    output wire        dbg_vma
+    output wire        dbg_vma,
+    output wire        dbg_ps_rd,
+    output wire        dbg_ps_wr,
+    output wire [21:0] dbg_ps_addr
 );
     wire        term_busy;
     wire        x1_req, x2_req, x1_ack, x2_ack;
@@ -45,7 +50,7 @@ module sim_top #(
     wire [21:0] ps_addr;
     wire [15:0] ps_din, ps_dout;
 
-    sbc09_soc #(.PH_DIV(PH_DIV), .ROM_BASE(ROM_BASE), .ROM_AW(ROM_AW), .ROM_FILE(ROM_FILE), .FREERUN(FREERUN)) soc (
+    sbc09_soc #(.PH_DIV(PH_DIV), .ROM_BASE(ROM_BASE), .ROM_AW(ROM_AW), .ROM_FILE(ROM_FILE), .FREERUN(FREERUN), .LEVEL2(LEVEL2), .IMG_SIZE(IMG_SIZE)) soc (
         .clk(clk), .resetn(resetn), .rxd(rxd), .txd(txd),
         .sd_clk(sd_clk), .sd_mosi(sd_mosi), .sd_miso(sd_miso), .sd_cs(sd_cs),
         .ps_rd(ps_rd), .ps_wr(ps_wr), .ps_addr(ps_addr), .ps_din(ps_din), .ps_bw(ps_bw),
@@ -72,6 +77,7 @@ module sim_top #(
     assign x1_req = 1'b0, x1_addr = 22'd0, x2_req = 1'b0, x2_addr = 22'd0;
 `endif
 
+    assign dbg_ps_rd = ps_rd, dbg_ps_wr = ps_wr, dbg_ps_addr = ps_addr;
     PsramModel mem (
         .clk(clk), .resetn(resetn), .read(ps_rd), .write(ps_wr), .addr(ps_addr), .din(ps_din),
         .byte_write(ps_bw), .dout(ps_dout), .busy(ps_busy)

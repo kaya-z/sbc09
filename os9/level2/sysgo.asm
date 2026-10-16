@@ -69,7 +69,12 @@ BannLen  equ   *-Banner
 
        IFEQ  ROM
 DefDev   equ   *
+* (a09 -D TN9K: the board has no /v0 (VRBF): the disk is /d0)
+         IFNE  TN9K
+         fcc   "/D0"
+         ELSE
          fcc   "/V0"
+         ENDC
 *       IFNE  DD
 *         fcc   "/DD"
 *       ELSE
@@ -77,14 +82,22 @@ DefDev   equ   *
 *       ENDC
          fcb   C$CR
 HDDev    equ   *
+         IFNE  TN9K
+         fcc   "/D0"
+         ELSE
          fcc   "/V0"
+         ENDC
          fcb   C$CR
 *       IFNE  DD
 *         fcc   "/DD/"
 *       ELSE
 *         fcc   "/H0/"
 *       ENDC
+         IFNE  TN9K
+ExecDir  fcc   "/D0/cmds"
+         ELSE
 ExecDir  fcc   "/V0/cmds"
+         ENDC
          fcb   C$CR
        ENDC
 

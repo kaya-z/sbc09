@@ -1,17 +1,20 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 sim09 contributors
 //
-// After the reset the kanji image (rtl/kanji.vh, scripts/mkkanji.py) is copied from the board's SPI flash
-// (offset KJ_FLASH, written with openFPGALoader -o) to the PSRAM (KJ_PSRAM), byte by byte, for the HDMI screen.
-// If the flash does not start with the image's magic, nothing is copied and ok stays 0 (kanji show as a box).
+// After the reset an image is copied from the board's SPI flash (offset j_flash, written with openFPGALoader -o) to
+// the PSRAM (j_psram), byte by byte.  Two jobs use it, one after the other (sbc09_soc.v): the kanji image for the HDMI
+// screen (rtl/kanji.vh, scripts/mkkanji.py; j_magic = 1: if the flash does not start with the image's magic, nothing is
+// copied and ok stays 0: the kanji show as a box) and the ROM image of the Level 2 machine (os9/os9v2.rom, no magic).
 // The flash is read with the plain READ command (03h) at clk/4 = 20 MHz.
-
-`include "kanji.vh"
 
 module kanji_loader (
     input  wire        clk,
     input  wire        rst,
     input  wire        start,
+    input  wire [23:0] j_flash,             // the job: the flash address of the image, the PSRAM address, the size in bytes, the check of 'KJF1'
+    input  wire [21:0] j_psram,
+    input  wire [18:0] j_size,
+    input  wire        j_magic,
     output reg         done,
     output reg         ok,
     output reg         fl_cs,
@@ -67,9 +70,9 @@ module kanji_loader (
     // registers that follow the byte counter (it changes once per byte, which takes 40 clocks)
     always @(posedge clk) begin
         n_lt4   <= (n[17:2] == 16'd0);
-        n_last  <= (n == `KJ_SIZE - 1);
+        n_last  <= (n == j_size - 1'b1);
         magic   <= (n[1:0] == 2'd0) ? 8'h4b : (n[1:0] == 2'd1) ? 8'h4a : (n[1:0] == 2'd2) ? 8'h46 : 8'h31;     // K J F 1
-        wr_addr <= {1'b0, 1'b1, 2'b00, n};                                                                   // KJ_PSRAM = 1 MB
+        wr_addr <= j_psram + {4'd0, n};
     end
 
     always @(posedge clk) begin
@@ -95,7 +98,7 @@ module kanji_loader (
 `ifdef DEBUG_FLASH0
                 cmd <= {8'h03, 24'h000016};              // DEBUG=3: read the bitstream's own first bytes (offset 0x16 is 0xA5), to see if the flash can be read at all
 `else
-                cmd <= {8'h03, `KJ_FLASH};
+                cmd <= {8'h03, j_flash};
 `endif
                 fl_cs <= 1'b0; ci <= 3'd0; n <= 18'd0; st <= L_CMD;
             end
@@ -112,7 +115,7 @@ module kanji_loader (
         L_CHK: begin
             if (n[17:0] == 18'd0) b0 <= srx;
             // the magic of the image: K J F 1
-            if (n_lt4 && srx != magic) begin
+            if (j_magic && n_lt4 && srx != magic) begin
                 if (tries == 4'd7) st <= L_END;         // give up: the kanji show as a box
                 else begin tries <= tries + 1'b1; fl_cs <= 1'b1; pw <= 14'd1000; pi <= 4'd15; st <= L_PWT; end   // try again from the start
             end

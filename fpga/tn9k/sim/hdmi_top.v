@@ -42,7 +42,7 @@ module hdmi_top #(
         .m1_req(x1_req), .m1_addr(x1_addr), .m1_ack(x1_ack), .m1_rdata(x1_rdata),
         .m2_req(x2_req), .m2_addr(x2_addr), .m2_ack(x2_ack), .m2_rdata(x2_rdata)
     );
-    PsramModel #(.INIT_FILE(KANJI_FILE), .INIT_BASE(20'h80000)) mem (
+    PsramModel #(.INIT_FILE(KANJI_FILE), .INIT_BASE(21'h100000)) mem (
         .clk(clk), .resetn(~rst), .read(ps_rd), .write(ps_wr), .addr(ps_addr), .din(ps_din),
         .byte_write(ps_bw), .dout(ps_dout), .busy(ps_busy)
     );

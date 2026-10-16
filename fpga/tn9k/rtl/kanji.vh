@@ -17,6 +17,6 @@
 `define KJ_PAGES    32'h000300
 `define KJ_GLYPH    32'h010000
 `define KJ_SIZE     32'h02d600
-`define KJ_PSRAM    22'h100000           // where the image is in the PSRAM (1 MB)
+`define KJ_PSRAM    22'h200000           // where the image is in the PSRAM (2 MB: the Level 2 machine has the 2 MB below it)
 `define KJ_FLASH    24'h100000           // and in the SPI flash
 `define KJ_GETA     12'd107              // the glyph for a character that has none: row 2, column 14 (JIS $222E)

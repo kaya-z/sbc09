@@ -5,7 +5,7 @@
 # (tools/a09, from the sbc09 project).
 MAKE9ROM = ../tools/make9rom
 
-all: os9v1.rom os9v1_tn9k.rom os9v1boot.rom OS9Boot.bin bootdisk os9v2.rom os9v1_euc.rom os9v2_euc.rom os9v1_sjis.rom os9v2_sjis.rom cmds
+all: os9v1.rom os9v1_tn9k.rom os9v1boot.rom OS9Boot.bin bootdisk os9v2.rom os9v2_tn9k.rom os9v1_euc.rom os9v2_euc.rom os9v1_sjis.rom os9v2_sjis.rom cmds
 
 modules:
 	$(MAKE) -C level1
@@ -59,12 +59,22 @@ OS9Boot.bin: modules
 # LSN 2 (tools/mkkernel.py): the machine then boots OS-9 from the card with the same FPGA bitstream as FUZIX and MK09
 # (the rest of the image goes on at LSN 720, which makes the disk a little larger)
 KERNMODS = level1/boot level1/init_tn9k level1/ioman level1/scf level1/os9p2 level1/os9p1_tn9k
+# the disk of the Level 2 machine of the FPGA board (os9l2): the Level 2 commands, 1440 sectors (tools/mkl2disk.py needs sim09)
+OS9L2.dsk: OS9.dsk os9v2.rom
+	python3 ../tools/mkl2disk.py -o $@
+
 bootdisk: OS9Boot.bin
 	python3 ../tools/mkkernel.py -e 720 OS9.dsk $(KERNMODS)
 	python3 ../tools/mkboot.py OS9.dsk OS9Boot.bin
 
 os9v2.rom os9v2_euc.rom os9v2_sjis.rom: modules
 	$(MAKE9ROM) -o $@ -2 $(L2MODS)
+
+# Level 2 for the FPGA board (the ROM image is copied from the SPI flash to the RAM at the start: docs/FPGA.md): the machine is named
+# Tang Nano 9K, the disk is /d0 (no /v0)
+os9v2_tn9k.rom: CS =
+os9v2_tn9k.rom: modules
+	$(MAKE9ROM) -o $@ -2 $(subst level2/sysgo,level2/sysgo_tn9k,$(subst level2/init,level2/init_tn9k,$(L2MODS)))
 
 clean:
 	$(MAKE) -C level1 clean

@@ -22,7 +22,7 @@ module PsramModel #(
     output reg  [15:0] dout,
     output wire        busy
 );
-    reg [15:0] mem [0:1048575];             // 2 MB: the machine uses the first 64 KB, the kanji image is at 1 MB
+    reg [15:0] mem [0:2097151];             // 4 MB: the machine uses the first 64 KB (Level 2: 2 MB), the kanji image is at 2 MB
     reg [15:0] cnt;
     reg        is_wr;
     reg [21:0] a;
@@ -42,10 +42,10 @@ module PsramModel #(
             cnt <= cnt - 1'b1;
             if (cnt == 1) begin
                 if (is_wr) begin
-                    if (!bw) mem[a[20:1]] <= d;
-                    else if (a[0]) mem[a[20:1]][15:8] <= d[15:8];
-                    else           mem[a[20:1]][7:0]  <= d[7:0];
-                end else dout <= mem[a[20:1]];
+                    if (!bw) mem[a[21:1]] <= d;
+                    else if (a[0]) mem[a[21:1]][15:8] <= d[15:8];
+                    else           mem[a[21:1]][7:0]  <= d[7:0];
+                end else dout <= mem[a[21:1]];
             end
         end else if (read || write) begin
             is_wr <= write;

@@ -7,7 +7,7 @@ NETDESC = n1 n2 n3 n1_euc n2_euc n3_euc n1_sjis n2_sjis n3_sjis
 
 A09 = ../../tools/a09 -I $(OS9SRC)/defs/
 
-ALL = ioman pdisk init os9p1 os9p2 os9p3_perr os9p4_regdump pipe pipeman pipeman_named piper rbf scf term term_euc term_sjis npty $(NETDESC) pty d0 d1 clock vector boot shell dir mdir sysgo v0 vrbf
+ALL = ioman pdisk init init_tn9k sysgo_tn9k os9p1 os9p2 os9p3_perr os9p4_regdump pipe pipeman pipeman_named piper rbf scf term term_euc term_sjis npty $(NETDESC) pty d0 d1 clock vector boot shell dir mdir sysgo v0 vrbf
 
 all : $(ALL)
 	cd cmds ; make
@@ -26,8 +26,15 @@ boot : boot.asm
 sysgo : sysgo.asm
 	$(A09) sysgo.asm -o sysgo $(LST)
 
+# for the FPGA board: the disk is /d0 (no /v0), the machine is named Tang Nano 9K
+sysgo_tn9k : sysgo.asm
+	$(A09) -D TN9K sysgo.asm -o sysgo_tn9k $(LST)
+
+init_tn9k : init.asm
+	$(A09) -D TN9K init.asm -o $@ $(LST)
+
 init : init.asm
-	$(A09) init.asm -o $@ $(LST)
+	$(A09) -D SIM09 init.asm -o $@ $(LST)
 
 vector : vector.asm
 	$(A09) vector.asm -o vector $(LST)
