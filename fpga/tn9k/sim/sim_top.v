@@ -7,7 +7,9 @@ module sim_top #(
     parameter [15:0] ROM_BASE = 16'hFF00,
     parameter ROM_AW = 8,
     parameter ROM_FILE = "rom.hex",
-    parameter FREERUN = 0
+    parameter FREERUN = 0,
+    parameter MEMTEST = 0,                      // 1: the memory test of the start-up (about 3 s of the board: too long for most tests)
+    parameter [21:0] MT_LAST = 22'h3fff
 ) (
     input  wire        clk,
     input  wire        resetn,
@@ -48,7 +50,7 @@ module sim_top #(
     wire [21:0] ps_addr;
     wire [15:0] ps_din, ps_dout;
 
-    sbc09_soc #(.PH_DIV(PH_DIV), .ROM_BASE(ROM_BASE), .ROM_AW(ROM_AW), .ROM_FILE(ROM_FILE), .FREERUN(FREERUN)) soc (
+    sbc09_soc #(.PH_DIV(PH_DIV), .ROM_BASE(ROM_BASE), .ROM_AW(ROM_AW), .ROM_FILE(ROM_FILE), .FREERUN(FREERUN), .MEMTEST(MEMTEST), .MT_LAST(MT_LAST)) soc (
         .clk(clk), .resetn(resetn), .rxd(rxd), .txd(txd),
         .sd_clk(sd_clk), .sd_mosi(sd_mosi), .sd_miso(sd_miso), .sd_cs(sd_cs),
         .ps_rd(ps_rd), .ps_wr(ps_wr), .ps_addr(ps_addr), .ps_din(ps_din), .ps_bw(ps_bw),

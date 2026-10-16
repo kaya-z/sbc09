@@ -47,6 +47,8 @@ module sbc09_soc #(
     parameter RTC_HOUR   = 0,
     parameter RTC_MIN    = 0,
     parameter RTC_SEC    = 0,
+    parameter MEMTEST    = 1,                       // test the PSRAM (55, AA, the address as the data) after the reset: Memory >>>> on the console
+    parameter [21:0] MT_LAST = 22'h1fffff,          // the last byte to test (2 MB)
     parameter KANJI      = 1                        // copy the kanji image from the SPI flash to the PSRAM after the reset (HDMI screen)
 ) (
     input  wire        clk,
@@ -125,7 +127,7 @@ module sbc09_soc #(
     assign dbg_lic = cpu_lic;
     assign dbg_addr = cpu_a;
     assign dbg_acc = acc2;
-    assign dbg_status = {cs_, mem_pend, acia_pend, disk_busy, pwroff, sd_st, sd_ready, sd_fail};
+    assign dbg_status = {cs_[2:0], mem_pend, acia_pend, disk_busy, pwroff, sd_st, sd_ready, sd_fail};
     assign dbg_din = cpu_d_in;
     assign dbg_rnw = cpu_rnw;
     assign dbg_vma = vma_pend;
@@ -138,6 +140,7 @@ module sbc09_soc #(
     reg       acc2;                 // and one clock later (the access itself: it needs the decoded address)
     reg       mem_pend;             // a PSRAM access of the CPU is under way
     wire      disk_busy;
+    wire      acia_tx_full;         // the transmitter cannot take a character now
     wire      ps_busy_m;
     wire [15:0] ps_dout_m;           // the word the arbiter read for master 0 (the CPU, the disk)
     reg       pwroff;
@@ -172,11 +175,12 @@ module sbc09_soc #(
     end
 
     // ---------------------------------------------------------------- start-up: PSRAM, clear, reset of the CPU
-    localparam [2:0] C_WAIT = 3'd0, C_CLR = 3'd1, C_WAIT2 = 3'd2, C_RUN = 3'd3, C_LOAD = 3'd4, C_LOADW = 3'd5;
+    localparam [3:0] C_WAIT = 4'd0, C_CLR = 4'd1, C_WAIT2 = 4'd2, C_RUN = 4'd3, C_LOAD = 4'd4, C_LOADW = 4'd5,
+                     M_HDR = 4'd6, M_W = 4'd7, M_WW = 4'd8, M_R = 4'd9, M_RW = 4'd10, M_RC = 4'd11, M_FIN = 4'd12;
     localparam [21:0] CLR_LAST = 22'h1fffff;                              // the last byte to clear: 2 MB (the Level 2 mode)
-    reg [2:0]  cs_;
+    reg [3:0]  cs_;
     reg [21:0] cw;
-    reg        c_wr;
+    reg        c_wr, t_rd;
     reg        ld_start;
     wire       ld_done, ld_wr;
     reg [3:0]  rcnt;
@@ -184,23 +188,88 @@ module sbc09_soc #(
     reg        l2 = 1'b0;               // the Level 2 mode
     reg [3:0]  bsy_d;               // busy low for a while: the PSRAM is up
 
+    // The memory test (before the clear): three passes over 0 ... MT_LAST, each one writes all, then reads all back:
+    // 0 = $55, 1 = $AA, 2 = the address as the data (folded to 8 bits).  tp = 3 is the clear (zero bytes).
+    reg [1:0]  tp;
+    wire [7:0] tdata = (tp == 2'd0) ? 8'h55 : (tp == 2'd1) ? 8'hAA : (tp == 2'd2) ? (cw[7:0] ^ cw[15:8] ^ {2'b00, cw[21:16]}) : 8'h00;
+    reg        t_fail;
+    reg [21:0] t_faddr;
+    reg [3:0]  mi;                                   // the index in the message
+    // the console output of the test: one character at a time (the ACIA and the screen)
+    reg        p_go, st_wr, st_d, st_d2;
+    reg [7:0]  p_ch, st_byte;
+    function [7:0] hexc(input [3:0] n); hexc = (n < 4'd10) ? (8'h30 + n) : (8'h37 + n); endfunction
+    function [7:0] msg(input [3:0] i, input fail, input [21:0] fa);
+        if (!fail) case (i)
+            4'd0: msg = " "; 4'd1: msg = "O"; 4'd2: msg = "K"; 4'd3: msg = " "; 4'd4: msg = "2"; 4'd5: msg = "0";
+            4'd6: msg = "4"; 4'd7: msg = "8"; 4'd8: msg = "K"; 4'd9: msg = 8'h0d; 4'd10: msg = 8'h0a; default: msg = 8'h00;
+        endcase else case (i)
+            4'd0: msg = " "; 4'd1: msg = "N"; 4'd2: msg = "G"; 4'd3: msg = "@";
+            4'd4: msg = hexc({2'b00, fa[21:20]}); 4'd5: msg = hexc(fa[19:16]); 4'd6: msg = hexc(fa[15:12]);
+            4'd7: msg = hexc(fa[11:8]); 4'd8: msg = hexc(fa[7:4]); 4'd9: msg = hexc(fa[3:0]);
+            4'd10: msg = 8'h0d; 4'd11: msg = 8'h0a; default: msg = 8'h00;
+        endcase
+    endfunction
+    // registered (the address and the pass are stable for several clocks before the values are used)
+    reg [7:0]  td_r, t_got_r;
+    reg [21:0] cw_n;                                 // cw + 1, registered (the carry chain of the counter was the critical path)
+    reg        cw_last, cw_pg;
+    always @(posedge clk) begin
+        td_r    <= tdata;
+        cw_n    <= cw + 1'b1;
+        t_got_r <= cw[0] ? ps_dout_m[15:8] : ps_dout_m[7:0];
+        cw_last <= (cw == MT_LAST);
+        cw_pg   <= (cw[17:0] == 18'h3ffff);
+    end
+
     always @(posedge clk) begin
         c_wr <= 1'b0;
+        t_rd <= 1'b0;
         ld_start <= 1'b0;
+        st_wr <= 1'b0; st_d <= st_wr; st_d2 <= st_d;
+        if (p_go && !st_wr && !st_d && !st_d2 && !acia_tx_full && !term_busy) begin st_wr <= 1'b1; st_byte <= p_ch; p_go <= 1'b0; end
         if (rst) begin
             cs_ <= C_WAIT; cw <= 0; bsy_d <= 0; rcnt <= 0; nreset_cpu <= 1'b0;
+            tp <= MEMTEST ? 2'd0 : 2'd3; t_fail <= 1'b0; t_faddr <= 22'd0; mi <= 4'd0; p_go <= 1'b0; p_ch <= 8'h00;
         end else begin
             bsy_d <= {bsy_d[2:0], ps_busy_m};
             if (go_req) begin nreset_cpu <= 1'b0; rcnt <= 4'd0; end      // the mode register: reset the CPU (in the Level 2 mode)
             case (cs_)
-                C_WAIT:  if (bsy_d == 4'b0000 && !ps_busy) cs_ <= C_CLR;
+                C_WAIT:  if (bsy_d == 4'b0000 && !ps_busy) cs_ <= MEMTEST ? M_HDR : C_CLR;
+                M_HDR: if (!p_go && !st_wr && !st_d) begin                    // "Memory "
+                    case (mi)
+                        4'd0: p_ch <= "M"; 4'd1: p_ch <= "e"; 4'd2: p_ch <= "m"; 4'd3: p_ch <= "o";
+                        4'd4: p_ch <= "r"; 4'd5: p_ch <= "y"; default: p_ch <= " ";
+                    endcase
+                    p_go <= 1'b1;
+                    if (mi == 4'd6) begin mi <= 4'd0; cs_ <= M_W; end else mi <= mi + 1'b1;
+                end
+                M_W: begin c_wr <= 1'b1; cs_ <= M_WW; end
+                M_WW: if (!c_wr && !ps_busy_m && !bsy_d[0] && !bsy_d[1]) begin
+                    if (cw_last) begin cw <= 0; cs_ <= M_R; end
+                    else begin cw <= cw_n; cs_ <= M_W; end
+                end
+                M_R: begin t_rd <= 1'b1; cs_ <= M_RW; end
+                M_RW: if (!t_rd && !ps_busy_m && !bsy_d[0] && !bsy_d[1]) cs_ <= M_RC;
+                M_RC: if (!p_go) begin
+                    if (t_got_r != td_r && !t_fail) begin t_fail <= 1'b1; t_faddr <= cw; end
+                    if (cw_pg || cw_last) begin p_ch <= ">"; p_go <= 1'b1; end   // one > for 256 KB
+                    if (cw_last) begin
+                        cw <= 0; tp <= tp + 1'b1;
+                        cs_ <= (tp == 2'd2) ? M_FIN : M_W;
+                    end else begin cw <= cw_n; cs_ <= M_R; end
+                end
+                M_FIN: if (!p_go && !st_wr && !st_d) begin                    // " OK 2048K" or " NG @address"
+                    if (msg(mi, t_fail, t_faddr) == 8'h00) cs_ <= C_CLR;       // then clear (tp = 3: zero bytes)
+                    else begin p_ch <= msg(mi, t_fail, t_faddr); p_go <= 1'b1; mi <= mi + 1'b1; end
+                end
                 C_CLR: begin                            // write zero bytes 0, 1, 2 ... 65535 (2 MB - 1 for Level 2; the access the controller was tested with)
                     c_wr <= 1'b1;
                     cs_  <= C_WAIT2;
                 end
                 C_WAIT2: if (!c_wr && !ps_busy_m && !bsy_d[0] && !bsy_d[1]) begin
                     if (cw == CLR_LAST) cs_ <= C_LOAD;
-                    else begin cw <= cw + 1'b1; cs_ <= C_CLR; end
+                    else begin cw <= cw_n; cs_ <= C_CLR; end
                 end
                 C_LOAD:  if (KANJI) begin ld_start <= 1'b1; cs_ <= C_LOADW; end else cs_ <= C_RUN;     // the kanji image
                 C_LOADW: if (ld_done) cs_ <= C_RUN;
@@ -208,6 +277,7 @@ module sbc09_soc #(
                     if (rcnt == 4'd15) nreset_cpu <= 1'b1;
                     else rcnt <= rcnt + 1'b1;
                 end
+                default: cs_ <= C_WAIT;
             endcase
         end
     end
@@ -283,17 +353,16 @@ module sbc09_soc #(
     wire [7:0] timer_rdata;
     reg        acia_rd;                 // a clock after the read: rd_reg has taken the character by then
     always @(posedge clk) acia_rd <= acc2 && vma_pend && cpu_rnw && io_acia && off[0];
-    wire       acia_tx_full;
     reg  [7:0] acia_byte;
     wire       acia_wr = acia_pend && !acia_tx_full && !term_busy;    // the screen can also hold a character back
-    assign term_stb  = acia_wr;
-    assign term_byte = acia_byte;
+    assign term_stb  = acia_wr | st_wr;
+    assign term_byte = st_wr ? st_byte : acia_byte;
     wire       timer_wr = acc2 && vma_pend && !cpu_rnw && io_timer;
     wire       iack     = acc2 && cpu_bs && !cpu_ba;
 
     acia_uart #(.BAUD_DIV(BAUD_DIV)) acia (
         .clk(clk), .rst(rst), .rxd(rxd), .txd(txd),
-        .rd_data(acia_rd), .wr_data(acia_wr), .wdata(acia_byte),
+        .rd_data(acia_rd), .wr_data(acia_wr | st_wr), .wdata(st_wr ? st_byte : acia_byte),
         .tx_full(acia_tx_full), .status(acia_status), .rdata(acia_rdata)
     );
 
@@ -389,7 +458,7 @@ module sbc09_soc #(
                                     map_s[7] <= 8'h3f;
                                 end
                                 if (cpu_d_out == 8'ha3 && l2) begin             // reset the CPU with the maps of the reset
-                                    go_req <= 1'b1; osrun <= 1'b0; tr <= 1'b0; tr_raw <= 8'hff;
+                                    go_req <= 1'b1; tr <= 1'b0; tr_raw <= 8'hff;
                                     for (mk = 0; mk < 8; mk = mk + 1) begin map_s[mk] <= 8'hff; map_u[mk] <= 8'hff; end
                                     map_s[7] <= 8'h3f;
                                 end
@@ -450,7 +519,7 @@ module sbc09_soc #(
     wire use_clr  = !run;
     reg  disk_sel = 1'b0;                       // the disk owns the port (a clock late: the CPU is waiting at both ends)
     always @(posedge clk) disk_sel <= disk_busy;
-    wire m_rd_s   = use_clr ? 1'b0 : disk_sel ? d_rd : c_rd;
+    wire m_rd_s   = use_clr ? t_rd : disk_sel ? d_rd : c_rd;
     wire m_wr_s   = use_clr ? (c_wr | ld_wr) : disk_sel ? d_wr : c_cwr;
     wire m0_pulse = m_rd_s | m_wr_s;
     reg         m0_req = 1'b0, m0_wrr = 1'b0;
@@ -463,7 +532,7 @@ module sbc09_soc #(
             m0_req  <= 1'b1;
             m0_wrr  <= m_wr_s;
             m0_addr <= use_clr ? (ld_wr ? ld_addr : cw) : disk_sel ? (l2 ? d_pa : d_addr) : c_addr;
-            m0_din  <= use_clr ? (ld_wr ? ld_data : 8'h00) : disk_sel ? d_din : c_wdata;
+            m0_din  <= use_clr ? (ld_wr ? ld_data : td_r) : disk_sel ? d_din : c_wdata;
         end
     end
     assign ps_busy_m = m0_req;                  // (high from the clock after the pulse: nobody looks at the clock of the pulse itself)

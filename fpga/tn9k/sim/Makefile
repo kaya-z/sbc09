@@ -48,13 +48,15 @@ SRC     = ../rtl/sbc09_soc.v ../rtl/acia_uart.v ../rtl/timer_rtc.v ../rtl/sd_dis
 HDMISRC = ../rtl/hdmi_text.v ../rtl/hdmi_term.v ../rtl/hdmi_video.v ../rtl/hdmi_decode.v ../rtl/hdmi_glyph.v ../rtl/psram_xfer.v ../rtl/tmds_enc.v
 HDMIOPT = $(if $(HDMI),+define+HDMI '+define+FONT_FILE="$(abspath ../rtl/font8x16.hex)"' +define+HDMI_CHARSET=$(CHARSET) -CFLAGS -DHDMI,)
 PH_DIV ?= 9
+MEMTEST ?= 0
+MT_LAST ?= 16383
 CHARSET ?= 1                       # the character set of the HDMI screen: 0 raw, 1 UTF-8, 2 EUC-JP, 3 Shift_JIS
 TRACE  := $(if $(DEBUG),--trace -CFLAGS -DVM_TRACE=1,)
 
 $(B)/obj/Vsim_top: $(SRC) $(HDMISRC) tb.cpp $(B)/rom.hex ../rtl/font8x16.hex
 	verilator --cc --exe --build -O2 -j 8 -I../rtl --top-module sim_top -Mdir $(B)/obj $(TRACE) \
 	  -Wno-fatal -Wno-lint -Wno-style -Wno-TIMESCALEMOD -Wno-UNOPTFLAT -Wno-CASEX -Wno-VARHIDDEN \
-	  -GROM_BASE=$(ROMBASE) -GROM_AW=$(ROMAW) -GROM_FILE='"$(abspath $(B)/rom.hex)"' -GFREERUN=$(FREERUN) -GPH_DIV=$(PH_DIV) \
+	  -GROM_BASE=$(ROMBASE) -GROM_AW=$(ROMAW) -GROM_FILE='"$(abspath $(B)/rom.hex)"' -GFREERUN=$(FREERUN) -GPH_DIV=$(PH_DIV) -GMEMTEST=$(MEMTEST) -GMT_LAST=$(MT_LAST) \
 	  -CFLAGS "-O2" $(HDMIOPT) $(SRC) $(if $(HDMI),$(HDMISRC),) $(abspath tb.cpp) -o Vsim_top >/dev/null
 
 $(B)/rom.hex: $(ROMBIN) ../scripts/bin2hex.py
