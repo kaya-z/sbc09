@@ -449,7 +449,7 @@ module sbc09_soc #(
                     if (io_hit) begin
                         if (cpu_rnw) rd_reg <= io_rdata;
                         else begin
-                            if (io_power && cpu_d_out == 8'ha5) pwroff <= 1'b1;
+                            if (io_power && cpu_d_out == 8'ha5) begin pwroff <= 1'b1; osrun <= 1'b0; end      // shutdown: LED5 on, LED4 off
                             if (io_power && cpu_d_out == 8'ha4) osrun <= 1'b1;
                             if (io_modr) begin
                                 if (cpu_d_out == 8'ha2 && !l2) begin           // to the Level 2 mode: the identity map for the blocks 0-6
