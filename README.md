@@ -244,7 +244,7 @@ os9/        OS-9 の ROM / モジュール / コマンドのビルド (make で 
   net/      OS-9 Net: npty ドライバ, n1..n3 デスクリプタ, nc, login
   nitros9-code/     NitrOS-9 ソース (必要部分)    OS9.dsk WORK.dsk  ディスクイメージ    v09.rom モニタ
 fpga/tn9k/  Tang Nano 9K 用の FPGA 設計: rtl/ (SoC、UART、タイマ、SD カード)、vendor/ (6809 コアと PSRAM コントローラ)、sim/ (Verilator)、scripts/build.sh (Gowin IDE)
-fuzix/      FUZIX の移植: platform-sim09 (カーネルのプラットフォーム部)、bootrom.s、mkdisk.py、build.sh、images/ (ブート ROM とディスクイメージ)
+fuzix/      FUZIX の移植: platform-sim09 (sim09 のマシン仕様のポート。Tang Nano 9K の FPGA は同じ仕様の実装で、カーネルは同じもの。カーネルのプラットフォーム部)、bootrom.s、mkdisk.py、build.sh、images/ (ブート ROM とディスクイメージ)
 tools/      build_gcc6809.sh (FUZIX 用の gcc 4.6.4 を作る)、a09 (OS-9 対応アセンブラ), make9rom, os9mod, mkskkdic.py (SKK 辞書), mkrbf.py (RBF ディスクイメージ), install_cmoc.sh ほか
 tests/      自己テスト一式
 docs/       FPGA.md FUZIX.md CPU.md KANJI.md OS9NET.md JWP.md PORTING.md (jwp の機種依存) DHRYSTONE.md OS9_MANUAL.md (OS-9 ユーザマニュアル、初心者向け)
