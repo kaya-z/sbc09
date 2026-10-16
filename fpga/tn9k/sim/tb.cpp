@@ -375,7 +375,7 @@ int main(int argc, char **argv)
         top->sd_miso = sd.step(top->sd_clk, top->sd_cs, top->sd_mosi);
         u.rx(top->txd, !quiet);
         u.tx(); top->rxd = u.line;
-        if (!(top->led & 0x20)) { rc = 0; powered_off = true; fprintf(stderr, "\n[power off at clk %ld]\n", clk); break; }
+        if (!(top->led & 0x20)) { rc = 0; powered_off = true; fprintf(stderr, "\n[power off at clk %ld, led %02x]\n", clk, (~top->led) & 0x3f); break; }
         if ((clk & 0xfff) == 0 && step < steps.size()) {
             const auto &s = steps[step];
             if (s.first == "expect") {
