@@ -141,6 +141,7 @@ module sbc09_soc #(
     wire      ps_busy_m;
     wire [15:0] ps_dout_m;           // the word the arbiter read for master 0 (the CPU, the disk)
     reg       pwroff;
+    reg       osrun;                // the boot ROM wrote $A4 to the power register: the OS has been started (LED4)
     reg       acia_pend;            // a character for a busy transmitter: the CPU waits
     // The byte read from the PSRAM lands in rd_reg on the clock where mem_pend falls.  The core takes its
     // inputs when E falls, so the stall is held for six more clocks (89 ns): the data has to run through the ALU
@@ -364,7 +365,7 @@ module sbc09_soc #(
         disk_busy_d <= disk_busy;
         if (disk_busy_d && !disk_busy) e040 <= disk_result;
         if (rst) begin
-            mem_pend <= 1'b0; mp_wait <= 1'b0; vma_pend <= 1'b1; pwroff <= 1'b0; acia_pend <= 1'b0;
+            mem_pend <= 1'b0; mp_wait <= 1'b0; vma_pend <= 1'b1; pwroff <= 1'b0; osrun <= 1'b0; acia_pend <= 1'b0;
             for (mk = 0; mk < 8; mk = mk + 1) begin map_s[mk] <= 8'hff; map_u[mk] <= 8'hff; end
             map_s[7] <= 8'h3f; tr <= 1'b0; tr_raw <= 8'hff; l2 <= 1'b0;
             rd_reg <= 8'h00; e040 <= 8'h00; d_drive <= 0; d_lsn2 <= 0; d_lsn1 <= 0; d_lsn0 <= 0;
@@ -380,6 +381,7 @@ module sbc09_soc #(
                         if (cpu_rnw) rd_reg <= io_rdata;
                         else begin
                             if (io_power && cpu_d_out == 8'ha5) pwroff <= 1'b1;
+                            if (io_power && cpu_d_out == 8'ha4) osrun <= 1'b1;
                             if (io_modr) begin
                                 if (cpu_d_out == 8'ha2 && !l2) begin           // to the Level 2 mode: the identity map for the blocks 0-6
                                     l2 <= 1'b1; tr <= 1'b0; tr_raw <= 8'hff;
@@ -387,7 +389,7 @@ module sbc09_soc #(
                                     map_s[7] <= 8'h3f;
                                 end
                                 if (cpu_d_out == 8'ha3 && l2) begin             // reset the CPU with the maps of the reset
-                                    go_req <= 1'b1; tr <= 1'b0; tr_raw <= 8'hff;
+                                    go_req <= 1'b1; osrun <= 1'b0; tr <= 1'b0; tr_raw <= 8'hff;
                                     for (mk = 0; mk < 8; mk = mk + 1) begin map_s[mk] <= 8'hff; map_u[mk] <= 8'hff; end
                                     map_s[7] <= 8'h3f;
                                 end
@@ -480,6 +482,7 @@ module sbc09_soc #(
     // ---------------------------------------------------------------- the LEDs (active low)
     reg [23:0] hb;
     always @(posedge clk) hb <= hb + 1'b1;
-    assign led = ~{pwroff, sd_fail, sd_active, sd_ready, run, hb[23]};
+    // LED2: card ready (steady) / card failed (blinking); LED4: the OS has been started
+    assign led = ~{pwroff, osrun, sd_active, sd_fail ? hb[22] : sd_ready, run, hb[23]};
 
 endmodule

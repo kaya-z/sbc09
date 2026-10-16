@@ -41,7 +41,9 @@ copy:	lda ,u+
 	decb
 	bne copy
 	bra next
-run:	jmp ,y
+run:	lda #$A4		; tell the board: the OS starts (LED4)
+	sta $E00F
+	jmp ,y
 goto:	ldx BUF
 	bra next
 fail:	lda #$A5		; no boot disk: power off
