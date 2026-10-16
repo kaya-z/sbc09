@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 YUKARI Semiconductor Devices
-"""mkl2disk.py [-s SECTORS] [-o OUT] [BASE.dsk]  - the disk of the Level 2 machine (the FPGA board's os9l2, or sim09 -2 without -v).
+"""mkl2disk.py [-s SECTORS] [-o OUT] [BASE.dsk]  - the disk of the Level 2 machine of the FPGA board (the same bitstream as FUZIX).
+
+The 256 byte boot ROM of the bitstream loads the code from LSN 2 (as it does for FUZIX and MK09): the loader of
+os9/level2/l2boot.asm (one record, LSN 2, and the entry record, LSN 3).  The loader switches the machine to the Level 2
+mode, reads the ROM image of the Level 2 machine (os9/os9v2_tn9k.rom: 105 sectors, LSN 720-824, marked used in the
+allocation map) into the physical memory and starts it.  The disk is /d0 of the Level 2 system.
 
 Starts from os9/OS9.dsk (the Level 1 disk), makes it larger (default 1440 sectors: DD.TOT and the allocation map) and
 replaces the commands that have a Level 2 version (os9/level2/cmds: the ones that look at the memory and the system:
@@ -30,6 +35,19 @@ def main():
         d[0:3] = size.to_bytes(3, 'big')
         d[4:6] = (size // 8).to_bytes(2, 'big')
         d[SEC + old_map:SEC + size // 8] = bytes(size // 8 - old_map)   # the new sectors are free (the rest of the old map sector was $FF)                  # DD.MAP: bytes of the allocation map (one sector: 2048 sectors at most)
+    # the loader (a09 -o: no prefix, the code starts at $0300) and the ROM image
+    ldr = os.path.join(tempfile.gettempdir(), 'l2boot.bin')
+    r = subprocess.run([os.path.join(ROOT, 'tools', 'a09'), '-o', ldr, os.path.join(ROOT, 'os9', 'level2', 'l2boot.asm')], capture_output=True)
+    code = open(ldr, 'rb').read()
+    rom = open(os.path.join(ROOT, 'os9', 'os9v2_tn9k.rom'), 'rb').read()
+    imglsn, nsect = 720, 105
+    if len(rom) > nsect * SEC or len(code) > 253 or imglsn + nsect > size:
+        sys.exit('mkl2disk: the ROM image (%d bytes) or the loader (%d bytes) does not fit: see os9/level2/l2boot.asm' % (len(rom), len(code)))
+    d[2 * SEC:3 * SEC] = bytes([0x03, 0x00, len(code)]) + code + bytes(253 - len(code))        # [dest $0300][n][code]
+    d[3 * SEC:4 * SEC] = bytes([0x03, 0x00, 0x00]) + bytes(253)                                  # [entry $0300][0]
+    d[imglsn * SEC:imglsn * SEC + len(rom)] = rom
+    for lsn in list(range(2, 4)) + list(range(imglsn, imglsn + nsect)):
+        d[SEC + lsn // 8] |= 0x80 >> (lsn % 8)                                                    # used
     open(out, 'wb').write(d)
     cdir = os.path.join(ROOT, 'os9', 'level2', 'cmds')
     names = []

@@ -10,7 +10,7 @@ RAM behind the PSRAM controller interface - runs the boot ROMs and the disk imag
           finds the file and a clean file system
   sdsc    the same boot with a byte addressed (SDSC) card
   os9     NitrOS-9 Level 1: the shell, the disk /d0 on the card, the module directory
-  os9l2   NitrOS-9 Level 2 (MMU, 2 MB, I/O at $FF80): the ROM image comes from the flash model, the disk is os9/OS9L2.dsk
+  os9l2   NitrOS-9 Level 2 (MMU, 2 MB, I/O at $FF80) with the same bitstream (boot ROM) as FUZIX: a loader on the card (os9/OS9L2.dsk) switches the machine
   os9k    NitrOS-9 Level 1 with the kernel on the card (LSN 2...), loaded by the 256 byte boot ROM of FUZIX / MK09: the same bitstream
   os9boot NitrOS-9 Level 1 booted from the card (4 KB ROM: kernel, Init and the booter; the rest is the boot file OS9Boot)
   nocard  no card: the boot ROM finds no disk and powers the machine off
@@ -48,7 +48,6 @@ FZ_DSK = os.path.join(ROOT, 'fuzix', 'images', 'sim09-fuzix.dsk.gz')
 have_fuzix = os.path.exists(FZ_ROM) and os.path.exists(FZ_DSK)
 OS9_DSK = os.path.join(ROOT, 'os9', 'OS9.dsk')
 OS9L2_DSK = os.path.join(ROOT, 'os9', 'OS9L2.dsk')
-OS9V2_ROM = os.path.join(ROOT, 'os9', 'os9v2_tn9k.rom')
 have_os9 = os.path.exists(os.path.join(ROOT, 'os9', 'os9v1.rom')) and os.path.exists(OS9_DSK)
 have_os9boot = os.path.exists(os.path.join(ROOT, 'os9', 'os9v1boot.rom')) and have_os9
 
@@ -186,9 +185,9 @@ def t_os9l2(exe):
     disk = os.path.join(d, 'OS9L2.dsk')
     shutil.copy(OS9L2_DSK, disk)
     out, rc = run(exe, ['wait 3000', 'send \\r', 'wait 500', 'send mfree\\r', 'wait 6000', 'send dir\\r', 'wait 6000', 'send mdir\\r', 'wait 8000', 'quit'],
-                  disk, extra=['-l2img', OS9V2_ROM], clks=4000000000)
+                  disk, clks=4000000000)
     shutil.rmtree(d, ignore_errors=True)
-    return [('NitrOS-9 Level 2 boots on the FPGA design (MMU, 2 MB, I/O at $FF80), the machine is named Tang Nano 9K',
+    return [('NitrOS-9 Level 2 boots with the boot ROM of FUZIX / MK09 (a loader on the card switches to the MMU, 2 MB, I/O at $FF80), the machine is named Tang Nano 9K',
              'NitrOS-9/6809 Level 2' in out and 'Tang Nano 9K' in out and 'OS9:' in out, out[:600]),
             ('the 2 MB of memory are there (mfree: 1984k), like in sim09 -2', 'Total:   F8  1984k' in out, out[-600:]),
             ('the disk is read through the MMU (dir shows CMDS), the commands of /d0/cmds run, the module directory is complete',
@@ -236,8 +235,8 @@ if have_os9boot:
     jobs += [('os9boot', 'os9boot', t_os9boot)]
 if have_os9 and have_fuzix:
     jobs += [('os9k', 'fuzix', t_os9k)]
-if os.path.exists(OS9L2_DSK) and os.path.exists(OS9V2_ROM):
-    jobs += [('os9l2', 'os9l2', t_os9l2)]
+if os.path.exists(OS9L2_DSK) and have_fuzix:
+    jobs += [('os9l2', 'fuzix', t_os9l2)]
 else:
     print('SKIP os9 test: os9/os9v1.rom or os9/OS9.dsk is missing (make)')
 

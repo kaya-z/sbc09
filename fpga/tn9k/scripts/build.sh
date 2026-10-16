@@ -10,9 +10,6 @@
 # os9    NitrOS-9 Level 1 (os9/os9v1_tn9k.rom, 16 KB at $C000)
 # os9boot  NitrOS-9 Level 1 booted from the card: the ROM (8 KB at $E000) holds the kernel, Init, the booter, IOMan and SCF, the rest
 #          comes from the boot file OS9Boot of the card (os9/OS9.dsk has it; make -C os9 bootdisk)
-# os9l2    NitrOS-9 Level 2 (the CoCo 3 style machine of sim09 -2: MMU, 2 MB RAM in the PSRAM, I/O at $FF80).  It has no ROM of its own:
-#          the image os9/os9v2_tn9k.rom is copied from the SPI flash (offset 0x140000) to the RAM at the start
-#          (openFPGALoader -b tangnano9k --external-flash -f -o 1310720 os9/os9v2_tn9k.rom).  Write it after the bitstream.
 # ramtest  a RAM test of the PSRAM path for the real board (scripts/ramtest.s); prints its results on the UART
 # bootcheck  the FUZIX boot ROM that prints checksums of what it loaded (scripts/bootcheck.s, bootcheck_expect.py)
 # os9euc, os9sjis   the same with the EUC-JP / Shift_JIS console ROM (os9v1_euc.rom, os9v1_sjis.rom)
@@ -24,9 +21,7 @@ HERE=$(cd "$(dirname "$0")/.." && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
 ROM=${1:-fuzix}
 IDE=${2:-${GOWIN_IDE:-/usr/local/IDE}}
-LEVEL2=0; IMGSIZE=0
 case $ROM in
-os9l2)   BIN=$ROOT/fuzix/images/bootrom.bin;  BASE="16'hFF00"; AW=8;  FREE=0; CS=1; LEVEL2=1; IMGSIZE=$(stat -c %s $ROOT/os9/os9v2_tn9k.rom) ;;
 fuzix)  BIN=$ROOT/fuzix/images/bootrom.bin;  BASE="16'hFF00"; AW=8;  FREE=0; CS=1 ;;
 os9boot) BIN=$ROOT/os9/os9v1boot.rom;       BASE="16'hE000"; AW=13; FREE=0; CS=1 ;;
 os9)    BIN=$ROOT/os9/os9v1_tn9k.rom;             BASE="16'hC000"; AW=14; FREE=0; CS=1 ;;
@@ -59,8 +54,6 @@ cat > "$B/tn9k_cfg.vh" <<EOF
 \`define ROM_BASE $BASE
 \`define ROM_AW $AW
 \`define FREERUN $FREE
-\`define LEVEL2 $LEVEL2
-\`define IMG_SIZE $IMGSIZE
 \`define RTC_YEAR $(( $1 - 1900 ))
 \`define RTC_MONTH $(echo $2 | sed 's/^0//')
 \`define RTC_DAY $(echo $3 | sed 's/^0//')

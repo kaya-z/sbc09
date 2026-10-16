@@ -102,8 +102,7 @@ module tn9k_top (
         .CLK_HZ(`CLK_HZ), .PH_DIV(`PH_DIV), .BAUD_DIV(`CLK_HZ / 115200),
         .ROM_BASE(`ROM_BASE), .ROM_AW(`ROM_AW), .ROM_FILE("rom.hex"), .FREERUN(`FREERUN),
         .RTC_YEAR(`RTC_YEAR), .RTC_MONTH(`RTC_MONTH), .RTC_DAY(`RTC_DAY),
-        .RTC_HOUR(`RTC_HOUR), .RTC_MIN(`RTC_MIN), .RTC_SEC(`RTC_SEC), .KANJI(`KANJI_LOAD),
-        .LEVEL2(`LEVEL2), .IMG_SIZE(`IMG_SIZE)
+        .RTC_HOUR(`RTC_HOUR), .RTC_MIN(`RTC_MIN), .RTC_SEC(`RTC_SEC), .KANJI(`KANJI_LOAD)
     ) soc (
         .clk(clk), .resetn(resetn), .rxd(uart_rx), .txd(uart_tx_soc),
         .sd_clk(sd_clk), .sd_mosi(sd_mosi), .sd_miso(sd_miso), .sd_cs(sd_cs),

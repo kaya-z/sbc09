@@ -6,8 +6,6 @@
 #   make DEBUG=1      with a VCD trace (-t file)
 ROOT   := ../../..
 ROM    ?= fuzix
-LEVEL2  = 0
-IMG_SIZE = 0
 ifeq ($(ROM),fuzix)
 ROMBIN  = $(ROOT)/fuzix/images/bootrom.bin
 ROMBASE = 65280
@@ -23,14 +21,6 @@ ROMBIN  = $(ROOT)/os9/os9v1boot.rom
 ROMBASE = 57344
 ROMAW   = 13
 FREERUN = 0
-else ifeq ($(ROM),os9l2)
-# the Level 2 machine (MMU, 2 MB, I/O at $FF80): no ROM; the image os9/os9v2_tn9k.rom comes from the flash model (tb.cpp -l2img)
-ROMBIN  = $(ROOT)/fuzix/images/bootrom.bin
-ROMBASE = 65280
-ROMAW   = 8
-FREERUN = 0
-LEVEL2  = 1
-IMG_SIZE = $(shell stat -c %s $(ROOT)/os9/os9v2_tn9k.rom)
 else ifeq ($(ROM),bootcheck)
 ROMBIN  = ../build/bootcheck.bin
 ROMBASE = 64512
@@ -64,7 +54,7 @@ TRACE  := $(if $(DEBUG),--trace -CFLAGS -DVM_TRACE=1,)
 $(B)/obj/Vsim_top: $(SRC) $(HDMISRC) tb.cpp $(B)/rom.hex ../rtl/font8x16.hex
 	verilator --cc --exe --build -O2 -j 8 -I../rtl --top-module sim_top -Mdir $(B)/obj $(TRACE) \
 	  -Wno-fatal -Wno-lint -Wno-style -Wno-TIMESCALEMOD -Wno-UNOPTFLAT -Wno-CASEX -Wno-VARHIDDEN \
-	  -GROM_BASE=$(ROMBASE) -GROM_AW=$(ROMAW) -GROM_FILE='"$(abspath $(B)/rom.hex)"' -GFREERUN=$(FREERUN) -GPH_DIV=$(PH_DIV) -GLEVEL2=$(LEVEL2) -GIMG_SIZE=$(IMG_SIZE) \
+	  -GROM_BASE=$(ROMBASE) -GROM_AW=$(ROMAW) -GROM_FILE='"$(abspath $(B)/rom.hex)"' -GFREERUN=$(FREERUN) -GPH_DIV=$(PH_DIV) \
 	  -CFLAGS "-O2" $(HDMIOPT) $(SRC) $(if $(HDMI),$(HDMISRC),) $(abspath tb.cpp) -o Vsim_top >/dev/null
 
 $(B)/rom.hex: $(ROMBIN) ../scripts/bin2hex.py

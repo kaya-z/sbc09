@@ -152,16 +152,12 @@ struct SdCard {
 // ------------------------------------------------------------------ the SPI flash with the kanji image (READ 03h, mode 0)
 struct Flash {
     std::vector<uint8_t> img;                   // the image, at flash offset 0x100000
-    std::vector<uint8_t> img2;                  // the ROM image of the Level 2 machine, at flash offset 0x140000
     bool last_clk = false, last_cs = true;
     int bits = 0, phase = 0, nrx = 0, txleft = 0, miso = 1;
     uint8_t rx = 0, txsh = 0xff;
     uint32_t addr = 0;
     long bytes_read = 0;
-    uint8_t at(uint32_t a) {
-        if (a >= 0x140000 && a - 0x140000 < img2.size()) return img2[a - 0x140000];
-        return (a >= 0x100000 && a - 0x100000 < img.size()) ? img[a - 0x100000] : 0xff;
-    }
+    uint8_t at(uint32_t a) { return (a >= 0x100000 && a - 0x100000 < img.size()) ? img[a - 0x100000] : 0xff; }
     int step(int cs, int clk, int mosi) {
         if (cs) { bits = 0; phase = 0; nrx = 0; txleft = 0; miso = 1; last_cs = true; last_clk = clk; return 1; }
         if (last_cs) { bits = 0; phase = 0; nrx = 0; txleft = 0; }
@@ -267,7 +263,6 @@ int main(int argc, char **argv)
     long maxclk = 4000000000L;
     bool quiet = false, sdsc = false, nosd = false;
     const char *kanji_file = nullptr;
-    const char *l2img_file = nullptr;
     long pcevery = 0;
     unsigned pswatch_lo = 0, pswatch_hi = 0; int pswatch_n = 0;       // -ps LO HI: log the PSRAM accesses of the machine to an address range
     long hstart = -1, hlast = -1; std::string hkey; std::map<std::string, std::pair<long, long>> hist;   // -h CLK: clocks per bus cycle from CLK on
@@ -283,7 +278,6 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "-sdsc")) sdsc = true;
         else if (!strcmp(argv[i], "-nosd")) nosd = true;
         else if (!strcmp(argv[i], "-kanji") && i + 1 < argc) kanji_file = argv[++i];
-        else if (!strcmp(argv[i], "-l2img") && i + 1 < argc) l2img_file = argv[++i];
         else if (!strcmp(argv[i], "-ps") && i + 2 < argc) { pswatch_lo = strtoul(argv[i + 1], 0, 16); pswatch_hi = strtoul(argv[i + 2], 0, 16); i += 2; }
         else if (!strcmp(argv[i], "-h") && i + 1 < argc) hstart = atol(argv[++i]);
         else if (!strcmp(argv[i], "-cy") && i + 2 < argc) { ctrace = fopen(argv[i + 1], "w"); climit = atol(argv[i + 2]); i += 2; }
@@ -291,13 +285,6 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "-i") && i + 2 < argc) { itrace = fopen(argv[i + 1], "w"); ilimit = atol(argv[i + 2]); i += 2; }
     }
     Flash flash;
-    if (l2img_file) {
-        FILE *lf = fopen(l2img_file, "rb");
-        if (!lf) { perror(l2img_file); return 3; }
-        int ch;
-        while ((ch = fgetc(lf)) != EOF) flash.img2.push_back((uint8_t)ch);
-        fclose(lf);
-    }
     if (kanji_file) {
         FILE *kf = fopen(kanji_file, "rb");
         if (!kf) { perror(kanji_file); return 3; }
